@@ -5,12 +5,20 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.const import EntityCategory
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DEVICE_NAME, DOMAIN, MANUFACTURER, MODEL, RegisterDefinition
+from .const import (
+    DEVICE_NAME,
+    DOMAIN,
+    MANUFACTURER,
+    MODEL,
+    RegisterDefinition,
+    build_device_slug,
+)
 from .coordinator import WebastoDataCoordinator
-from .hub import ModbusBridge
+from .hub import ModbusBridge, WebastoModbusError
 
 
 class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
@@ -29,7 +37,7 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._host = host
         self._unit_id = unit_id
         self._register = register
-        self._unique_prefix = f"{host.lower()}-{unit_id}"
+        self._unique_prefix = build_device_slug(host, unit_id)
 
         self._attr_name = register.name
         self._attr_unique_id = f"{self._unique_prefix}-{register.key}"
@@ -58,7 +66,10 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
     async def _async_write_register(self, value: int) -> None:
         """Write a value to the backing Modbus register."""
 
-        await self._bridge.async_write_register(self._register, value)
+        try:
+            await self._bridge.async_write_register(self._register, value)
+        except WebastoModbusError as err:
+            raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
 
     def get_coordinator_value(self) -> Any:
         """Helper returning the latest coordinator value for this register."""

@@ -12,9 +12,28 @@ DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 5  # seconds
 MIN_SCAN_INTERVAL: Final = 2
 MAX_SCAN_INTERVAL: Final = 60
+MAX_RETRY_ATTEMPTS: Final = 3
+RETRY_BACKOFF_SECONDS: Final = 1.0
+FAILURE_NOTIFICATION_THRESHOLD: Final = 3
+FAILURE_NOTIFICATION_TITLE: Final = "Webasto Next Modbus connection issue"
 
 CONF_UNIT_ID: Final = "unit_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_VARIANT: Final = "variant"
+
+VARIANT_11_KW: Final = "11kw"
+VARIANT_22_KW: Final = "22kw"
+DEFAULT_VARIANT: Final = VARIANT_22_KW
+
+VARIANT_LABELS: Final = {
+	VARIANT_11_KW: "11 kW (16 A)",
+	VARIANT_22_KW: "22 kW (32 A)",
+}
+
+VARIANT_MAX_CURRENT: Final = {
+	VARIANT_11_KW: 16,
+	VARIANT_22_KW: 32,
+}
 
 MANUFACTURER: Final = "Webasto"
 MODEL: Final = "Next"
@@ -94,6 +113,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="sensor",
 		device_class="enum",
+		icon="mdi:ev-station",
 		options=CHARGE_POINT_STATE_MAP,
 	),
 	RegisterDefinition(
@@ -105,6 +125,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="sensor",
 		device_class="enum",
+		icon="mdi:battery-charging",
 		options=CHARGING_STATE_MAP,
 	),
 	RegisterDefinition(
@@ -116,6 +137,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="sensor",
 		device_class="enum",
+		icon="mdi:cog-outline",
 		options=EQUIPMENT_STATE_MAP,
 	),
 	RegisterDefinition(
@@ -127,6 +149,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="sensor",
 		device_class="enum",
+		icon="mdi:cable-data",
 		options=CABLE_STATE_MAP,
 	),
 	RegisterDefinition(
@@ -152,6 +175,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		state_class="measurement",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="current_l2_a",
@@ -165,6 +189,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		state_class="measurement",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="current_l3_a",
@@ -178,6 +203,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		state_class="measurement",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="voltage_l1_v",
@@ -190,6 +216,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="V",
 		device_class="voltage",
 		state_class="measurement",
+		icon="mdi:flash",
 	),
 	RegisterDefinition(
 		key="voltage_l2_v",
@@ -202,6 +229,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="V",
 		device_class="voltage",
 		state_class="measurement",
+		icon="mdi:flash",
 	),
 	RegisterDefinition(
 		key="voltage_l3_v",
@@ -214,6 +242,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="V",
 		device_class="voltage",
 		state_class="measurement",
+		icon="mdi:flash",
 	),
 	RegisterDefinition(
 		key="active_power_total_w",
@@ -226,6 +255,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="W",
 		device_class="power",
 		state_class="measurement",
+		icon="mdi:lightning-bolt",
 	),
 	RegisterDefinition(
 		key="active_power_l1_w",
@@ -238,6 +268,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="W",
 		device_class="power",
 		state_class="measurement",
+		icon="mdi:lightning-bolt",
 	),
 	RegisterDefinition(
 		key="active_power_l2_w",
@@ -250,6 +281,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="W",
 		device_class="power",
 		state_class="measurement",
+		icon="mdi:lightning-bolt",
 	),
 	RegisterDefinition(
 		key="active_power_l3_w",
@@ -262,6 +294,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="W",
 		device_class="power",
 		state_class="measurement",
+		icon="mdi:lightning-bolt",
 	),
 	RegisterDefinition(
 		key="energy_total_kwh",
@@ -275,6 +308,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="kWh",
 		device_class="energy",
 		state_class="total_increasing",
+		icon="mdi:counter",
 	),
 	RegisterDefinition(
 		key="session_max_current_a",
@@ -288,6 +322,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		device_class="current",
 		state_class="measurement",
 		entity_category="diagnostic",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="evse_min_current_a",
@@ -300,6 +335,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		entity_category="diagnostic",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="evse_max_current_a",
@@ -312,6 +348,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		entity_category="diagnostic",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="cable_max_current_a",
@@ -324,6 +361,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		unit="A",
 		device_class="current",
 		entity_category="diagnostic",
+		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
 		key="session_start_time",
@@ -348,6 +386,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		device_class="duration",
 		state_class="measurement",
 		entity_category="diagnostic",
+		icon="mdi:timer-outline",
 	),
 	RegisterDefinition(
 		key="session_end_time",
@@ -374,6 +413,7 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		entity="number",
 		unit="A",
 		device_class="current",
+		icon="mdi:current-ac",
 		writable=True,
 		min_value=6,
 		max_value=32,
@@ -388,6 +428,7 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="number",
 		unit="s",
+		icon="mdi:timer-outline",
 		writable=True,
 		min_value=6,
 		max_value=120,
@@ -403,6 +444,7 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		entity="number",
 		unit="A",
 		device_class="current",
+		icon="mdi:speedometer",
 		writable=True,
 		write_only=True,
 		min_value=0,
@@ -421,6 +463,7 @@ BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		register_type="holding",
 		data_type="uint16",
 		entity="button",
+		icon="mdi:lan-connect",
 		writable=True,
 		write_only=True,
 	),
@@ -450,3 +493,18 @@ def get_register(key: str) -> RegisterDefinition:
 SERVICE_SET_CURRENT: Final = "set_current"
 SERVICE_SET_FAILSAFE: Final = "set_failsafe"
 SERVICE_SEND_KEEPALIVE: Final = "send_keepalive"
+
+
+def build_device_slug(host: str, unit_id: int) -> str:
+	"""Return the canonical device slug used for device registry identifiers."""
+
+	return f"{host.lower()}-{unit_id}"
+
+
+def get_max_current_for_variant(variant: str | None) -> int:
+
+	"""Return the maximum supported current for the configured variant."""
+
+	if variant in VARIANT_MAX_CURRENT:
+		return VARIANT_MAX_CURRENT[variant]
+	return VARIANT_MAX_CURRENT[DEFAULT_VARIANT]

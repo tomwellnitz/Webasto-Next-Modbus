@@ -2,7 +2,7 @@
 name = "webasto-next-modbus"
 version = "0.1.0"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
-authors = [{ name = "Your Name", email = "you@example.com" }]
+authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
 requires-python = ">=3.11"
 

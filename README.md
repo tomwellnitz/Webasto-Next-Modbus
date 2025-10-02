@@ -1,124 +1,139 @@
 # Webasto Next Modbus for Home Assistant
 
-> ⚠️ The integration is still under construction; breaking changes may occur while we iterate. Feedback and test reports are welcome.
+> Mature custom integration that brings Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP.
 
 ## Overview
 
-This repository contains a custom Home Assistant integration that connects Webasto Next / Ampure Unite wallboxes via Modbus TCP. The integration is being implemented step-by-step in this session. The code already supports automatic discovery via config flow, entity platforms for sensors/numbers/buttons, and service helpers for advanced automation scenarios.
+This project exposes the complete Modbus register map of Webasto Next–series wallboxes to Home Assistant. It bundles a polished config flow, rich entities, built-in services, and automation triggers so you can monitor and control charging sessions without writing any low-level Modbus code yourself.
+
+## Feature highlights
+
+- Guided setup with automatic connection testing and duplicate protection.
+- Coordinator-driven sensor, number, and button entities that cover all relevant holding/input registers.
+- Write helpers for dynamic charging current, fail-safe settings, and manual keep-alive frames.
+- Device triggers for charging state changes, connectivity events, and manual keep-alive actions.
+- Extensive unit-test coverage and reusable development tooling based on `pytest` and `ruff`.
+
+## Requirements
+
+- Home Assistant 2024.12 or newer (tested against 2025.10 dev builds).
+- Webasto Next or Ampure Unite wallbox reachable via Modbus TCP.
+- Network access to TCP port 502 and the correct Modbus unit ID (factory default: `255`).
 
 ## Installation
 
-### Via HACS (recommended once published)
+### HACS (recommended)
 
-1. Open HACS in Home Assistant and go to **Integrations → ⋮ → Custom repositories**.
+1. Open HACS in Home Assistant and navigate to **Integrations → ⋮ → Custom repositories**.
 2. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` with the category **Integration**.
-3. HACS will list “Webasto Next Modbus”; install it and restart Home Assistant when prompted.
+3. Install “Webasto Next Modbus” and restart Home Assistant when prompted.
 
-### Manual installation (development/testing)
+### Manual installation
 
-1. Create the directory `custom_components/webasto_next_modbus` inside your Home Assistant configuration folder.
-2. Copy the contents of `custom_components/webasto_next_modbus/` from this repository into that directory.
-3. Restart Home Assistant to load the integration code.
+1. Create `custom_components/webasto_next_modbus` inside your Home Assistant configuration directory.
+2. Copy the contents of this repository’s `custom_components/webasto_next_modbus/` folder into the directory you just created.
+3. Restart Home Assistant to load the integration.
 
-After restarting, navigate to **Settings → Devices & Services → Add Integration** and search for “Webasto Next Modbus”. Follow the guided config flow to supply the connection details.
+After the restart, go to **Settings → Devices & Services → Add Integration**, search for “Webasto Next Modbus”, and follow the on-screen wizard.
 
 ## Configuration
 
-The config flow requests:
+During onboarding you will be asked for:
 
-- **Host** – IP address or DNS name of the wallbox.
-- **Port** – Modbus TCP port (defaults to `502`).
-- **Unit ID** – Modbus unit/slave ID (factory default is `255`).
-- **Scan interval** – Polling interval in seconds (2–60 seconds, defaults to `5`).
+- **Host** – IP address or hostname of the wallbox.
+- **Port** – Modbus TCP port (default `502`).
+- **Unit ID** – Modbus unit/slave ID (default `255`).
+- **Scan interval** – Polling interval in seconds (`2–60`, default `5`).
+- **Variant** – Choose between the 11 kW (16 A) and 22 kW (32 A) hardware tiers. The integration automatically clamps writable currents to this limit.
 
-Validation happens immediately: the flow performs a test connection and prevents duplicate entries by generating a unique ID of `host-unit_id`.
+The config flow validates the connection immediately and stores a deterministic unique ID (`<host>-<unit_id>`) to prevent duplicate entries.
 
-## Development setup
+## Usage
 
-The project ships with a `pyproject.toml` exposing a `dev` extra that installs Home Assistant, Modbus dependencies, and the full tooling stack (pytest, ruff, etc.). After creating and activating your virtual environment, run:
+### Entities
 
-```bash
-pip install -e '.[dev]'
-```
+Once configured you will see:
 
-Useful commands during development:
+- **Sensors** for charging state, per-phase current/voltage, power, energy totals, and diagnostic registers.
+- **Number** entities for failsafe current, failsafe timeout, and the write-only charging current limit.
+- **Button** entity (`Send Keepalive`) to manually trigger the wallbox keep-alive frame.
 
-- Run the unit tests: `python -m pytest`
-- Run the linter: `python -m ruff check custom_components/webasto_next_modbus tests`
-- Continuous integration mirrors these commands via GitHub Actions (`.github/workflows/ci.yaml`).
+Refer to `custom_components/webasto_next_modbus/const.py` for the exact register mapping.
 
-For quick, repeatable checks, we recommend running both commands before committing changes.
+### Services
 
-## Development roadmap
-
-- [x] Architecture outline
-- [x] Core integration code
-- [x] Config flow & options
-- [x] Entity platforms (sensor, number, button)
-- [x] Automated tests
-- [x] Documentation polish
-
-## Entities and services
-
-After adding the integration via the config flow, Home Assistant will expose:
-
-- Sensors for all readable Modbus registers, including power, current, and enumerated state values.
-- Numbers for writable configuration registers such as fail-safe current, timeout, and the write-only charging current limit.
-- A button entity to trigger the wallbox keep-alive frame on demand.
-
-The integration also ships with three services under the `webasto_next_modbus` domain:
-
-- `set_current` – adjust the dynamic charging current (0–32 A).
-- `set_failsafe` – configure fail-safe current and optional timeout.
-- `send_keepalive` – send a manual keep-alive frame, mirroring the button entity.
-
-### Service payloads
-
-Example YAML to set the charging current using the Home Assistant Services UI:
+Three helper services live under the `webasto_next_modbus` domain:
 
 ```yaml
+# Adjust the dynamic charging current (amps 0–32, clamped per variant)
 service: webasto_next_modbus.set_current
 data:
-	amps: 16
-	config_entry_id: YOUR_CONFIG_ENTRY_ID  # Required only if multiple wallboxes are configured
-```
+  amps: 16
+  config_entry_id: YOUR_CONFIG_ENTRY_ID  # Only required if multiple wallboxes are configured
 
-Setting fail-safe parameters with a timeout:
-
-```yaml
+# Configure fail-safe current and optional timeout (seconds 6–120)
 service: webasto_next_modbus.set_failsafe
 data:
-	amps: 20
-	timeout_s: 60
-```
+  amps: 20
+  timeout_s: 60
 
-Sending an explicit keep-alive frame:
-
-```yaml
+# Send a manual keep-alive frame to the wallbox
 service: webasto_next_modbus.send_keepalive
 ```
 
-All services automatically clamp values to the safe ranges defined by the Modbus registers and trigger an immediate data refresh so entities update quickly.
+Every service writes the underlying Modbus register, raises the appropriate device trigger, and forces an immediate data refresh so entity state updates quickly.
 
-## Testing and troubleshooting
+### Automations and device triggers
 
-- Run `python -m pytest -k services` to execute only the service-related unit tests while iterating on automations.
-- Ensure the integration can reach the wallbox by pinging the host and verifying that TCP port 502 is open.
-- If you encounter unexpected Modbus errors, enable Home Assistant’s debug logging for `custom_components.webasto_next_modbus` to inspect communication details.
+The integration exposes five device triggers you can use in automations:
 
-## Further reading
+| Trigger | Description |
+| ------- | ----------- |
+| `charging_started` | Charger transitioned from idle to charging. |
+| `charging_stopped` | Charging session ended. |
+| `connection_lost` | Coordinator detected connectivity loss. |
+| `connection_restored` | Connectivity recovered after a failure. |
+| `keepalive_sent` | Manual keep-alive frame was triggered (button or service). |
 
-- [Architecture notes](docs/architecture.md) provide background on register definitions, the coordinator design, and planned enhancements.
+Create automations via **Settings → Automations & Scenes → Add Automation → Device Trigger** and select the wallbox device.
 
-## Releasing via HACS
+## Manual verification checklist
 
-To publish a new version for HACS consumers:
+1. Install the integration (HACS or manual) and restart Home Assistant.
+2. Complete the config flow, then confirm device and entities are present and updating.
+3. Create a test automation for one of the device triggers (for example `charging_started`) and verify the automation trace fires when expected.
+4. Call the helper services from the Developer Tools and observe entity updates plus trigger emissions in the logbook.
+5. (Optional) Enable debug logging to inspect Modbus requests and retry behaviour (see the [developer guide](docs/development.md) for instructions).
+
+## Troubleshooting
+
+- **Connection failures** – Verify the wallbox responds to `ping`, ensure TCP port 502 is reachable, and confirm the Modbus unit ID matches the wallbox configuration.
+- **Stale data** – Watch Home Assistant’s log; the coordinator retries transient errors three times and raises a persistent notification if communication remains down.
+- **Diagnostics** – Download the diagnostics dump from **Settings → Devices & Services → Webasto Next Modbus → ⋮ → Download diagnostics** for timestamps and error history.
+
+## Development
+
+Looking to contribute or run the integration locally? The complete developer workflow—including environment setup, lint/test commands, debug logging, manual verification, and the release checklist—is documented in [`docs/development.md`](docs/development.md).
+
+## Localization
+
+English strings ship as the default language; a full German translation is bundled in `translations/de.json`. When Home Assistant runs in another language it falls back to English automatically.
+
+## Documentation
+
+- `docs/architecture.md` explains the Modbus register mapping, coordinator layout, and planned enhancements.
+- `CHANGELOG.md` captures release notes and noteworthy behaviour changes.
+
+## Release process (HACS compatible)
 
 1. Update the `version` field in `custom_components/webasto_next_modbus/manifest.json`.
-2. Commit your changes and push to GitHub.
-3. Create a Git tag matching the version (for example `v0.2.0`) and push it (`git push origin v0.2.0`).
-4. Draft a GitHub release that references the tag and includes release notes.
-5. Make the repository public (Settings → General → Change visibility) before sharing the release or submitting to HACS.
-6. If the repository is not part of the HACS default list, remind users to add it as a custom repository; otherwise HACS will automatically pick up the new release within an hour.
+2. Ensure `python -m ruff check` and `python -m pytest` succeed locally and document changes in `CHANGELOG.md`.
+3. Commit the release and push to GitHub.
+4. Create a Git tag matching the version (for example `v0.2.0`) and push it (`git push origin v0.2.0`).
+5. Draft a GitHub release that references the tag and includes the changelog fragment.
+6. Make the repository public (Settings → General → Change visibility) before publishing or submitting to HACS.
+7. If the repository is not part of the HACS default list, remind users to add it as a custom repository; otherwise HACS will pick up the release automatically.
 
-Stay tuned!
+## Support and feedback
+
+Please open a GitHub issue for questions, bug reports, or feature requests. Public tracking keeps discussions transparent and ensures improvements benefit everyone.

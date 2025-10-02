@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, TypeVar
 
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 from .const import (
+	MAX_RETRY_ATTEMPTS,
 	REGISTER_TYPE,
+	RETRY_BACKOFF_SECONDS,
 	RegisterDefinition,
 	all_registers,
 )
@@ -69,6 +71,8 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
 				or reg_end - current_start > MAX_REGISTERS_PER_REQUEST
 			):
 				if current_regs:
+					assert current_start is not None
+					assert current_end is not None
 					requests.append(
 						ReadRequest(
 							start_address=current_start,
@@ -96,6 +100,9 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
 
 	requests.sort(key=lambda request: (request.register_type, request.start_address))
 	return tuple(requests)
+
+
+T = TypeVar("T")
 
 
 class ModbusBridge:
@@ -151,6 +158,53 @@ class ModbusBridge:
 	async def async_read_register(self, register: RegisterDefinition) -> int | float | None:
 		"""Read a single register definition and return the decoded value."""
 
+		return await self._call_with_retry(
+			lambda: self._async_read_register_once(register),
+			f"read register {register.key}",
+		)
+
+	async def async_read_data(self) -> dict[str, float | int | None]:
+		"""Read all relevant registers and return a dictionary."""
+
+		return await self._call_with_retry(self._async_read_data_once, "bulk read")
+
+	async def async_write_register(self, register: RegisterDefinition, value: int) -> None:
+		"""Write a single holding register."""
+
+		if not register.writable:
+			raise ValueError(f"Register {register.key} is not writable")
+
+		await self._call_with_retry(
+			lambda: self._async_write_register_once(register, value),
+			f"write register {register.key}",
+		)
+
+	async def _call_with_retry(
+		self,
+		func: Callable[[], Awaitable[T]],
+		description: str,
+	) -> T:
+		last_err: WebastoModbusError | None = None
+		for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
+			try:
+				return await func()
+			except WebastoModbusError as err:
+				last_err = err
+				_LOGGER.warning(
+					"Attempt %s/%s to %s failed: %s",
+					attempt,
+					MAX_RETRY_ATTEMPTS,
+					description,
+					err,
+				)
+				await self.async_close()
+				if attempt == MAX_RETRY_ATTEMPTS:
+					break
+				await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+		assert last_err is not None
+		raise last_err
+
+	async def _async_read_register_once(self, register: RegisterDefinition) -> int | float | None:
 		async with self._lock:
 			await self.async_connect()
 			assert self._client is not None  # For type checkers
@@ -178,9 +232,7 @@ class ModbusBridge:
 
 		return _decode_register(register, response.registers)  # type: ignore[attr-defined]
 
-	async def async_read_data(self) -> dict[str, float | int | None]:
-		"""Read all relevant registers and return a dictionary."""
-
+	async def _async_read_data_once(self) -> dict[str, float | int | None]:
 		data: dict[str, float | int | None] = {}
 
 		async with self._lock:
@@ -227,12 +279,7 @@ class ModbusBridge:
 
 		return data
 
-	async def async_write_register(self, register: RegisterDefinition, value: int) -> None:
-		"""Write a single holding register."""
-
-		if not register.writable:
-			raise ValueError(f"Register {register.key} is not writable")
-
+	async def _async_write_register_once(self, register: RegisterDefinition, value: int) -> None:
 		async with self._lock:
 			await self.async_connect()
 			assert self._client is not None
@@ -250,6 +297,12 @@ class ModbusBridge:
 			raise WebastoModbusError(
 				f"Writing register {register.key} failed: {response!r}"  # type: ignore[str-format]
 			)
+
+	@property
+	def endpoint(self) -> str:
+		"""Return the Modbus endpoint for logging/diagnostics."""
+
+		return f"{self._host}:{self._port} (unit {self._unit_id})"
 
 
 def _decode_register(definition: RegisterDefinition, data: list[int]) -> float | int:

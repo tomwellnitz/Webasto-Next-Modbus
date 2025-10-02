@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.webasto_next_modbus.button import WebastoButton
 from custom_components.webasto_next_modbus.const import (
     KEEPALIVE_TRIGGER_VALUE,
     get_register,
 )
+from custom_components.webasto_next_modbus.device_trigger import TRIGGER_KEEPALIVE_SENT
+from custom_components.webasto_next_modbus.hub import WebastoModbusError
 from custom_components.webasto_next_modbus.number import WebastoNumber
 from custom_components.webasto_next_modbus.sensor import WebastoSensor
 
@@ -58,12 +61,41 @@ async def test_number_clamps_and_writes(coordinator_fixture) -> None:
     register = get_register("failsafe_current_a")
     coordinator.data = {register.key: 12}
 
-    number = WebastoNumber(coordinator, bridge, "192.0.2.11", 9, register)
+    number = WebastoNumber(coordinator, bridge, "192.0.2.11", 9, register, 32)
 
     await number.async_set_native_value(99)
 
     bridge.async_write_register.assert_awaited_with(register, register.max_value)
     coordinator.async_request_refresh.assert_awaited()
+
+
+async def test_number_respects_variant_limit(coordinator_fixture) -> None:
+    """Number entities should clamp to the variant-specific maximum."""
+
+    coordinator, bridge = coordinator_fixture
+    register = get_register("failsafe_current_a")
+    coordinator.data = {register.key: 12}
+
+    number = WebastoNumber(coordinator, bridge, "192.0.2.11", 9, register, 16)
+
+    await number.async_set_native_value(99)
+
+    bridge.async_write_register.assert_awaited_with(register, 16)
+    coordinator.async_request_refresh.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_number_write_failure_raises_homeassistant_error(coordinator_fixture) -> None:
+    """Translate Modbus failures into HomeAssistantError for entity writes."""
+
+    coordinator, bridge = coordinator_fixture
+    register = get_register("failsafe_current_a")
+    bridge.async_write_register.side_effect = WebastoModbusError("boom")
+
+    number = WebastoNumber(coordinator, bridge, "192.0.2.11", 9, register, 32)
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(10)
 
 
 async def test_button_triggers_keepalive(coordinator_fixture) -> None:
@@ -74,7 +106,14 @@ async def test_button_triggers_keepalive(coordinator_fixture) -> None:
 
     button = WebastoButton(coordinator, bridge, "192.0.2.12", 5, register)
 
-    await button.async_press()
+    with patch(
+        "custom_components.webasto_next_modbus.button.async_fire_device_trigger"
+    ) as fire:
+        await button.async_press()
 
     bridge.async_write_register.assert_awaited_with(register, KEEPALIVE_TRIGGER_VALUE)
     coordinator.async_request_refresh.assert_awaited()
+    fire.assert_called_once()
+    args, _ = fire.call_args
+    assert args[1] == "192.0.2.12-5"
+    assert args[2] == TRIGGER_KEEPALIVE_SENT

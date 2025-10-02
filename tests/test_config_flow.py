@@ -17,9 +17,12 @@ from custom_components.webasto_next_modbus.config_flow import (
 from custom_components.webasto_next_modbus.const import (
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
+    CONF_VARIANT,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_UNIT_ID,
+    DEFAULT_VARIANT,
+    VARIANT_22_KW,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -36,6 +39,7 @@ async def test_user_step_success() -> None:
         CONF_PORT: 1502,
         CONF_UNIT_ID: 10,
         CONF_SCAN_INTERVAL: 5,
+        CONF_VARIANT: VARIANT_22_KW,
     }
 
     with (
@@ -52,7 +56,7 @@ async def test_user_step_success() -> None:
     assert result.get("type") == FlowResultType.CREATE_ENTRY
     assert result.get("title") == "192.0.2.1 (unit 10)"
     assert result.get("data") == user_input
-    assert result.get("options") == {CONF_SCAN_INTERVAL: 5}
+    assert result.get("options") == {CONF_SCAN_INTERVAL: 5, CONF_VARIANT: VARIANT_22_KW}
 
 
 async def test_user_step_cannot_connect() -> None:
@@ -89,8 +93,12 @@ async def test_options_flow_updates_interval() -> None:
             CONF_PORT: DEFAULT_PORT,
             CONF_UNIT_ID: DEFAULT_UNIT_ID,
             CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
         },
-        options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL},
+        options={
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+        },
         unique_id="192.0.2.3-255",
     )
 
@@ -99,6 +107,8 @@ async def test_options_flow_updates_interval() -> None:
     initial = await options_flow.async_step_init()
     assert initial.get("type") == FlowResultType.FORM
 
-    updated = await options_flow.async_step_init({CONF_SCAN_INTERVAL: 10})
+    updated = await options_flow.async_step_init(
+        {CONF_SCAN_INTERVAL: 10, CONF_VARIANT: VARIANT_22_KW}
+    )
     assert updated.get("type") == FlowResultType.CREATE_ENTRY
-    assert updated.get("data") == {CONF_SCAN_INTERVAL: 10}
+    assert updated.get("data") == {CONF_SCAN_INTERVAL: 10, CONF_VARIANT: VARIANT_22_KW}

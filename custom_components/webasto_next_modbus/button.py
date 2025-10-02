@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import RuntimeData
 from .const import BUTTON_REGISTERS, CONF_UNIT_ID, DOMAIN, KEEPALIVE_TRIGGER_VALUE
+from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .entity import WebastoRegisterEntity
 
 
@@ -43,4 +44,11 @@ class WebastoButton(WebastoRegisterEntity, ButtonEntity):  # type: ignore[misc]
 
 		value = KEEPALIVE_TRIGGER_VALUE if self.register.key == "send_keepalive" else 1
 		await self._async_write_register(value)
+		if self.register.key == "send_keepalive":
+			async_fire_device_trigger(
+				self.coordinator.hass,
+				self._unique_prefix,
+				TRIGGER_KEEPALIVE_SENT,
+				{"source": "button"},
+			)
 		await self.coordinator.async_request_refresh()

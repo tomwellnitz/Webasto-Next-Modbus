@@ -15,12 +15,15 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import (
 	CONF_SCAN_INTERVAL,
 	CONF_UNIT_ID,
+	CONF_VARIANT,
 	DEFAULT_PORT,
 	DEFAULT_SCAN_INTERVAL,
 	DEFAULT_UNIT_ID,
+	DEFAULT_VARIANT,
 	DOMAIN,
 	MAX_SCAN_INTERVAL,
 	MIN_SCAN_INTERVAL,
+	VARIANT_LABELS,
 )
 from .hub import ModbusBridge, WebastoModbusError
 
@@ -60,18 +63,22 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 				self._abort_if_unique_id_configured()
 
 				data = {
-					CONF_HOST: user_input[CONF_HOST],
-					CONF_PORT: user_input[CONF_PORT],
-					CONF_UNIT_ID: user_input[CONF_UNIT_ID],
-					CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
-				}
+				CONF_HOST: user_input[CONF_HOST],
+				CONF_PORT: user_input[CONF_PORT],
+				CONF_UNIT_ID: user_input[CONF_UNIT_ID],
+				CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+				CONF_VARIANT: user_input[CONF_VARIANT],
+			}
 
 				title = f"{user_input[CONF_HOST]} (unit {user_input[CONF_UNIT_ID]})"
 
 				return self.async_create_entry(
 					title=title,
 					data=data,
-					options={CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL]},
+					options={
+					CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+					CONF_VARIANT: user_input[CONF_VARIANT],
+				},
 				)
 
 		defaults = user_input or {}
@@ -103,6 +110,10 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 					vol.Coerce(int),
 					vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
 				),
+				vol.Required(
+				CONF_VARIANT,
+				default=defaults.get(CONF_VARIANT, DEFAULT_VARIANT),
+			): vol.In(VARIANT_LABELS),
 			}
 		)
 
@@ -151,19 +162,31 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 			CONF_SCAN_INTERVAL,
 			self._config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
 		)
+		current_variant = self._config_entry.options.get(
+			CONF_VARIANT,
+			self._config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
+		)
 
 		if user_input is not None:
 			interval = user_input[CONF_SCAN_INTERVAL]
+			variant = user_input[CONF_VARIANT]
 			if interval < MIN_SCAN_INTERVAL or interval > MAX_SCAN_INTERVAL:
 				errors["base"] = "invalid_interval"
 			else:
-				return self.async_create_entry(title="", data={CONF_SCAN_INTERVAL: interval})
+				return self.async_create_entry(
+					title="",
+					data={
+						CONF_SCAN_INTERVAL: interval,
+						CONF_VARIANT: variant,
+					},
+				)
 
 		data_schema = vol.Schema(
 			{
 				vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
 					vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
-				)
+				),
+				vol.Required(CONF_VARIANT, default=current_variant): vol.In(VARIANT_LABELS),
 			}
 		)
 

@@ -5,9 +5,16 @@ __pycache__/
 .env
 .venv
 .envrc
+.ruff_cache/
 .mypy_cache/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
 .idea/
 .vscode/
 .ha-cache/
 *.egg-info/
+.DS_Store

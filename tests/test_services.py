@@ -4,23 +4,31 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.webasto_next_modbus import (
     DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
+    TRIGGER_KEEPALIVE_SENT,
     RuntimeData,
     _async_service_send_keepalive,
     _async_service_set_current,
     _async_service_set_failsafe,
     _resolve_runtime,
 )
-from custom_components.webasto_next_modbus.const import get_register
+from custom_components.webasto_next_modbus.const import (
+    VARIANT_11_KW,
+    VARIANT_22_KW,
+    build_device_slug,
+    get_max_current_for_variant,
+    get_register,
+)
 from custom_components.webasto_next_modbus.coordinator import WebastoDataCoordinator
-from custom_components.webasto_next_modbus.hub import ModbusBridge
+from custom_components.webasto_next_modbus.hub import ModbusBridge, WebastoModbusError
 
 
 def _make_hass(runtime_map: dict[str, RuntimeData] | None) -> HomeAssistant:
@@ -37,12 +45,18 @@ def _make_call(data: dict[str, Any], hass: HomeAssistant | None = None) -> Servi
     return call
 
 
-def _make_runtime() -> RuntimeData:
+def _make_runtime(variant: str = VARIANT_22_KW) -> RuntimeData:
     bridge = cast(ModbusBridge, SimpleNamespace())
     bridge.async_write_register = AsyncMock()  # type: ignore[attr-defined]
     coordinator = cast(WebastoDataCoordinator, SimpleNamespace())
     coordinator.async_request_refresh = AsyncMock()  # type: ignore[attr-defined]
-    return RuntimeData(bridge=bridge, coordinator=coordinator)
+    return RuntimeData(
+        bridge=bridge,
+        coordinator=coordinator,
+        variant=variant,
+        max_current=get_max_current_for_variant(variant),
+        device_slug=build_device_slug("192.0.2.1", 255),
+    )
 
 
 def test_resolve_runtime_single_entry() -> None:
@@ -96,7 +110,7 @@ async def test_service_set_current_clamps_and_refreshes() -> None:
 
     runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
         register,
-        register.max_value,
+        runtime.max_current,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
 
@@ -116,11 +130,49 @@ async def test_service_set_failsafe_writes_optional_timeout() -> None:
 
     runtime.bridge.async_write_register.assert_any_await(  # type: ignore[attr-defined]
         current_register,
-        current_register.max_value,
+        runtime.max_current,
     )
     runtime.bridge.async_write_register.assert_any_await(  # type: ignore[attr-defined]
         timeout_register,
         timeout_register.max_value,
+    )
+    runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_service_variant_limits_current() -> None:
+    """Clamp current service to the variant limit when below register max."""
+
+    runtime = _make_runtime(variant=VARIANT_11_KW)
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({"amps": 40}, hass=hass)
+
+    register = get_register("set_current_a")
+
+    await _async_service_set_current(call)
+
+    runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
+        register,
+        runtime.max_current,
+    )
+    runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_service_variant_limits_failsafe() -> None:
+    """Clamp failsafe current to the variant limit."""
+
+    runtime = _make_runtime(variant=VARIANT_11_KW)
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({"amps": 40}, hass=hass)
+
+    current_register = get_register("failsafe_current_a")
+
+    await _async_service_set_failsafe(call)
+
+    runtime.bridge.async_write_register.assert_any_await(  # type: ignore[attr-defined]
+        current_register,
+        runtime.max_current,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
 
@@ -135,10 +187,30 @@ async def test_service_send_keepalive_triggers_write_and_refresh() -> None:
 
     register = get_register("send_keepalive")
 
-    await _async_service_send_keepalive(call)
+    with patch("custom_components.webasto_next_modbus.async_fire_device_trigger") as mock_fire:
+        await _async_service_send_keepalive(call)
 
     runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
         register,
         KEEPALIVE_TRIGGER_VALUE,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    mock_fire.assert_called_once_with(
+        call.hass,
+        runtime.device_slug,
+        TRIGGER_KEEPALIVE_SENT,
+        {"source": "service"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_service_write_errors_surface_as_homeassistant_error() -> None:
+    """A Modbus write failure should surface as a HomeAssistantError."""
+
+    runtime = _make_runtime()
+    runtime.bridge.async_write_register.side_effect = WebastoModbusError("boom")  # type: ignore[attr-defined]
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({"amps": 10}, hass=hass)
+
+    with pytest.raises(HomeAssistantError):
+        await _async_service_set_current(call)

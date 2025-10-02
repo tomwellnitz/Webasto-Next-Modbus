@@ -10,13 +10,15 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
 	CONF_SCAN_INTERVAL,
 	CONF_UNIT_ID,
+	CONF_VARIANT,
 	DEFAULT_SCAN_INTERVAL,
+	DEFAULT_VARIANT,
 	DOMAIN,
 	KEEPALIVE_TRIGGER_VALUE,
 	MAX_SCAN_INTERVAL,
@@ -24,9 +26,12 @@ from .const import (
 	SERVICE_SEND_KEEPALIVE,
 	SERVICE_SET_CURRENT,
 	SERVICE_SET_FAILSAFE,
+	build_device_slug,
+	get_max_current_for_variant,
 	get_register,
 )
 from .coordinator import WebastoDataCoordinator
+from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .hub import ModbusBridge, WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +45,9 @@ class RuntimeData:
 
 	bridge: ModbusBridge
 	coordinator: WebastoDataCoordinator
+	variant: str
+	max_current: int
+	device_slug: str
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -53,6 +61,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 		entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
 	)
 
+	variant = entry.options.get(CONF_VARIANT, entry.data.get(CONF_VARIANT, DEFAULT_VARIANT))
+	max_current = get_max_current_for_variant(variant)
+	device_slug = build_device_slug(host, unit_id)
+
+	if CONF_VARIANT not in entry.data:
+		updated_data = {**entry.data, CONF_VARIANT: variant}
+		hass.config_entries.async_update_entry(entry, data=updated_data)
+
 	bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
 
 	try:
@@ -61,12 +77,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 		raise ConfigEntryNotReady(str(err)) from err
 
 	update_interval = timedelta(seconds=_clamp(scan_interval, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL))
-	coordinator = WebastoDataCoordinator(hass, bridge, update_interval)
+	coordinator = WebastoDataCoordinator(
+		hass,
+		entry.entry_id,
+		bridge,
+		update_interval,
+		device_slug,
+		config_entry=entry,
+	)
 
 	await coordinator.async_config_entry_first_refresh()
 
 	domain_data = hass.data.setdefault(DOMAIN, {})
-	domain_data[entry.entry_id] = RuntimeData(bridge=bridge, coordinator=coordinator)
+	domain_data[entry.entry_id] = RuntimeData(
+		bridge=bridge,
+		coordinator=coordinator,
+		variant=variant,
+		max_current=max_current,
+		device_slug=device_slug,
+	)
 
 	await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -182,8 +211,12 @@ async def _async_service_set_current(call: ServiceCall) -> None:
 	runtime = _resolve_runtime(call.hass, call)
 	register = get_register("set_current_a")
 	amps = int(call.data["amps"])
-	value = int(_clamp(amps, register.min_value or 0, register.max_value or 32))
-	await runtime.bridge.async_write_register(register, value)
+	max_allowed = min(runtime.max_current, register.max_value or runtime.max_current)
+	value = int(_clamp(amps, register.min_value or 0, max_allowed))
+	try:
+		await runtime.bridge.async_write_register(register, value)
+	except WebastoModbusError as err:
+		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
 	await runtime.coordinator.async_request_refresh()
 
 
@@ -193,8 +226,12 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
 	runtime = _resolve_runtime(call.hass, call)
 	amps_register = get_register("failsafe_current_a")
 	amps = int(call.data["amps"])
-	amps_value = int(_clamp(amps, amps_register.min_value or 6, amps_register.max_value or 32))
-	await runtime.bridge.async_write_register(amps_register, amps_value)
+	max_allowed = min(runtime.max_current, amps_register.max_value or runtime.max_current)
+	amps_value = int(_clamp(amps, amps_register.min_value or 6, max_allowed))
+	try:
+		await runtime.bridge.async_write_register(amps_register, amps_value)
+	except WebastoModbusError as err:
+		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
 
 	timeout_value: int | None = None
 	if "timeout_s" in call.data:
@@ -203,7 +240,10 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
 		timeout_value = int(
 			_clamp(timeout, timeout_register.min_value or 6, timeout_register.max_value or 120)
 		)
-		await runtime.bridge.async_write_register(timeout_register, timeout_value)
+		try:
+			await runtime.bridge.async_write_register(timeout_register, timeout_value)
+		except WebastoModbusError as err:
+			raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
 
 	await runtime.coordinator.async_request_refresh()
 
@@ -213,7 +253,16 @@ async def _async_service_send_keepalive(call: ServiceCall) -> None:
 
 	runtime = _resolve_runtime(call.hass, call)
 	register = get_register("send_keepalive")
-	await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
+	try:
+		await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
+	except WebastoModbusError as err:
+		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+	async_fire_device_trigger(
+		call.hass,
+		runtime.device_slug,
+		TRIGGER_KEEPALIVE_SENT,
+		{"source": "service"},
+	)
 	await runtime.coordinator.async_request_refresh()
 
 

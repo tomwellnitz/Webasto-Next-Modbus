@@ -25,8 +25,16 @@ async def async_setup_entry(
 	host = entry.data[CONF_HOST]
 	unit_id = entry.data[CONF_UNIT_ID]
 
+	max_current = runtime.max_current
 	entities = [
-		WebastoNumber(runtime.coordinator, runtime.bridge, host, unit_id, register)
+		WebastoNumber(
+			runtime.coordinator,
+			runtime.bridge,
+			host,
+			unit_id,
+			register,
+			max_current,
+		)
 		for register in NUMBER_REGISTERS
 	]
 
@@ -39,7 +47,15 @@ class WebastoNumber(WebastoRegisterEntity, NumberEntity):  # type: ignore[misc]
 	_attr_has_entity_name = True
 	_attr_mode = NumberMode.BOX
 
-	def __init__(self, coordinator, bridge, host: str, unit_id: int, register) -> None:
+	def __init__(
+		self,
+		coordinator,
+		bridge,
+		host: str,
+		unit_id: int,
+		register,
+		variant_max_current: int | None = None,
+	) -> None:
 		super().__init__(coordinator, bridge, host, unit_id, register)
 
 		if register.min_value is not None:
@@ -57,6 +73,16 @@ class WebastoNumber(WebastoRegisterEntity, NumberEntity):  # type: ignore[misc]
 
 		if not self._write_only and coordinator.data:
 			self._attr_native_value = coordinator.data.get(register.key)
+
+		self._variant_max_current = variant_max_current
+		if (
+			register.key in {"failsafe_current_a", "set_current_a"}
+			and variant_max_current is not None
+		):
+			current_max = self._attr_native_max_value
+			if current_max is None:
+				current_max = float(variant_max_current)
+			self._attr_native_max_value = float(min(current_max, variant_max_current))
 
 	async def async_set_native_value(self, value: float) -> None:
 		"""Write a value to the Modbus register."""
