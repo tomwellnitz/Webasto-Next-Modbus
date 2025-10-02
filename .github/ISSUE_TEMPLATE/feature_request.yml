@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose an enhancement or new capability for the integration
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Share as much detail as possible so the proposal can be evaluated quickly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the feature you would like to see.
+      placeholder: I'd like the integration to...
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and context
+      description: Why is this feature important? Include example automations or user journeys.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you looked at other approaches or integrations?
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this request hasn't already been filed.
+          required: true
+        - label: I am happy to help with development or testing.

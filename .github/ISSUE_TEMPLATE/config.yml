@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/tomwellnitz/Webasto-Next-Modbus
+    about: Review the README and docs for setup and troubleshooting guidance.
+  - name: Discussions
+    url: https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions
+    about: Ask questions and share ideas that aren't bugs or feature requests.

@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format roug
 
 ## [Unreleased]
 
-- _Nothing yet._
+- Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
 
 ## [0.2.0] - 2025-10-03
 
