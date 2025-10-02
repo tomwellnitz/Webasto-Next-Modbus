@@ -1,0 +1,15 @@
+{
+  "domain": "webasto_next_modbus",
+  "name": "Webasto Next Modbus",
+  "version": "0.1.0",
+  "documentation": "https://github.com/tomwellnitz/Webasto-Next-Modbus",
+  "issue_tracker": "https://github.com/tomwellnitz/Webasto-Next-Modbus/issues",
+  "requirements": [
+    "pymodbus==3.6.9"
+  ],
+  "dependencies": [],
+  "codeowners": ["@tomwellnitz"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "loggers": ["pymodbus", "custom_components.webasto_next_modbus"]
+}

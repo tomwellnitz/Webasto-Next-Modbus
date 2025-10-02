@@ -1,0 +1,46 @@
+"""Button platform for Webasto Next Modbus integration."""
+
+from __future__ import annotations
+
+from homeassistant.components.button import ButtonEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import RuntimeData
+from .const import BUTTON_REGISTERS, CONF_UNIT_ID, DOMAIN, KEEPALIVE_TRIGGER_VALUE
+from .entity import WebastoRegisterEntity
+
+
+async def async_setup_entry(
+	hass: HomeAssistant,
+	entry: ConfigEntry,
+	async_add_entities: AddEntitiesCallback,
+) -> None:
+	"""Set up Webasto button entities."""
+
+	runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+
+	host = entry.data[CONF_HOST]
+	unit_id = entry.data[CONF_UNIT_ID]
+
+	entities = [
+		WebastoButton(runtime.coordinator, runtime.bridge, host, unit_id, register)
+		for register in BUTTON_REGISTERS
+	]
+
+	async_add_entities(entities)
+
+
+class WebastoButton(WebastoRegisterEntity, ButtonEntity):  # type: ignore[misc]
+	"""Represent write-only Modbus actions as buttons."""
+
+	_attr_has_entity_name = True
+
+	async def async_press(self) -> None:
+		"""Trigger the Modbus action associated with the register."""
+
+		value = KEEPALIVE_TRIGGER_VALUE if self.register.key == "send_keepalive" else 1
+		await self._async_write_register(value)
+		await self.coordinator.async_request_refresh()

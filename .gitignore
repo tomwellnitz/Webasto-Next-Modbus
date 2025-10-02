@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+.env
+.venv
+.envrc
+.mypy_cache/
+.pytest_cache/
+.idea/
+.vscode/
+.ha-cache/
+*.egg-info/

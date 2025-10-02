@@ -1,0 +1,41 @@
+set_current:
+  name: Set charging current
+  description: Update the dynamic charging current limit of the wallbox.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+    amps:
+      name: Current (A)
+      description: Desired charging current in ampere.
+      required: true
+      example: 16
+
+set_failsafe:
+  name: Configure fail-safe parameters
+  description: Set the fallback charging current and optional timeout used when the energy management system drops offline.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+    amps:
+      name: Fallback current (A)
+      description: Charging current enforced during fail-safe operation.
+      required: true
+      example: 10
+    timeout_s:
+      name: Timeout (s)
+      description: Time window without updates before fail-safe mode activates.
+      required: false
+      example: 30
+
+send_keepalive:
+  name: Send keep-alive frame
+  description: Trigger the keep-alive command to inform the wallbox that the energy manager is still present.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"

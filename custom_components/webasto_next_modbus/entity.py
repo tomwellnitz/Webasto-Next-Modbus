@@ -1,0 +1,72 @@
+"""Shared entity helpers for the Webasto Next Modbus integration."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from homeassistant.const import EntityCategory
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import DEVICE_NAME, DOMAIN, MANUFACTURER, MODEL, RegisterDefinition
+from .coordinator import WebastoDataCoordinator
+from .hub import ModbusBridge
+
+
+class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
+    """Base entity bound to a Modbus register definition."""
+
+    def __init__(
+        self,
+        coordinator: WebastoDataCoordinator,
+        bridge: ModbusBridge,
+        host: str,
+        unit_id: int,
+        register: RegisterDefinition,
+    ) -> None:
+        super().__init__(coordinator)
+        self._bridge = bridge
+        self._host = host
+        self._unit_id = unit_id
+        self._register = register
+        self._unique_prefix = f"{host.lower()}-{unit_id}"
+
+        self._attr_name = register.name
+        self._attr_unique_id = f"{self._unique_prefix}-{register.key}"
+
+        if register.icon:
+            self._attr_icon = register.icon
+        if register.entity_category:
+            try:
+                self._attr_entity_category = EntityCategory(register.entity_category)
+            except ValueError:
+                pass
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._unique_prefix)},
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+            name=DEVICE_NAME,
+        )
+
+    @property
+    def register(self) -> RegisterDefinition:
+        """Expose the wrapped register definition."""
+
+        return self._register
+
+    async def _async_write_register(self, value: int) -> None:
+        """Write a value to the backing Modbus register."""
+
+        await self._bridge.async_write_register(self._register, value)
+
+    def get_coordinator_value(self) -> Any:
+        """Helper returning the latest coordinator value for this register."""
+
+        return self.coordinator.data.get(self._register.key)
+
+    @property
+    def available(self) -> bool | None:  # type: ignore[override]
+        """Return availability aligned with Entity expectations."""
+
+        return super().available

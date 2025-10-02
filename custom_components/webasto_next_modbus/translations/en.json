@@ -1,0 +1,38 @@
+{
+  "title": "Webasto Next Modbus",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Webasto Next",
+        "description": "Enter the connection details for your wallbox.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Unit ID",
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check host, port, and Modbus configuration.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This wallbox is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Webasto Next options",
+        "description": "Adjust advanced settings.",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_interval": "Interval is outside the supported range."
+    }
+  }
+}
