@@ -12,7 +12,7 @@ dev = [
   "pytest-homeassistant-custom-component==0.13.200",
   "pytest-asyncio>=0.24,<2",
   "coverage==7.6.8",
-  "pytest-cov==6.0.0",
+  "pytest-cov==7.0.0",
   "ruff>=0.5",
   "mypy>=1.8"
 ]
