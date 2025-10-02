@@ -4,15 +4,15 @@ version = "0.2.0"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.2",
-  "pytest-homeassistant-custom-component>=0.13",
-  "pytest-asyncio>=0.23",
-  "coverage>=7.10.6,<8",
-  "pytest-cov>=5.0",
+  "pytest>=8.3.4,<9",
+  "pytest-homeassistant-custom-component==0.13.200",
+  "pytest-asyncio>=0.24,<2",
+  "coverage==7.6.8",
+  "pytest-cov==6.0.0",
   "ruff>=0.5",
   "mypy>=1.8"
 ]
@@ -20,6 +20,7 @@ dev = [
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100

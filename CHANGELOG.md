@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file. The format roug
 ## [Unreleased]
 
 - Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
-- Loosen coverage constraint for the development extra to align with pytest-cov requirements.
+- Raise the minimum supported Python runtime to 3.12 and align dev tooling (coverage, pytest-cov, pytest-homeassistant-custom-component) with the latest compatible matrix.
 
 ## [0.2.0] - 2025-10-03
 
