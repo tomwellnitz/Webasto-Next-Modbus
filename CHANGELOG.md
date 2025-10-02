@@ -4,7 +4,8 @@ All notable changes to this project are documented in this file. The format roug
 
 ## [Unreleased]
 
-- _Nothing yet._
+- Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
+- Raise the minimum supported Python runtime to 3.12 and align dev tooling (coverage, pytest-cov, pytest-homeassistant-custom-component) with the latest compatible matrix.
 
 ## [0.2.0] - 2025-10-03
 
