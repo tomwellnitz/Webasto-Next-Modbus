@@ -45,6 +45,7 @@ Useful commands during development:
 
 - Run the unit tests: `python -m pytest`
 - Run the linter: `python -m ruff check custom_components/webasto_next_modbus tests`
+- Continuous integration mirrors these commands via GitHub Actions (`.github/workflows/ci.yaml`).
 
 For quick, repeatable checks, we recommend running both commands before committing changes.
 
