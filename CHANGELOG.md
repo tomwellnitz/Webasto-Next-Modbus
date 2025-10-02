@@ -5,6 +5,7 @@ All notable changes to this project are documented in this file. The format roug
 ## [Unreleased]
 
 - Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
+- Pin coverage dependency for the development extra to satisfy CI dependency resolver.
 
 ## [0.2.0] - 2025-10-03
 
