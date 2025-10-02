@@ -117,6 +117,7 @@ To publish a new version for HACS consumers:
 2. Commit your changes and push to GitHub.
 3. Create a Git tag matching the version (for example `v0.2.0`) and push it (`git push origin v0.2.0`).
 4. Draft a GitHub release that references the tag and includes release notes.
-5. If the repository is not part of the HACS default list, remind users to add it as a custom repository; otherwise HACS will automatically pick up the new release within an hour.
+5. Make the repository public (Settings → General → Change visibility) before sharing the release or submitting to HACS.
+6. If the repository is not part of the HACS default list, remind users to add it as a custom repository; otherwise HACS will automatically pick up the new release within an hour.
 
 Stay tuned!
