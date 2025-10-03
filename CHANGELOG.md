@@ -6,6 +6,18 @@ All notable changes to this project are documented in this file. The format roug
 
 - _Nothing yet_
 
+## [0.2.2-beta] - 2025-10-03
+
+### Added
+- Two explicit services (`webasto_next_modbus.start_session` / `stop_session`) and a bundled blueprint to toggle FastCharge/FullCharge helpers.
+- Extended sensor coverage for static metadata (serial, firmware, backend IDs), EV max current, charged energy, and live charge power.
+- Dedicated tests for Modbus string decoding and the new service helpers.
+
+### Changed
+- Lazily import `pymodbus` to improve diagnostics for missing dependencies.
+- Decode string registers with UTF-8 trimming while preserving existing numeric handling.
+- Surface additional register metadata in the developer documentation.
+
 ## [0.2.1-beta] - 2025-10-03
 
 ### Added

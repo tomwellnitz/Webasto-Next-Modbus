@@ -26,6 +26,10 @@ from .const import (
 	SERVICE_SEND_KEEPALIVE,
 	SERVICE_SET_CURRENT,
 	SERVICE_SET_FAILSAFE,
+	SERVICE_START_SESSION,
+	SERVICE_STOP_SESSION,
+	SESSION_COMMAND_START_VALUE,
+	SESSION_COMMAND_STOP_VALUE,
 	build_device_slug,
 	get_max_current_for_variant,
 	get_register,
@@ -166,6 +170,20 @@ def _register_services(hass: HomeAssistant) -> None:
 		schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
 	)
 
+	hass.services.async_register(
+		DOMAIN,
+		SERVICE_START_SESSION,
+		_async_service_start_session,
+		schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
+	)
+
+	hass.services.async_register(
+		DOMAIN,
+		SERVICE_STOP_SESSION,
+		_async_service_stop_session,
+		schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
+	)
+
 	hass.data[DOMAIN]["_services_registered"] = True
 
 
@@ -178,6 +196,8 @@ def _unregister_services(hass: HomeAssistant) -> None:
 	hass.services.async_remove(DOMAIN, SERVICE_SET_CURRENT)
 	hass.services.async_remove(DOMAIN, SERVICE_SET_FAILSAFE)
 	hass.services.async_remove(DOMAIN, SERVICE_SEND_KEEPALIVE)
+	hass.services.async_remove(DOMAIN, SERVICE_START_SESSION)
+	hass.services.async_remove(DOMAIN, SERVICE_STOP_SESSION)
 
 
 def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
@@ -263,6 +283,30 @@ async def _async_service_send_keepalive(call: ServiceCall) -> None:
 		TRIGGER_KEEPALIVE_SENT,
 		{"source": "service"},
 	)
+	await runtime.coordinator.async_request_refresh()
+
+
+async def _async_service_start_session(call: ServiceCall) -> None:
+	"""Handle service to start a charging session explicitly."""
+
+	runtime = _resolve_runtime(call.hass, call)
+	register = get_register("session_command")
+	try:
+		await runtime.bridge.async_write_register(register, SESSION_COMMAND_START_VALUE)
+	except WebastoModbusError as err:
+		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+	await runtime.coordinator.async_request_refresh()
+
+
+async def _async_service_stop_session(call: ServiceCall) -> None:
+	"""Handle service to stop the active charging session."""
+
+	runtime = _resolve_runtime(call.hass, call)
+	register = get_register("session_command")
+	try:
+		await runtime.bridge.async_write_register(register, SESSION_COMMAND_STOP_VALUE)
+	except WebastoModbusError as err:
+		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
 	await runtime.coordinator.async_request_refresh()
 
 

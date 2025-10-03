@@ -65,8 +65,9 @@ After reloading Home Assistant, detailed Modbus requests, retries, and trigger d
 1. Install the integration (via HACS or manual copy) and restart Home Assistant.
 2. Complete the config flow with your wallbox’s host, port, unit ID, scan interval, and variant.
 3. Confirm that the new device and all entities appear in **Settings → Devices & Services** and that sensor values update.
-4. Invoke the helper services (`webasto_next_modbus.set_current`, `webasto_next_modbus.set_failsafe`, `webasto_next_modbus.send_keepalive`) from the Developer Tools and watch for immediate entity refreshes plus device triggers.
+4. Invoke the helper services (`webasto_next_modbus.set_current`, `webasto_next_modbus.set_failsafe`, `webasto_next_modbus.send_keepalive`, `webasto_next_modbus.start_session`, `webasto_next_modbus.stop_session`) from the Developer Tools and watch for immediate entity refreshes plus device triggers.
 5. Create a test automation for each device trigger to ensure dispatcher events fire as expected (`charging_started`, `charging_stopped`, `connection_lost`, `connection_restored`, `keepalive_sent`).
+6. (Optional) Import the bundled FastCharge/FullCharge blueprint and confirm that toggling the assigned helpers triggers the new start/stop services.
 
 ## Release checklist
 

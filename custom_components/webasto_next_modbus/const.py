@@ -39,9 +39,11 @@ MANUFACTURER: Final = "Webasto"
 MODEL: Final = "Next"
 DEVICE_NAME: Final = "Webasto Next Wallbox"
 KEEPALIVE_TRIGGER_VALUE: Final = 1
+SESSION_COMMAND_START_VALUE: Final = 1
+SESSION_COMMAND_STOP_VALUE: Final = 2
 
 REGISTER_TYPE = Literal["input", "holding"]
-REGISTER_DATA_TYPE = Literal["uint16", "uint32"]
+REGISTER_DATA_TYPE = Literal["uint16", "uint32", "string"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +69,7 @@ class RegisterDefinition:
 	min_value: float | None = None
 	max_value: float | None = None
 	step: float | None = None
+	encoding: str | None = None
 
 
 # Enumerations mapped to user friendly strings.
@@ -102,8 +105,120 @@ CABLE_STATE_MAP: Final = {
 	3: "vehicle_locked",
 }
 
+PHASE_COUNT_MAP: Final = {
+	0: "single_phase",
+	1: "three_phase",
+}
+
 
 SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
+	RegisterDefinition(
+		key="serial_number",
+		name="Serial Number",
+		address=100,
+		count=25,
+		register_type="input",
+		data_type="string",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:identifier",
+		encoding="utf-8",
+	),
+	RegisterDefinition(
+		key="charge_point_id",
+		name="Charge Point ID",
+		address=130,
+		count=50,
+		register_type="input",
+		data_type="string",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:id-card",
+		encoding="utf-8",
+	),
+	RegisterDefinition(
+		key="charge_point_brand",
+		name="Charge Point Brand",
+		address=190,
+		count=10,
+		register_type="input",
+		data_type="string",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:factory",
+		encoding="utf-8",
+	),
+	RegisterDefinition(
+		key="charge_point_model",
+		name="Charge Point Model",
+		address=210,
+		count=5,
+		register_type="input",
+		data_type="string",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:ev-station",
+		encoding="utf-8",
+	),
+	RegisterDefinition(
+		key="firmware_version",
+		name="Firmware Version",
+		address=230,
+		count=50,
+		register_type="input",
+		data_type="string",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:chip",
+		encoding="utf-8",
+	),
+	RegisterDefinition(
+		key="wallbox_date",
+		name="Controller Date",
+		address=290,
+		count=2,
+		register_type="input",
+		data_type="uint32",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:calendar",
+	),
+	RegisterDefinition(
+		key="wallbox_time",
+		name="Controller Time",
+		address=294,
+		count=2,
+		register_type="input",
+		data_type="uint32",
+		entity="sensor",
+		entity_category="diagnostic",
+		icon="mdi:clock-outline",
+	),
+	RegisterDefinition(
+		key="rated_power_w",
+		name="Rated Power",
+		address=400,
+		count=2,
+		register_type="input",
+		data_type="uint32",
+		entity="sensor",
+		unit="W",
+		entity_category="diagnostic",
+		icon="mdi:flash-outline",
+	),
+	RegisterDefinition(
+		key="phase_configuration",
+		name="Phase Configuration",
+		address=404,
+		count=1,
+		register_type="input",
+		data_type="uint16",
+		entity="sensor",
+		device_class="enum",
+		entity_category="diagnostic",
+		icon="mdi:current-ac",
+		options=PHASE_COUNT_MAP,
+	),
 	RegisterDefinition(
 		key="charge_point_state",
 		name="Charge Point State",
@@ -364,6 +479,32 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		icon="mdi:current-ac",
 	),
 	RegisterDefinition(
+		key="ev_max_current_a",
+		name="EV Max Current",
+		address=1108,
+		count=1,
+		register_type="input",
+		data_type="uint16",
+		entity="sensor",
+		unit="A",
+		device_class="current",
+		entity_category="diagnostic",
+		icon="mdi:current-ac",
+	),
+	RegisterDefinition(
+		key="charged_energy_wh",
+		name="Charged Energy",
+		address=1502,
+		count=1,
+		register_type="input",
+		data_type="uint16",
+		entity="sensor",
+		unit="Wh",
+		device_class="energy",
+		state_class="measurement",
+		icon="mdi:battery-clock",
+	),
+	RegisterDefinition(
 		key="session_start_time",
 		name="Session Start Time",
 		address=1504,
@@ -398,6 +539,19 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		entity="sensor",
 		entity_category="diagnostic",
 		icon="mdi:clock-end",
+	),
+	RegisterDefinition(
+		key="charge_power_w",
+		name="Charge Power",
+		address=5000,
+		count=2,
+		register_type="holding",
+		data_type="uint32",
+		entity="sensor",
+		unit="W",
+		device_class="power",
+		state_class="measurement",
+		icon="mdi:lightning-bolt-outline",
 	),
 )
 
@@ -470,6 +624,22 @@ BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 )
 
 
+CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
+	RegisterDefinition(
+		key="session_command",
+		name="Session Command",
+		address=5006,
+		count=1,
+		register_type="holding",
+		data_type="uint16",
+		entity="diagnostic",
+		writable=True,
+		write_only=True,
+		entity_category="diagnostic",
+	),
+)
+
+
 def all_registers(include_write_only: bool = False) -> tuple[RegisterDefinition, ...]:
 	"""Return all register definitions, optionally including write-only ones."""
 
@@ -484,7 +654,7 @@ def all_registers(include_write_only: bool = False) -> tuple[RegisterDefinition,
 def get_register(key: str) -> RegisterDefinition:
 	"""Retrieve a register definition by key."""
 
-	for register in (*SENSOR_REGISTERS, *NUMBER_REGISTERS, *BUTTON_REGISTERS):
+	for register in (*SENSOR_REGISTERS, *NUMBER_REGISTERS, *BUTTON_REGISTERS, *CONTROL_REGISTERS):
 		if register.key == key:
 			return register
 	raise KeyError(key)
@@ -493,6 +663,8 @@ def get_register(key: str) -> RegisterDefinition:
 SERVICE_SET_CURRENT: Final = "set_current"
 SERVICE_SET_FAILSAFE: Final = "set_failsafe"
 SERVICE_SEND_KEEPALIVE: Final = "send_keepalive"
+SERVICE_START_SESSION: Final = "start_session"
+SERVICE_STOP_SESSION: Final = "stop_session"
 
 
 def build_device_slug(host: str, unit_id: int) -> str:

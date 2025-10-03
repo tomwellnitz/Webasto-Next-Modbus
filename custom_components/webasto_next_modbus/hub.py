@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from typing import Final, TypeVar
-
-from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.exceptions import ModbusException
+from typing import Any, Final, TypeVar, cast
 
 from .const import (
 	MAX_RETRY_ATTEMPTS,
@@ -18,6 +16,9 @@ from .const import (
 	RegisterDefinition,
 	all_registers,
 )
+
+_ASYNC_CLIENT_CLASS: type[Any] | None = None
+_MODBUS_EXCEPTION_CLASS: type[Exception] | None = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,6 +103,27 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
 	return tuple(requests)
 
 
+def _ensure_pymodbus() -> tuple[type[Any], type[Exception]]:
+	"""Ensure pymodbus is imported and return the relevant classes."""
+
+	global _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
+	if _ASYNC_CLIENT_CLASS is not None and _MODBUS_EXCEPTION_CLASS is not None:
+		return _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
+
+	try:
+		client_module = importlib.import_module("pymodbus.client")
+		exception_module = importlib.import_module("pymodbus.exceptions")
+	except ImportError as err:  # pragma: no cover - configuration issue
+		raise RuntimeError(
+			"pymodbus is required for the Webasto Next Modbus integration. "
+			"Install it by adding 'pymodbus' to your environment."
+		) from err
+
+	_ASYNC_CLIENT_CLASS = cast(type[Any], client_module.AsyncModbusTcpClient)
+	_MODBUS_EXCEPTION_CLASS = cast(type[Exception], exception_module.ModbusException)
+	return _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
+
+
 T = TypeVar("T")
 
 
@@ -115,21 +137,25 @@ class ModbusBridge:
 		unit_id: int,
 		read_timeout: float = 5.0,
 	) -> None:
+		client_cls, exception_cls = _ensure_pymodbus()
+
 		self._host = host
 		self._port = port
 		self._unit_id = unit_id
 		self._timeout = read_timeout
-		self._client: AsyncModbusTcpClient | None = None
+		self._client_cls = client_cls
+		self._modbus_exception = exception_cls
+		self._client: Any | None = None
 		self._lock = asyncio.Lock()
 		self._read_plan = _build_read_plan(all_registers(include_write_only=False))
 
 	async def async_connect(self) -> None:
 		"""Initialise the Modbus client connection."""
 
-		if self._client and self._client.connected:
+		if self._client and getattr(self._client, "connected", False):
 			return
 
-		client = AsyncModbusTcpClient(self._host, port=self._port, timeout=self._timeout)
+		client = self._client_cls(self._host, port=self._port, timeout=self._timeout)
 		await client.connect()
 		if not client.connected:
 			raise WebastoModbusError(
@@ -155,7 +181,7 @@ class ModbusBridge:
 		test_register = registers[0]
 		await self.async_read_register(test_register)
 
-	async def async_read_register(self, register: RegisterDefinition) -> int | float | None:
+	async def async_read_register(self, register: RegisterDefinition) -> int | float | str | None:
 		"""Read a single register definition and return the decoded value."""
 
 		return await self._call_with_retry(
@@ -163,7 +189,7 @@ class ModbusBridge:
 			f"read register {register.key}",
 		)
 
-	async def async_read_data(self) -> dict[str, float | int | None]:
+	async def async_read_data(self) -> dict[str, float | int | str | None]:
 		"""Read all relevant registers and return a dictionary."""
 
 		return await self._call_with_retry(self._async_read_data_once, "bulk read")
@@ -205,6 +231,7 @@ class ModbusBridge:
 		raise last_err
 
 	async def _async_read_register_once(self, register: RegisterDefinition) -> int | float | None:
+		modbus_exception = self._modbus_exception
 		async with self._lock:
 			await self.async_connect()
 			assert self._client is not None  # For type checkers
@@ -222,7 +249,7 @@ class ModbusBridge:
 						register.count,
 						unit=self._unit_id,
 					)
-			except ModbusException as err:
+			except modbus_exception as err:  # type: ignore[misc]
 				raise WebastoModbusError(str(err)) from err
 
 		if not hasattr(response, "isError") or response.isError():  # type: ignore[attr-defined]
@@ -232,8 +259,9 @@ class ModbusBridge:
 
 		return _decode_register(register, response.registers)  # type: ignore[attr-defined]
 
-	async def _async_read_data_once(self) -> dict[str, float | int | None]:
-		data: dict[str, float | int | None] = {}
+	async def _async_read_data_once(self) -> dict[str, float | int | str | None]:
+		data: dict[str, float | int | str | None] = {}
+		modbus_exception = self._modbus_exception
 
 		async with self._lock:
 			await self.async_connect()
@@ -253,7 +281,7 @@ class ModbusBridge:
 							request.count,
 							unit=self._unit_id,
 						)
-				except ModbusException as err:
+				except modbus_exception as err:  # type: ignore[misc]
 					raise WebastoModbusError(str(err)) from err
 
 				if response.isError():  # type: ignore[attr-defined]
@@ -280,6 +308,7 @@ class ModbusBridge:
 		return data
 
 	async def _async_write_register_once(self, register: RegisterDefinition, value: int) -> None:
+		modbus_exception = self._modbus_exception
 		async with self._lock:
 			await self.async_connect()
 			assert self._client is not None
@@ -290,7 +319,7 @@ class ModbusBridge:
 					value,
 					unit=self._unit_id,
 				)
-			except ModbusException as err:
+			except modbus_exception as err:  # type: ignore[misc]
 				raise WebastoModbusError(str(err)) from err
 
 		if response.isError():  # type: ignore[attr-defined]
@@ -305,8 +334,20 @@ class ModbusBridge:
 		return f"{self._host}:{self._port} (unit {self._unit_id})"
 
 
-def _decode_register(definition: RegisterDefinition, data: list[int]) -> float | int:
+
+def _decode_register(definition: RegisterDefinition, data: list[int]) -> float | int | str:
 	"""Decode a Modbus response into a Python value."""
+
+	if definition.data_type == "string":
+		byte_buffer = bytearray()
+		for register in data:
+			byte_buffer.extend(register.to_bytes(2, "big"))
+		byte_buffer = byte_buffer.rstrip(b"\x00")
+		text = byte_buffer.decode(
+			definition.encoding or "utf-8",
+			errors="ignore",
+		)
+		return text.strip()
 
 	if definition.data_type == "uint16":
 		raw_value = data[0]
