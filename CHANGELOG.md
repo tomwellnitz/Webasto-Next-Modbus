@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format roug
 
 ## [Unreleased]
 
+- _Nothing yet_
+
+## [0.2.1-beta] - 2025-10-03
+
+### Added
+- Repository branding assets (logo/icon) rendered in HACS and documentation for easier discovery.
+
+### Changed
 - Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
 - Raise the minimum supported Python runtime to 3.12 and align dev tooling (coverage, pytest-cov, pytest-homeassistant-custom-component) with the latest compatible matrix.
 
