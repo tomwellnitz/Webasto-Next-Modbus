@@ -18,9 +18,13 @@ from custom_components.webasto_next_modbus import (
     _async_service_send_keepalive,
     _async_service_set_current,
     _async_service_set_failsafe,
+    _async_service_start_session,
+    _async_service_stop_session,
     _resolve_runtime,
 )
 from custom_components.webasto_next_modbus.const import (
+    SESSION_COMMAND_START_VALUE,
+    SESSION_COMMAND_STOP_VALUE,
     VARIANT_11_KW,
     VARIANT_22_KW,
     build_device_slug,
@@ -201,6 +205,57 @@ async def test_service_send_keepalive_triggers_write_and_refresh() -> None:
         TRIGGER_KEEPALIVE_SENT,
         {"source": "service"},
     )
+
+
+@pytest.mark.asyncio
+async def test_service_start_session_writes_command() -> None:
+    """Start session service should write the start command."""
+
+    runtime = _make_runtime()
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({}, hass=hass)
+
+    register = get_register("session_command")
+
+    await _async_service_start_session(call)
+
+    runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
+        register,
+        SESSION_COMMAND_START_VALUE,
+    )
+    runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_service_stop_session_writes_command() -> None:
+    """Stop session service should write the stop command."""
+
+    runtime = _make_runtime()
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({}, hass=hass)
+
+    register = get_register("session_command")
+
+    await _async_service_stop_session(call)
+
+    runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
+        register,
+        SESSION_COMMAND_STOP_VALUE,
+    )
+    runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_session_services_surface_errors() -> None:
+    """Modbus errors should bubble up as HomeAssistantError."""
+
+    runtime = _make_runtime()
+    runtime.bridge.async_write_register.side_effect = WebastoModbusError("boom")  # type: ignore[attr-defined]
+    hass = _make_hass({"entry": runtime})
+    call = _make_call({}, hass=hass)
+
+    with pytest.raises(HomeAssistantError):
+        await _async_service_start_session(call)
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,79 @@
+blueprint:
+  name: Webasto Next – FastCharge/FullCharge Steuerung
+  description: >-
+    Startet oder stoppt eine Ladesitzung der Webasto Next / Ampure Unite Wallbox
+    basierend auf zwei Helfern (z. B. Input-Booleans). Inspiration und Werte
+    stammen aus https://github.com/cdrfun/webasto_next.
+  domain: automation
+  source_url: https://github.com/cdrfun/webasto_next
+  input:
+    config_entry_id:
+      name: Integrations-ID
+      description: >-
+        `config_entry_id` der Webasto Next Modbus-Integration (siehe Einstellungen →
+        Geräte & Dienste → Integration → ⋮ → Informationen).
+      selector:
+        text:
+          multiline: false
+    fastcharge_helper:
+      name: FastCharge-Helfer (Start)
+      description: >-
+        Input-Boolean oder Helfer, der das Starten der Ladesitzung auslöst.
+      selector:
+        entity:
+          domain: input_boolean
+    fullcharge_helper:
+      name: FullCharge-Helfer (Stopp)
+      description: >-
+        Input-Boolean oder Helfer, der das Stoppen der Ladesitzung auslöst.
+      selector:
+        entity:
+          domain: input_boolean
+    reset_helpers:
+      name: Helfer nach Ausführung zurücksetzen
+      description: >-
+        Schaltet den jeweiligen Helfer nach erfolgreicher Ausführung automatisch
+        wieder aus.
+      default: true
+      selector:
+        boolean: {}
+
+mode: restart
+max_exceeded: warn
+
+trigger:
+  - platform: template
+    value_template: "{{ is_state(i('fastcharge_helper'), 'on') }}"
+    id: start
+  - platform: template
+    value_template: "{{ is_state(i('fullcharge_helper'), 'on') }}"
+    id: stop
+
+condition: []
+
+action:
+  - choose:
+      - conditions: "{{ trigger.id == 'start' }}"
+        sequence:
+          - service: webasto_next_modbus.start_session
+            data:
+              config_entry_id: "{{ i('config_entry_id') }}"
+          - if:
+              - condition: template
+                value_template: "{{ i('reset_helpers') }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ i('fastcharge_helper') }}"
+      - conditions: "{{ trigger.id == 'stop' }}"
+        sequence:
+          - service: webasto_next_modbus.stop_session
+            data:
+              config_entry_id: "{{ i('config_entry_id') }}"
+          - if:
+              - condition: template
+                value_template: "{{ i('reset_helpers') }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ i('fullcharge_helper') }}"

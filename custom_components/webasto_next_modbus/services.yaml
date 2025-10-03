@@ -39,3 +39,21 @@ send_keepalive:
       name: Config entry ID
       description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+
+start_session:
+  name: Start charging session
+  description: Issue an explicit start command to the wallbox.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+
+stop_session:
+  name: Stop charging session
+  description: Request the wallbox to end the active charging session.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
