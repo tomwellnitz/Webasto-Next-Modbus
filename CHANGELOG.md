@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file. The format roug
 
 - _Nothing yet_
 
+## [0.2.3-beta] - 2025-10-03
+
+### Fixed
+- Pin `setuptools.packages` discovery to the integration module so editable installs succeed when blueprints are bundled.
+
+### Changed
+- Document the local workflow for validating both Python 3.12 and 3.13 matrix jobs before opening a pull request.
+
 ## [0.2.2-beta] - 2025-10-03
 
 ### Added
