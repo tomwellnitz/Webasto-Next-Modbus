@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Webasto Next Modbus" width="240" />
+</p>
+
 # Webasto Next Modbus
 
 Integrate Webasto Next / Ampure Unite wallboxes with Home Assistant over Modbus TCP.
