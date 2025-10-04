@@ -1,10 +1,23 @@
 # Changelog
+<!-- markdownlint-disable MD022 MD024 MD032 -->
 
 All notable changes to this project are documented in this file. The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 - _Nothing yet_
+
+## [0.2.4-beta] - 2025-10-04
+
+### Added
+
+- Standalone Modbus TCP simulator server with a `virtual-wallbox` CLI entry point.
+- Virtual wallbox scenario overrides, JSON loading, and helper docs for headless testing.
+- Comprehensive simulator test coverage, including Modbus data block behaviours and write actions.
+
+### Changed
+
+- Developer documentation and README now cover the simulator workflow and CLI usage.
 
 ## [0.2.3-beta] - 2025-10-03
 

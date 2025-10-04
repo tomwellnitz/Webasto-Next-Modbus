@@ -111,6 +111,16 @@ Create automations via **Settings → Automations & Scenes → Add Automation �
 
 The repository ships a blueprint at `blueprints/automation/webasto_next_modbus/fastcharge_fullcharge.yaml` that links two input booleans (for example “FastCharge” and “FullCharge”) to the `start_session` and `stop_session` services. The logic is adapted from the community project [cdrfun/webasto_next](https://github.com/cdrfun/webasto_next) and automatically resets the helpers after execution. Import the blueprint through Home Assistant’s blueprint UI and provide the configuration entry ID of your wallbox integration.
 
+### Virtual wallbox simulator
+
+Need to hack on the integration without hardware? Install the package with the `dev` extras and run:
+
+```bash
+virtual-wallbox --host 0.0.0.0 --port 15020
+```
+
+The CLI exposes the simulator as a Modbus TCP server that mirrors the register layout used by the tests. Point your development Home Assistant instance at the advertised host/port to exercise the integration end-to-end. See `docs/development.md` for details on scenario files and advanced options.
+
 ## Troubleshooting
 
 - **Connection failures** – Verify the wallbox responds to `ping`, ensure TCP port 502 is reachable, and confirm the Modbus unit ID matches the wallbox configuration.

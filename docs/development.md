@@ -47,6 +47,50 @@ Execute a subset of tests while iterating on a feature:
 python -m pytest -k services
 ```
 
+## Virtual wallbox simulator
+
+The repository bundles a lightweight Modbus simulator under `virtual_wallbox/`. It mirrors the register map of the real device and powers the automated tests. You can use it in three ways:
+
+1. **Pytest fixtures** – Import `register_virtual_wallbox` or consume the `default_virtual_wallbox` fixture defined in `tests/conftest.py` to back integration tests with a deterministic register set.
+2. **Ad-hoc scripts** – Create a scenario and patch the integration to rely on `virtual_wallbox.simulator.FakeAsyncModbusTcpClient`, e.g.:
+
+   ```python
+  import asyncio
+
+  from custom_components.webasto_next_modbus.hub import ModbusBridge
+   from virtual_wallbox.simulator import Scenario, register_virtual_wallbox, FakeAsyncModbusTcpClient, FakeModbusException
+
+   # Point the bridge to a simulated wallbox.
+   from custom_components.webasto_next_modbus import hub as hub_module
+   hub_module._ASYNC_CLIENT_CLASS = None
+   hub_module._MODBUS_EXCEPTION_CLASS = None
+   hub_module._ensure_pymodbus = lambda: (FakeAsyncModbusTcpClient, FakeModbusException)
+
+   with register_virtual_wallbox(scenario=Scenario(values={"charging_state": 1})):  # host=127.0.0.1:15020
+     bridge = ModbusBridge("127.0.0.1", 15020, 255)
+     data = asyncio.get_event_loop().run_until_complete(bridge.async_read_data())
+   ```
+
+3. **Custom scenarios** – Extend `Scenario(write_actions=...)` to emulate state transitions (e.g. `session_command` start/stop) by updating multiple registers atomically.
+
+The simulator ensures you can iterate on new registers or triggers without waiting for physical hardware. When the actual wallbox becomes available, keep the simulator in CI while adding periodic hardware smoke tests for regression coverage.
+
+### Run the simulator as a Modbus TCP server
+
+Install the package in editable mode (as described above) and run:
+
+```bash
+virtual-wallbox --host 0.0.0.0 --port 15020
+```
+
+Useful options:
+
+- `--scenario path/to/file.json` loads a JSON description with `values` and optional `write_actions`.
+- `--set key=value` (repeatable) overrides individual registers before the server starts.
+- `--unit 42` advertises a custom Modbus unit ID.
+
+The server shares the same logic as the test fixtures, so changes to register definitions automatically flow into the CLI. Press `Ctrl+C` to stop the process.
+
 ## Debug logging in Home Assistant
 
 Add the following to your Home Assistant `configuration.yaml` (or merge it with an existing logger configuration) to surface debug logs from the integration:
