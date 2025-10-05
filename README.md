@@ -1,10 +1,15 @@
 # Webasto Next Modbus for Home Assistant
 
-> Bring Webasto Next / Ampure Unite wallboxes into Home Assistant with a production-ready Modbus TCP integration.
+> Bring Webasto Next / Ampure Unite wallboxes into Home Assistant with a Modbus TCP integration.
 
 [![Release](https://img.shields.io/github/v/release/tomwellnitz/Webasto-Next-Modbus?display_name=release)](https://github.com/tomwellnitz/Webasto-Next-Modbus/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/tomwellnitz/Webasto-Next-Modbus/ci.yaml?branch=main)](https://github.com/tomwellnitz/Webasto-Next-Modbus/actions/workflows/ci.yaml)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange)](https://hacs.xyz)
+[![License](https://img.shields.io/github/license/tomwellnitz/Webasto-Next-Modbus.svg)](LICENSE)
+[![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/tomwellnitz/Webasto-Next-Modbus/commits/main)
+
+> 📚 Looking for the full documentation portal? Start with [`docs/README.md`](docs/README.md) for architecture notes, development guides, and support resources inspired by the excellent [Spook integration](https://github.com/frenck/spook).
+> ⚠️ This project is a community-maintained integration that is not affiliated with, endorsed, or supported by Webasto, Ampure, or the Home Assistant project.
 
 ## At a glance
 
@@ -24,6 +29,8 @@
 - [Development & testing](#development--testing)
 - [Operations & release playbook](#operations--release-playbook)
 - [Project resources](#project-resources)
+- [Support & community](#support--community)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## Quick start
@@ -174,8 +181,19 @@ English is the default language. A German translation ships in `translations/de.
 
 - [`docs/architecture.md`](docs/architecture.md) – register map, coordinator internals, and future work.
 - [`docs/development.md`](docs/development.md) – environment setup, tooling, and smoke tests.
+- [`docs/support.md`](docs/support.md) – diagnostics checklist, known limitations, and contact options.
 - [`CHANGELOG.md`](CHANGELOG.md) – release history.
 - [Issue tracker](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues) – questions, bug reports, feature requests.
+
+## Support & community
+
+- Work through the [support checklist](docs/support.md) before opening a bug report; collecting diagnostics and debug logs up front keeps the issue tracker actionable.
+- Post “how do I…” and automation questions in the [GitHub discussions board](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions).
+- Security disclosures should be sent privately to `security@tomwellnitz.de`.
+
+## Contributing
+
+We welcome pull requests and documentation improvements. Read the new [`CONTRIBUTING.md`](CONTRIBUTING.md) to learn how to set up your environment, run the tooling suite, and follow the release playbook. Please run `python -m ruff check` and `python -m pytest` before submitting changes.
 
 ## License
 

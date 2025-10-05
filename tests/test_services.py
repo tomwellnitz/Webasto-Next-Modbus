@@ -25,9 +25,9 @@ from custom_components.webasto_next_modbus import (
 from custom_components.webasto_next_modbus.const import (
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
+    SIGNAL_REGISTER_WRITTEN,
     VARIANT_11_KW,
     VARIANT_22_KW,
-    SIGNAL_REGISTER_WRITTEN,
     build_device_slug,
     get_max_current_for_variant,
     get_register,

@@ -8,16 +8,16 @@ from homeassistant.components.number import NumberEntity, NumberMode, RestoreNum
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.exceptions import HomeAssistantError
 
 from . import RuntimeData
 from .const import CONF_UNIT_ID, DOMAIN, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
 from .entity import WebastoRegisterEntity
 
-
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
 	hass: HomeAssistant,

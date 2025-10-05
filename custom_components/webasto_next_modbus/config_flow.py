@@ -17,8 +17,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 
 from .const import (
-	CONF_SCAN_INTERVAL,
 	CONF_NAME,
+	CONF_SCAN_INTERVAL,
 	CONF_UNIT_ID,
 	CONF_VARIANT,
 	DEFAULT_PORT,
@@ -50,8 +50,8 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 		if vol is None:
 			_LOGGER.error(
-				"Missing dependency 'voluptuous'; aborting config flow. Please ensure the Home Assistant "
-				"environment includes this package."
+				"Missing dependency 'voluptuous'; aborting config flow. "
+				"Please ensure the Home Assistant environment includes this package."
 			)
 			return self.async_abort(reason="missing_dependency")
 
@@ -89,7 +89,9 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 				if name:
 					data[CONF_NAME] = name
 
-				title = name or f"{normalized_input[CONF_HOST]} (unit {normalized_input[CONF_UNIT_ID]})"
+				host = normalized_input[CONF_HOST]
+				unit_id = normalized_input[CONF_UNIT_ID]
+				title = name or f"{host} (unit {unit_id})"
 
 				return self.async_create_entry(
 					title=title,
@@ -190,8 +192,8 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 
 		if vol is None:
 			_LOGGER.error(
-				"Missing dependency 'voluptuous'; aborting options flow. Please ensure the Home Assistant "
-				"environment includes this package."
+				"Missing dependency 'voluptuous'; aborting options flow. "
+				"Please ensure the Home Assistant environment includes this package."
 			)
 			return self.async_abort(reason="missing_dependency")
 

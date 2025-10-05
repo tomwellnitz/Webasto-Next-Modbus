@@ -9,6 +9,14 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Final, TypeVar, cast
 
+from .const import (
+	MAX_RETRY_ATTEMPTS,
+	REGISTER_TYPE,
+	RETRY_BACKOFF_SECONDS,
+	RegisterDefinition,
+	all_registers,
+)
+
 try:  # pragma: no cover - optional dependency import
 	from pymodbus.client import AsyncModbusTcpClient as _AsyncModbusTcpClient
 	from pymodbus.exceptions import ModbusException as _ModbusException
@@ -18,14 +26,6 @@ except ImportError:  # pragma: no cover - handled at runtime
 
 _ASYNC_CLIENT_CLASS: type[Any] | None = cast("type[Any] | None", _AsyncModbusTcpClient)
 _MODBUS_EXCEPTION_CLASS: type[Exception] | None = cast("type[Exception] | None", _ModbusException)
-
-from .const import (
-	MAX_RETRY_ATTEMPTS,
-	REGISTER_TYPE,
-	RETRY_BACKOFF_SECONDS,
-	RegisterDefinition,
-	all_registers,
-)
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
@@ -16,13 +16,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
-	CONF_SCAN_INTERVAL,
 	CONF_NAME,
+	CONF_SCAN_INTERVAL,
 	CONF_UNIT_ID,
 	CONF_VARIANT,
 	DEFAULT_SCAN_INTERVAL,
 	DEFAULT_VARIANT,
-    DEVICE_NAME,
+	DEVICE_NAME,
 	DOMAIN,
 	KEEPALIVE_TRIGGER_VALUE,
 	MAX_SCAN_INTERVAL,
@@ -34,7 +34,7 @@ from .const import (
 	SERVICE_STOP_SESSION,
 	SESSION_COMMAND_START_VALUE,
 	SESSION_COMMAND_STOP_VALUE,
-    SIGNAL_REGISTER_WRITTEN,
+	SIGNAL_REGISTER_WRITTEN,
 	build_device_slug,
 	get_max_current_for_variant,
 	get_register,
