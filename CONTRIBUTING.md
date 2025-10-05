@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking the time to improve Webasto Next Modbus! This project follows the same playbook as other well-maintained Home Assistant custom integrations, such as [Spook](https://github.com/frenck/spook). The notes below summarise how to get set up, how to propose changes, and where to ask questions.
+Thanks for taking the time to improve Webasto Next Modbus! The notes below summarise how to get set up, how to propose changes, and where to ask questions.
 
 ## Quick start
 
