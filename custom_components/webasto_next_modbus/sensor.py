@@ -26,7 +26,14 @@ async def async_setup_entry(
 	unit_id = entry.data[CONF_UNIT_ID]
 
 	entities = [
-		WebastoSensor(runtime.coordinator, runtime.bridge, host, unit_id, definition)
+		WebastoSensor(
+			runtime.coordinator,
+			runtime.bridge,
+			host,
+			unit_id,
+			definition,
+			runtime.device_name,
+		)
 		for definition in SENSOR_REGISTERS
 	]
 
@@ -45,8 +52,9 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
 		host: str,
 		unit_id: int,
 		register,
+		device_name: str,
 	) -> None:
-		super().__init__(coordinator, bridge, host, unit_id, register)
+		super().__init__(coordinator, bridge, host, unit_id, register, device_name)
 
 		if register.device_class:
 			try:

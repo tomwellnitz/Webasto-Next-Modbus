@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
+import inspect
 import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Final, TypeVar, cast
+
+try:  # pragma: no cover - optional dependency import
+	from pymodbus.client import AsyncModbusTcpClient as _AsyncModbusTcpClient
+	from pymodbus.exceptions import ModbusException as _ModbusException
+except ImportError:  # pragma: no cover - handled at runtime
+	_AsyncModbusTcpClient = None  # type: ignore[assignment]
+	_ModbusException = None  # type: ignore[assignment]
+
+_ASYNC_CLIENT_CLASS: type[Any] | None = cast("type[Any] | None", _AsyncModbusTcpClient)
+_MODBUS_EXCEPTION_CLASS: type[Exception] | None = cast("type[Exception] | None", _ModbusException)
 
 from .const import (
 	MAX_RETRY_ATTEMPTS,
@@ -16,9 +26,6 @@ from .const import (
 	RegisterDefinition,
 	all_registers,
 )
-
-_ASYNC_CLIENT_CLASS: type[Any] | None = None
-_MODBUS_EXCEPTION_CLASS: type[Exception] | None = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,21 +114,13 @@ def _ensure_pymodbus() -> tuple[type[Any], type[Exception]]:
 	"""Ensure pymodbus is imported and return the relevant classes."""
 
 	global _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
-	if _ASYNC_CLIENT_CLASS is not None and _MODBUS_EXCEPTION_CLASS is not None:
-		return _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
-
-	try:
-		client_module = importlib.import_module("pymodbus.client")
-		exception_module = importlib.import_module("pymodbus.exceptions")
-	except ImportError as err:  # pragma: no cover - configuration issue
+	if _ASYNC_CLIENT_CLASS is None or _MODBUS_EXCEPTION_CLASS is None:
 		raise RuntimeError(
 			"pymodbus is required for the Webasto Next Modbus integration. "
 			"Install it by adding 'pymodbus' to your environment."
-		) from err
+		)
 
-	_ASYNC_CLIENT_CLASS = cast(type[Any], client_module.AsyncModbusTcpClient)
-	_MODBUS_EXCEPTION_CLASS = cast(type[Exception], exception_module.ModbusException)
-	return _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
+	return cast(type[Any], _ASYNC_CLIENT_CLASS), cast(type[Exception], _MODBUS_EXCEPTION_CLASS)
 
 
 T = TypeVar("T")
@@ -148,6 +147,55 @@ class ModbusBridge:
 		self._client: Any | None = None
 		self._lock = asyncio.Lock()
 		self._read_plan = _build_read_plan(all_registers(include_write_only=False))
+	async def _invoke_with_unit(
+		self,
+		method: Callable[..., Awaitable[Any]],
+		*args: Any,
+		**kwargs: Any,
+	) -> Any:
+		"""Call a pymodbus coroutine, handling differing unit keyword names."""
+
+		base_kwargs = dict(kwargs)
+		for keyword in ("device_id", "unit", "slave"):
+			current_kwargs = dict(base_kwargs)
+			if keyword in current_kwargs:
+				continue
+			current_kwargs[keyword] = self._unit_id
+			try:
+				return await method(*args, **current_kwargs)
+			except TypeError as err_keyword:
+				if self._is_keyword_unsupported(err_keyword, keyword):
+					continue
+				raise WebastoModbusError(str(err_keyword)) from err_keyword
+
+		if not base_kwargs:
+			try:
+				return await method(*args, self._unit_id)
+			except TypeError as err_positional:
+				if self._is_positional_only_error(err_positional):
+					raise WebastoModbusError(
+						"Modbus client does not support unit/slave parameter"
+					) from err_positional
+				raise WebastoModbusError(str(err_positional)) from err_positional
+
+		raise WebastoModbusError("Modbus client does not support unit/slave parameter")
+
+	@staticmethod
+	def _is_keyword_unsupported(err: TypeError, keyword: str) -> bool:
+		"""Return True if TypeError indicates an unexpected keyword argument."""
+
+		message = str(err)
+		return (
+			"unexpected keyword argument" in message and f"'{keyword}'" in message
+			or "multiple values for argument" in message and f"'{keyword}'" in message
+		)
+
+	@staticmethod
+	def _is_positional_only_error(err: TypeError) -> bool:
+		"""Detect positional argument mismatches when falling back."""
+
+		message = str(err)
+		return "positional argument" in message and "given" in message
 
 	async def async_connect(self) -> None:
 		"""Initialise the Modbus client connection."""
@@ -168,7 +216,9 @@ class ModbusBridge:
 		"""Close the Modbus connection."""
 
 		if self._client is not None:
-			await self._client.close()
+			close_result = self._client.close()
+			if inspect.isawaitable(close_result):
+				await close_result
 			self._client = None
 			_LOGGER.debug("Modbus connection to %s closed", self._host)
 
@@ -238,16 +288,16 @@ class ModbusBridge:
 
 			try:
 				if register.register_type == "input":
-					response = await self._client.read_input_registers(
+					response = await self._invoke_with_unit(
+						self._client.read_input_registers,
 						register.address,
-						register.count,
-						unit=self._unit_id,
+						count=register.count,
 					)
 				else:
-					response = await self._client.read_holding_registers(
+					response = await self._invoke_with_unit(
+						self._client.read_holding_registers,
 						register.address,
-						register.count,
-						unit=self._unit_id,
+						count=register.count,
 					)
 			except modbus_exception as err:  # type: ignore[misc]
 				raise WebastoModbusError(str(err)) from err
@@ -270,16 +320,16 @@ class ModbusBridge:
 			for request in self._read_plan:
 				try:
 					if request.register_type == "input":
-						response = await self._client.read_input_registers(
+						response = await self._invoke_with_unit(
+							self._client.read_input_registers,
 							request.start_address,
-							request.count,
-							unit=self._unit_id,
+							count=request.count,
 						)
 					else:
-						response = await self._client.read_holding_registers(
+						response = await self._invoke_with_unit(
+							self._client.read_holding_registers,
 							request.start_address,
-							request.count,
-							unit=self._unit_id,
+							count=request.count,
 						)
 				except modbus_exception as err:  # type: ignore[misc]
 					raise WebastoModbusError(str(err)) from err
@@ -314,10 +364,10 @@ class ModbusBridge:
 			assert self._client is not None
 
 			try:
-				response = await self._client.write_register(
+				response = await self._invoke_with_unit(
+					self._client.write_register,
 					register.address,
 					value,
-					unit=self._unit_id,
 				)
 			except modbus_exception as err:  # type: ignore[misc]
 				raise WebastoModbusError(str(err)) from err

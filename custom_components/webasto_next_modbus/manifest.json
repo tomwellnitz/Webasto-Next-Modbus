@@ -1,16 +1,16 @@
 {
   "domain": "webasto_next_modbus",
   "name": "Webasto Next Modbus",
-  "version": "0.2.4-beta",
+  "version": "0.3.0-beta.1",
   "documentation": "https://github.com/tomwellnitz/Webasto-Next-Modbus",
   "issue_tracker": "https://github.com/tomwellnitz/Webasto-Next-Modbus/issues",
   "requirements": [
-    "pymodbus==3.6.9"
+    "pymodbus>=3.11.2,<4"
   ],
   "dependencies": [],
   "codeowners": ["@tomwellnitz"],
   "config_flow": true,
-  "homeassistant": "2024.12.0",
+  "homeassistant": "2024.6.0",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "loggers": ["pymodbus", "custom_components.webasto_next_modbus"]

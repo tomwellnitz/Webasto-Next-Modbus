@@ -2,7 +2,7 @@
   "name": "Webasto Next Modbus",
   "render_readme": true,
   "domains": ["webasto_next_modbus"],
-  "homeassistant": "2024.12.0",
+  "homeassistant": "2024.6.0",
   "content_in_root": false,
   "country": "global"
 }

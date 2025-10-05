@@ -103,6 +103,10 @@ async def test_options_flow_updates_interval() -> None:
     )
 
     options_flow = WebastoOptionsFlow(entry)
+    hass = MagicMock()
+    hass.config_entries = MagicMock()
+    hass.config_entries.async_update_entry = MagicMock()
+    options_flow.hass = hass
 
     initial = await options_flow.async_step_init()
     assert initial.get("type") == FlowResultType.FORM
@@ -112,3 +116,4 @@ async def test_options_flow_updates_interval() -> None:
     )
     assert updated.get("type") == FlowResultType.CREATE_ENTRY
     assert updated.get("data") == {CONF_SCAN_INTERVAL: 10, CONF_VARIANT: VARIANT_22_KW}
+    hass.config_entries.async_update_entry.assert_called_once()

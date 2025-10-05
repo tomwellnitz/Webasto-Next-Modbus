@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -12,13 +13,16 @@ from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
 	CONF_SCAN_INTERVAL,
+	CONF_NAME,
 	CONF_UNIT_ID,
 	CONF_VARIANT,
 	DEFAULT_SCAN_INTERVAL,
 	DEFAULT_VARIANT,
+    DEVICE_NAME,
 	DOMAIN,
 	KEEPALIVE_TRIGGER_VALUE,
 	MAX_SCAN_INTERVAL,
@@ -30,6 +34,7 @@ from .const import (
 	SERVICE_STOP_SESSION,
 	SESSION_COMMAND_START_VALUE,
 	SESSION_COMMAND_STOP_VALUE,
+    SIGNAL_REGISTER_WRITTEN,
 	build_device_slug,
 	get_max_current_for_variant,
 	get_register,
@@ -52,10 +57,19 @@ class RuntimeData:
 	variant: str
 	max_current: int
 	device_slug: str
+	device_name: str
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 	"""Set up Webasto Next Modbus from a config entry."""
+
+	domain_data = hass.data.setdefault(DOMAIN, {})
+	if not domain_data.get("_integration_path_logged"):
+		integration_path = Path(__file__).resolve().parent
+		_LOGGER.warning(
+			"Webasto Next Modbus integration loaded from %s", integration_path
+		)
+		domain_data["_integration_path_logged"] = True
 
 	host = entry.data[CONF_HOST]
 	port = entry.data[CONF_PORT]
@@ -68,9 +82,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 	variant = entry.options.get(CONF_VARIANT, entry.data.get(CONF_VARIANT, DEFAULT_VARIANT))
 	max_current = get_max_current_for_variant(variant)
 	device_slug = build_device_slug(host, unit_id)
+	configured_name = entry.data.get(CONF_NAME)
+	device_name = configured_name or entry.title or DEVICE_NAME
 
-	if CONF_VARIANT not in entry.data:
-		updated_data = {**entry.data, CONF_VARIANT: variant}
+	updated_data = dict(entry.data)
+	if CONF_VARIANT not in updated_data:
+		updated_data[CONF_VARIANT] = variant
+	if configured_name != updated_data.get(CONF_NAME):
+		# Keep stored name in sync with data payload; remove empty values.
+		if configured_name:
+			updated_data[CONF_NAME] = configured_name
+		elif CONF_NAME in updated_data:
+			updated_data.pop(CONF_NAME)
+	if updated_data != entry.data:
 		hass.config_entries.async_update_entry(entry, data=updated_data)
 
 	bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
@@ -92,13 +116,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 	await coordinator.async_config_entry_first_refresh()
 
-	domain_data = hass.data.setdefault(DOMAIN, {})
 	domain_data[entry.entry_id] = RuntimeData(
 		bridge=bridge,
 		coordinator=coordinator,
 		variant=variant,
 		max_current=max_current,
 		device_slug=device_slug,
+		device_name=device_name,
 	)
 
 	await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -237,6 +261,13 @@ async def _async_service_set_current(call: ServiceCall) -> None:
 		await runtime.bridge.async_write_register(register, value)
 	except WebastoModbusError as err:
 		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+	async_dispatcher_send(
+		call.hass,
+		SIGNAL_REGISTER_WRITTEN,
+		runtime.device_slug,
+		register.key,
+		value,
+	)
 	await runtime.coordinator.async_request_refresh()
 
 
@@ -252,6 +283,13 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
 		await runtime.bridge.async_write_register(amps_register, amps_value)
 	except WebastoModbusError as err:
 		raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+	async_dispatcher_send(
+		call.hass,
+		SIGNAL_REGISTER_WRITTEN,
+		runtime.device_slug,
+		amps_register.key,
+		amps_value,
+	)
 
 	timeout_value: int | None = None
 	if "timeout_s" in call.data:
@@ -264,6 +302,13 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
 			await runtime.bridge.async_write_register(timeout_register, timeout_value)
 		except WebastoModbusError as err:
 			raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+		async_dispatcher_send(
+			call.hass,
+			SIGNAL_REGISTER_WRITTEN,
+			runtime.device_slug,
+			timeout_register.key,
+			timeout_value,
+		)
 
 	await runtime.coordinator.async_request_refresh()
 

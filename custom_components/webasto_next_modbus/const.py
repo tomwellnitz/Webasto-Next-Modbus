@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "0.2.4-beta"
+INTEGRATION_VERSION: Final = "0.3.0-beta.1"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 5  # seconds
@@ -20,6 +20,7 @@ FAILURE_NOTIFICATION_TITLE: Final = "Webasto Next Modbus connection issue"
 CONF_UNIT_ID: Final = "unit_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_VARIANT: Final = "variant"
+CONF_NAME: Final = "name"
 
 VARIANT_11_KW: Final = "11kw"
 VARIANT_22_KW: Final = "22kw"
@@ -41,6 +42,7 @@ DEVICE_NAME: Final = "Webasto Next Wallbox"
 KEEPALIVE_TRIGGER_VALUE: Final = 1
 SESSION_COMMAND_START_VALUE: Final = 1
 SESSION_COMMAND_STOP_VALUE: Final = 2
+SIGNAL_REGISTER_WRITTEN: Final = "webasto_next_modbus_register_written"
 
 REGISTER_TYPE = Literal["input", "holding"]
 REGISTER_DATA_TYPE = Literal["uint16", "uint32", "string"]
@@ -618,6 +620,30 @@ BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 		data_type="uint16",
 		entity="button",
 		icon="mdi:lan-connect",
+		writable=True,
+		write_only=True,
+	),
+	RegisterDefinition(
+		key="start_session",
+		name="Start Charging",
+		address=5006,
+		count=1,
+		register_type="holding",
+		data_type="uint16",
+		entity="button",
+		icon="mdi:play",
+		writable=True,
+		write_only=True,
+	),
+	RegisterDefinition(
+		key="stop_session",
+		name="Stop Charging",
+		address=5006,
+		count=1,
+		register_type="holding",
+		data_type="uint16",
+		entity="button",
+		icon="mdi:stop-circle",
 		writable=True,
 		write_only=True,
 	),

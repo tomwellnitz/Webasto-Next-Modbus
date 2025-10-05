@@ -10,12 +10,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DEVICE_NAME,
-    DOMAIN,
-    MANUFACTURER,
-    MODEL,
-    RegisterDefinition,
-    build_device_slug,
+	DOMAIN,
+	MANUFACTURER,
+	MODEL,
+	RegisterDefinition,
+	build_device_slug,
 )
 from .coordinator import WebastoDataCoordinator
 from .hub import ModbusBridge, WebastoModbusError
@@ -31,6 +30,7 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         host: str,
         unit_id: int,
         register: RegisterDefinition,
+        device_name: str,
     ) -> None:
         super().__init__(coordinator)
         self._bridge = bridge
@@ -54,7 +54,7 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
             identifiers={(DOMAIN, self._unique_prefix)},
             manufacturer=MANUFACTURER,
             model=MODEL,
-            name=DEVICE_NAME,
+            name=device_name,
         )
 
     @property

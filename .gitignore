@@ -16,5 +16,7 @@ build/
 .idea/
 .vscode/
 .ha-cache/
+ha-config/
+!ha-config/.gitkeep
 *.egg-info/
 .DS_Store

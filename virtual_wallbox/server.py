@@ -6,11 +6,11 @@ import logging
 from collections.abc import Iterable
 
 from pymodbus.datastore import (
+    ModbusDeviceContext,
     ModbusServerContext,
-    ModbusSlaveContext,
     ModbusSparseDataBlock,
 )
-from pymodbus.device import ModbusDeviceIdentification
+from pymodbus.pdu.device import ModbusDeviceIdentification
 from pymodbus.server import StartAsyncTcpServer
 
 from custom_components.webasto_next_modbus.const import REGISTER_TYPE
@@ -70,6 +70,38 @@ class VirtualWallboxDataBlock(ModbusSparseDataBlock):
         return address + 1
 
 
+class VirtualWallboxDeviceContext(ModbusDeviceContext):
+    """Device context that preserves legacy zero-mode behaviour."""
+
+    def __init__(
+        self,
+        *,
+        zero_mode: bool,
+        input_block: ModbusSparseDataBlock,
+        holding_block: ModbusSparseDataBlock,
+    ) -> None:
+        super().__init__(
+            di=ModbusSparseDataBlock({}),
+            co=ModbusSparseDataBlock({}),
+            ir=input_block,
+            hr=holding_block,
+        )
+
+    def getValues(self, func_code, address, count=1):  # type: ignore[override]
+        block = self.store[self.decode(func_code)]
+        return block.getValues(address, count)
+
+    def setValues(self, func_code, address, values):  # type: ignore[override]
+        block = self.store[self.decode(func_code)]
+        return block.setValues(address, values)
+
+    def validate(self, func_code, address, count=1):  # type: ignore[override]
+        block = self.store[self.decode(func_code)]
+        if hasattr(block, "validate"):
+            return block.validate(address, count)
+        return True
+
+
 def build_server_context(
     state: VirtualWallboxState,
     *,
@@ -79,14 +111,12 @@ def build_server_context(
 
     input_block = VirtualWallboxDataBlock(state, "input", zero_mode=zero_mode)
     holding_block = VirtualWallboxDataBlock(state, "holding", zero_mode=zero_mode)
-    slave = ModbusSlaveContext(
-        di=ModbusSparseDataBlock({}),
-        co=ModbusSparseDataBlock({}),
-        hr=holding_block,
-        ir=input_block,
+    device = VirtualWallboxDeviceContext(
         zero_mode=zero_mode,
+        input_block=input_block,
+        holding_block=holding_block,
     )
-    return ModbusServerContext(slaves=slave, single=True)
+    return ModbusServerContext(devices=device, single=True)
 
 
 def build_identity() -> ModbusDeviceIdentification:

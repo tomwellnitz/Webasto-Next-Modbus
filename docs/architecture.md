@@ -1,112 +1,102 @@
 # Webasto Next Modbus Home Assistant Integration
 
-## Zielsetzung
+This document captures architectural goals, the Modbus register model, and the high-level software design that powers the Webasto Next Modbus integration.
 
-Diese Integration bindet Webasto Next (bzw. Ampure Unite) Wallboxen per Modbus TCP in Home Assistant ein. Sie liefert strukturierte Sensoren, erlaubt das Setzen von Ladeparametern und stellt optionale Helfer bereit, ohne YAML-Anpassungen vorauszusetzen. Der Fokus liegt auf einem robusten, wartbaren Code mit kommentierten Schnittstellen sowie automatisierten Tests.
+## Objectives
 
-## Wichtige Anforderungen
+- Ship a resilient Home Assistant integration that surfaces telemetry and control surfaces for Webasto Next / Ampure Unite wallboxes via Modbus TCP.
+- Provide rich entities and helper services without requiring users to handcraft YAML automations.
+- Concentrate Modbus knowledge in a single place so new registers and behaviours can be added with minimal risk.
+- Keep the codebase maintainable by favouring typed helpers, clear boundaries, and comprehensive automated tests.
 
-- **Konfigurationsoberfläche**: Setup per Config Flow (Host, Port, Unit-ID, Update-Intervall) mit Eingangs-Validierung.
-- **Modbus-Kommunikation**: Asynchroner TCP-Client (pymodbus) inkl. automatischer Bündelung der Registerabfragen, Fehlerhandhabung und Wiederverbindung.
-- **Entitäten**:
-  - Sensoren für Status, Ströme, Leistungen, Energie, Sitzungszeiten sowie statische Metadaten (Seriennummer, Charge-Point-ID, Marke/Modell, Firmware, Controller-Uhr, Nennleistung, Phasenkonfiguration).
-  - Number-Entities für dynamisches Stromlimit sowie Fail-safe-Parameter.
-  - Button (optional) zum manuellen Senden des Keepalive-Registers.
-- **Services**: `webasto_next_modbus.set_current`, `webasto_next_modbus.set_failsafe`, `webasto_next_modbus.send_keepalive`, `webasto_next_modbus.start_session` und `webasto_next_modbus.stop_session` als Ergänzung zu den Entitäten.
-- **Erweiterbarkeit**: Registerdefinitionen konzentrieren, damit neue Datenpunkte ohne großen Eingriff ergänzt werden können.
-- **Tests**: Pytest-Suite mit Mocks für Modbus, Abdeckung von Config Flow, Entitäten und Service-Logik.
-- **Dokumentation**: README mit Installations-, Konfigurations- und Troubleshooting-Hinweisen.
+## Functional requirements
 
-## Domänen- und Namenskonzept
+- **Configuration flow** – Guided setup that collects host, port, unit ID, scan interval, and hardware variant while validating connectivity inline.
+- **Modbus communication** – Async TCP client (pymodbus) with request batching, retry/backoff, and deterministic reconnect behaviour.
+- **Entities** – Sensors for live telemetry and metadata, numbers for writable settings, and buttons for manual keep-alive and session control.
+- **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) to complement the entity model.
+- **Extensibility** – Centralised register descriptions drive entity creation so new datapoints require minimal boilerplate.
+- **Testing** – Pytest suite with Modbus fixtures covering the config flow, coordinator, entities, services, and device triggers.
+- **Documentation** – User-facing README plus architecture and development guides for maintainers.
 
-- Domain: `webasto_next_modbus`
-- Geräte-ID: Kombination aus Host und Unit-ID.
-- Einheiten:
-  - Ampere (A), Volt (V), Watt (W), Kilowattstunden (kWh), Sekunden (s).
-  - Zustände mit Enum-Mapping (z. B. Charge Point State).
+## Domain model
 
-## Registermodell
+- Integration domain: `webasto_next_modbus`.
+- Device unique ID: `<host>-<unit_id>`.
+- Units of measure: ampere (A), volt (V), watt (W), kilowatt-hour (kWh), second (s). Enumerations map integer states to human-readable labels.
 
-Registerdaten basieren auf Community-Dokumentation und Hersteller-Unterlagen:
+## Register map
 
-| Schlüssel | Adresse | Typ | Skalierung | Beschreibung |
-|-----------|---------|-----|------------|--------------|
-| `serial_number` | 100 | string | – | Seriennummer laut Controller |
-| `charge_point_id` | 130 | string | – | Backend-/Charge-Point-ID |
-| `charge_point_brand` | 190 | string | – | Markenname des EVSE |
-| `charge_point_model` | 210 | string | – | Modellbezeichnung |
-| `firmware_version` | 230 | string | – | Firmware-Version |
-| `wallbox_date` | 290 | uint32 | – | Controller-Datum (YYYYMMDD) |
-| `wallbox_time` | 294 | uint32 | – | Controller-Uhrzeit (HHMMSS) |
-| `rated_power_w` | 400 | uint32 | – | Nennleistung laut Gerät |
-| `phase_configuration` | 404 | uint16 | – | Phasenkonfiguration (0=1p, 1=3p) |
-| `charge_point_state` | 1000 | uint16 | – | IEC 61851 Zustand (0–8) |
-| `charging_state` | 1001 | uint16 | – | Ladeaktivität (0/1) |
-| `equipment_state` | 1002 | uint16 | – | EVSE-Zustand |
-| `cable_state` | 1004 | uint16 | – | Kabel- / Fahrzeugstatus |
-| `fault_code` | 1006 | uint16 | – | Fehlercode |
-| `current_l{1..3}` | 1008/1010/1012 | uint16 | ×0.001 | Phasenströme |
-| `voltage_l{1..3}` | 1014/1016/1018 | uint16 | – | Phasenspannungen |
-| `active_power_total` | 1020 | uint32 | – | Gesamtleistung |
-| `active_power_l{1..3}` | 1024/1028/1032 | uint32 | – | Phasenleistungen |
-| `energy_total` | 1036 | uint32 | ×0.001 | Zählerstand gesamt |
-| `ev_max_current` | 1108 | uint16 | – | Maximal zulässiger EV-Strom laut Fahrzeug |
-| `charged_energy_wh` | 1502 | uint16 | – | Energie je aktueller Sitzung |
-| `session_*` | 1504–1512 | uint32 | – | Sitzungsdaten (Start, Dauer, Ende) |
-| `failsafe_current` | 2000 | uint16 | – | Fail-safe Strom |
-| `failsafe_timeout` | 2002 | uint16 | – | Fail-safe Timeout |
-| `charge_power_w` | 5000 | uint32 | – | Momentane Ladeleistung (Holding, Read) |
-| `set_current` | 5004 | uint16 | – | Dynamisches Stromlimit (Write) |
-| `session_command` | 5006 | uint16 | – | Sitzungsstart/-stopp befehl (Write) |
-| `alive` | 6000 | uint16 | – | Keepalive Toggle |
+The register ranges are derived from community research and vendor documentation. Values are batched into segments of up to 110 registers to minimise Modbus overhead.
 
-Register werden in Gruppen bis max. 110 Register zusammengefasst, um Modbus-Overhead zu reduzieren.
+| Key | Address | Type | Scale | Description |
+| --- | --- | --- | --- | --- |
+| `serial_number` | 100 | string | – | Wallbox serial number |
+| `charge_point_id` | 130 | string | – | Backend charge point identifier |
+| `charge_point_brand` | 190 | string | – | Advertised brand name |
+| `charge_point_model` | 210 | string | – | Model designation |
+| `firmware_version` | 230 | string | – | Firmware version |
+| `wallbox_date` | 290 | uint32 | – | Controller date (`YYYYMMDD`) |
+| `wallbox_time` | 294 | uint32 | – | Controller time (`HHMMSS`) |
+| `rated_power_w` | 400 | uint32 | – | Rated charging power |
+| `phase_configuration` | 404 | uint16 | – | Phase configuration (`0 = single-phase`, `1 = three-phase`) |
+| `charge_point_state` | 1000 | uint16 | – | IEC 61851 charge point state (`0–8`) |
+| `charging_state` | 1001 | uint16 | – | Charging active (`0/1`) |
+| `equipment_state` | 1002 | uint16 | – | EVSE equipment state |
+| `cable_state` | 1004 | uint16 | – | Cable/vehicle state |
+| `fault_code` | 1006 | uint16 | – | Vendor-specific error code |
+| `current_l{1..3}` | 1008/1010/1012 | uint16 | ×0.001 | Phase currents |
+| `voltage_l{1..3}` | 1014/1016/1018 | uint16 | – | Phase voltages |
+| `active_power_total` | 1020 | uint32 | – | Total active power |
+| `active_power_l{1..3}` | 1024/1028/1032 | uint32 | – | Per-phase active power |
+| `energy_total` | 1036 | uint32 | ×0.001 | Lifetime energy counter |
+| `ev_max_current` | 1108 | uint16 | – | Max allowable EV current |
+| `charged_energy_wh` | 1502 | uint16 | – | Energy for the current session |
+| `session_*` | 1504–1512 | uint32 | – | Session timestamps and durations |
+| `failsafe_current` | 2000 | uint16 | – | Fail-safe current |
+| `failsafe_timeout` | 2002 | uint16 | – | Fail-safe timeout |
+| `charge_power_w` | 5000 | uint32 | – | Live charging power (holding register) |
+| `set_current` | 5004 | uint16 | – | Writable dynamic current limit |
+| `session_command` | 5006 | uint16 | – | Start/stop command register |
+| `alive` | 6000 | uint16 | – | Keep-alive toggle |
 
-## Softwarearchitektur
+## Software components
 
-### Module
+- `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap.
+- `const.py` – Constants, version metadata, register descriptions, and enum mappings.
+- `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, and exposes read/write helpers.
+- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles and normalises raw register values.
+- `config_flow.py` – User and options flows with validation and duplicate protection.
+- Platform modules (`sensor.py`, `number.py`, `button.py`) – Entity classes backed by static descriptions.
+- `services.yaml` – Service schemas surfaced to Home Assistant.
 
-- `__init__.py`: Setup, Unload, Service-Registrierung, Coordinator-Initialisierung.
-- `const.py`: Konstanten, Version, Register-Definitionen, Enum-Mappings.
-- `coordinator.py` / `hub.py`: ModbusBridge mit asynchronem Client, Lese- und Schreibfunktionen, Fehlerbehandlung.
-- `config_flow.py`: Benutzer- und Optionsdialoge, Validierung.
-- Plattformdateien (`sensor.py`, `number.py`, `button.py`): Entity-Klassen mit Beschreibungen und Kommentaren.
-- `services.yaml`: Definition der Custom Services.
+## Data flow
 
-### Datenfluss
+1. The config flow collects user input, performs a probe read, and stores a unique ID.
+2. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
+3. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
+4. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
+5. Write operations (`set_current`, `set_failsafe`, start/stop commands) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
+6. The keep-alive button/service toggles register `6000` and triggers an on-demand refresh to keep dashboards responsive.
 
-1. Config Flow legt `host`, `port`, `unit_id` und `scan_interval` fest und prüft die Verbindung per Testleseauftrag.
-2. Setup erstellt `ModbusBridge` und `DataUpdateCoordinator`.
-3. Coordinator ruft zyklisch `bridge.read_data()` auf, dekodiert die Register und speichert das Ergebnis.
-4. Entitäten subscriben auf Coordinator, nutzen Key aus Registerdefinition.
-5. Number-Entitäten schreiben über `bridge.write_register()` und triggern Refresh.
-6. Keepalive-Service oder -Button schreibt bei Bedarf 1 auf Register 6000 und löst einen sofortigen Refresh aus.
+## Error handling
 
-### Fehler- und Retry-Strategie
+- Communication errors raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
+- Individual register errors are logged and surfaced as `None` without blocking the entire payload.
+- Write helpers clamp values to safe ranges and surface validation errors back to the UI.
+- Persistent connectivity failures publish Home Assistant notifications to alert the user.
 
-- Bei Kommunikationsfehlern: `UpdateFailed` mit Original-Fehler, Coordinator versucht beim nächsten Intervall erneut.
-- Einzelne Register-Reads im Fehlerfall: markiert als `None`, loggt Warnung, blockiert aber nicht alle Werte.
-- Write-Operationen clampen Werte auf definierte Grenzen und geben Exceptions an UI weiter.
+## Testing strategy
 
-## Tests
+- Config flow tests covering happy path, connection failures, and duplicate detection.
+- Coordinator tests that validate decoding, delta handling, and retry behaviour under simulated Modbus failures.
+- Entity snapshot tests to guard the number of exposed entities and their metadata.
+- Service tests asserting register writes, clamping, and refresh behaviour using the virtual wallbox simulator.
+- `pytest-homeassistant-custom-component` fixtures provide a realistic Home Assistant core for integration-level tests.
 
-- Unit Tests für Config Flow (Happy Path, Connection Error, Unique-ID-Kollision).
-- Tests für Update Coordinator mit simulierten Registerwerten und Fehlerfällen.
-- Snapshot- bzw. Assertions für Entity-Registrierung (z. B. Anzahl Sensoren).
-- Services werden mit Mock Bridge geprüft (Clamping, Refresh-Trigger, Fehlerfälle).
+## Assumptions and open items
 
-Pytest-Setup nutzt `pytest-homeassistant-custom-component` und Mocks (`pytest-mock`).
-
-## Offene Fragen / Annahmen
-
-- Standard-Port 502, Unit-ID 255 (laut Community). Config Flow erlaubt Anpassung.
-- Firmware >3.1: Alive-Register optional; Button/Service funktionieren nur, wenn das Register vorhanden ist.
-- Session-Zeitregister: Format (Unix Timestamp) wird dokumentiert, aber unverarbeitet (Rohwert). Optionale Template-Sensoren im README.
-
-## Nächste Schritte
-
-1. Diagnose- und Logbook-Einträge ergänzen (Diagnostics, Debug-Services).
-2. Energy-Dashboard-Kompatibilität verifizieren und dokumentieren.
-3. Übersetzungen vervollständigen und weitere Sprachen hinzufügen.
-4. Paketierung für HACS/Release vorbereiten (Versionierung, Changelog).
-5. Praxis-Tests mit realen Wallboxen durchführen und Registerliste validieren.
+- Defaults assume TCP port `502` and unit ID `255`; both are user-configurable during onboarding.
+- Firmware revisions prior to `3.1` may omit the keep-alive register; the integration degrades gracefully by hiding the button.
+- Session timestamp registers are kept as integers; template sensors can convert them to datetime values if required.
+- Future enhancements include richer diagnostics, Energy Dashboard metadata, and additional translations.

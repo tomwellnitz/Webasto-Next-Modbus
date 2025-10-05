@@ -18,7 +18,8 @@
       "unknown": "Unerwarteter Fehler"
     },
     "abort": {
-      "already_configured": "Diese Wallbox ist bereits eingerichtet."
+      "already_configured": "Diese Wallbox ist bereits eingerichtet.",
+      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
   },
   "options": {
@@ -33,6 +34,9 @@
     },
     "error": {
       "invalid_interval": "Intervall liegt außerhalb des unterstützten Bereichs."
+    },
+    "abort": {
+      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
   }
 }

@@ -27,6 +27,7 @@ from custom_components.webasto_next_modbus.const import (
     SESSION_COMMAND_STOP_VALUE,
     VARIANT_11_KW,
     VARIANT_22_KW,
+    SIGNAL_REGISTER_WRITTEN,
     build_device_slug,
     get_max_current_for_variant,
     get_register,
@@ -60,7 +61,14 @@ def _make_runtime(variant: str = VARIANT_22_KW) -> RuntimeData:
         variant=variant,
         max_current=get_max_current_for_variant(variant),
         device_slug=build_device_slug("192.0.2.1", 255),
+        device_name="Test Wallbox",
     )
+
+
+@pytest.fixture
+def dispatcher_stub():
+    with patch("custom_components.webasto_next_modbus.async_dispatcher_send") as mock_dispatch:
+        yield mock_dispatch
 
 
 def test_resolve_runtime_single_entry() -> None:
@@ -101,7 +109,7 @@ def test_resolve_runtime_missing_runtime_data() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_set_current_clamps_and_refreshes() -> None:
+async def test_service_set_current_clamps_and_refreshes(dispatcher_stub) -> None:
     """Current service should clamp value and trigger coordinator refresh."""
 
     runtime = _make_runtime()
@@ -117,10 +125,17 @@ async def test_service_set_current_clamps_and_refreshes() -> None:
         runtime.max_current,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    dispatcher_stub.assert_called_once_with(
+        call.hass,
+        SIGNAL_REGISTER_WRITTEN,
+        runtime.device_slug,
+        register.key,
+        runtime.max_current,
+    )
 
 
 @pytest.mark.asyncio
-async def test_service_set_failsafe_writes_optional_timeout() -> None:
+async def test_service_set_failsafe_writes_optional_timeout(dispatcher_stub) -> None:
     """Failsafe service should write both registers when timeout provided."""
 
     runtime = _make_runtime()
@@ -141,10 +156,25 @@ async def test_service_set_failsafe_writes_optional_timeout() -> None:
         timeout_register.max_value,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    assert dispatcher_stub.call_count == 2
+    dispatcher_stub.assert_any_call(
+        call.hass,
+        SIGNAL_REGISTER_WRITTEN,
+        runtime.device_slug,
+        current_register.key,
+        runtime.max_current,
+    )
+    dispatcher_stub.assert_any_call(
+        call.hass,
+        SIGNAL_REGISTER_WRITTEN,
+        runtime.device_slug,
+        timeout_register.key,
+        timeout_register.max_value,
+    )
 
 
 @pytest.mark.asyncio
-async def test_service_variant_limits_current() -> None:
+async def test_service_variant_limits_current(dispatcher_stub) -> None:
     """Clamp current service to the variant limit when below register max."""
 
     runtime = _make_runtime(variant=VARIANT_11_KW)
@@ -160,10 +190,17 @@ async def test_service_variant_limits_current() -> None:
         runtime.max_current,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    dispatcher_stub.assert_called_once_with(
+        call.hass,
+        SIGNAL_REGISTER_WRITTEN,
+        runtime.device_slug,
+        register.key,
+        runtime.max_current,
+    )
 
 
 @pytest.mark.asyncio
-async def test_service_variant_limits_failsafe() -> None:
+async def test_service_variant_limits_failsafe(dispatcher_stub) -> None:
     """Clamp failsafe current to the variant limit."""
 
     runtime = _make_runtime(variant=VARIANT_11_KW)
@@ -179,10 +216,17 @@ async def test_service_variant_limits_failsafe() -> None:
         runtime.max_current,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    dispatcher_stub.assert_called_once_with(
+        call.hass,
+        SIGNAL_REGISTER_WRITTEN,
+        runtime.device_slug,
+        current_register.key,
+        runtime.max_current,
+    )
 
 
 @pytest.mark.asyncio
-async def test_service_send_keepalive_triggers_write_and_refresh() -> None:
+async def test_service_send_keepalive_triggers_write_and_refresh(dispatcher_stub) -> None:
     """Keepalive service writes the trigger value and refreshes coordinator."""
 
     runtime = _make_runtime()
@@ -205,10 +249,11 @@ async def test_service_send_keepalive_triggers_write_and_refresh() -> None:
         TRIGGER_KEEPALIVE_SENT,
         {"source": "service"},
     )
+    dispatcher_stub.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_service_start_session_writes_command() -> None:
+async def test_service_start_session_writes_command(dispatcher_stub) -> None:
     """Start session service should write the start command."""
 
     runtime = _make_runtime()
@@ -224,10 +269,11 @@ async def test_service_start_session_writes_command() -> None:
         SESSION_COMMAND_START_VALUE,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    dispatcher_stub.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_service_stop_session_writes_command() -> None:
+async def test_service_stop_session_writes_command(dispatcher_stub) -> None:
     """Stop session service should write the stop command."""
 
     runtime = _make_runtime()
@@ -243,10 +289,11 @@ async def test_service_stop_session_writes_command() -> None:
         SESSION_COMMAND_STOP_VALUE,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
+    dispatcher_stub.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_session_services_surface_errors() -> None:
+async def test_session_services_surface_errors(dispatcher_stub) -> None:
     """Modbus errors should bubble up as HomeAssistantError."""
 
     runtime = _make_runtime()
@@ -256,10 +303,11 @@ async def test_session_services_surface_errors() -> None:
 
     with pytest.raises(HomeAssistantError):
         await _async_service_start_session(call)
+    dispatcher_stub.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_service_write_errors_surface_as_homeassistant_error() -> None:
+async def test_service_write_errors_surface_as_homeassistant_error(dispatcher_stub) -> None:
     """A Modbus write failure should surface as a HomeAssistantError."""
 
     runtime = _make_runtime()
@@ -269,3 +317,4 @@ async def test_service_write_errors_surface_as_homeassistant_error() -> None:
 
     with pytest.raises(HomeAssistantError):
         await _async_service_set_current(call)
+    dispatcher_stub.assert_not_called()

@@ -4,7 +4,7 @@ This document describes how to set up a local development environment, run the t
 
 ## Prerequisites
 
-- Python 3.11 or newer
+- Python 3.12 or newer
 - Access to a Home Assistant test installation (optional but recommended for manual validation)
 - A Webasto Next / Ampure Unite wallbox reachable over the network when performing end-to-end tests
 
@@ -20,6 +20,22 @@ pip install -e '.[dev]'
 ```
 
 If you prefer Poetry or another environment manager, make sure the packages listed in the `dev` extra (pytest, pytest-homeassistant-custom-component, ruff, mypy, etc.) are available in your environment.
+
+### Optional: Home Assistant test instance via Docker Compose
+
+For manual testing a lean Docker Compose stack is available:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+The compose file mounts `ha-config/` as `/config` and bind-mounts `custom_components/` plus `blueprints/` directly from your checkout. Code changes immediately propagate into the running container; restart to reload Python modules:
+
+```bash
+docker compose -f docker/docker-compose.yml restart homeassistant
+```
+
+On first start Home Assistant seeds the entire configuration inside `ha-config/`. The folder is ignored by git (except for `.gitkeep`) so personal settings remain local.
 
 ## Tooling commands
 
@@ -55,20 +71,26 @@ The repository bundles a lightweight Modbus simulator under `virtual_wallbox/`. 
 2. **Ad-hoc scripts** – Create a scenario and patch the integration to rely on `virtual_wallbox.simulator.FakeAsyncModbusTcpClient`, e.g.:
 
    ```python
-  import asyncio
+   import asyncio
 
-  from custom_components.webasto_next_modbus.hub import ModbusBridge
-   from virtual_wallbox.simulator import Scenario, register_virtual_wallbox, FakeAsyncModbusTcpClient, FakeModbusException
+   from custom_components.webasto_next_modbus.hub import ModbusBridge
+   from virtual_wallbox.simulator import (
+       FakeAsyncModbusTcpClient,
+       FakeModbusException,
+       Scenario,
+       register_virtual_wallbox,
+   )
 
    # Point the bridge to a simulated wallbox.
    from custom_components.webasto_next_modbus import hub as hub_module
+
    hub_module._ASYNC_CLIENT_CLASS = None
    hub_module._MODBUS_EXCEPTION_CLASS = None
    hub_module._ensure_pymodbus = lambda: (FakeAsyncModbusTcpClient, FakeModbusException)
 
    with register_virtual_wallbox(scenario=Scenario(values={"charging_state": 1})):  # host=127.0.0.1:15020
-     bridge = ModbusBridge("127.0.0.1", 15020, 255)
-     data = asyncio.get_event_loop().run_until_complete(bridge.async_read_data())
+       bridge = ModbusBridge("127.0.0.1", 15020, 255)
+       data = asyncio.get_event_loop().run_until_complete(bridge.async_read_data())
    ```
 
 3. **Custom scenarios** – Extend `Scenario(write_actions=...)` to emulate state transitions (e.g. `session_command` start/stop) by updating multiple registers atomically.
@@ -90,6 +112,33 @@ Useful options:
 - `--unit 42` advertises a custom Modbus unit ID.
 
 The server shares the same logic as the test fixtures, so changes to register definitions automatically flow into the CLI. Press `Ctrl+C` to stop the process.
+
+### Automated smoke test against Home Assistant
+
+Once Home Assistant is connected to the integration and the virtual wallbox, run the smoke-test CLI to exercise the critical code paths (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) and verify entity updates (`charging_state`, `charge_power`, fail-safe numbers).
+
+Prerequisites:
+
+- Running Home Assistant instance with the integration configured against the virtual wallbox.
+- Long-lived access token with administrator privileges (**Profile → Security → Create Token**).
+- Copy the token verbatim (no smart quotes or ellipses) to avoid HTTP header parsing issues.
+
+Example invocation (adapt host/port/token to your setup):
+
+```bash
+HA_TOKEN="<your-token>" webasto-smoke \
+    --ha-url http://127.0.0.1:8123 \
+    --device-host 127.0.0.1 \
+    --unit-id 255 \
+    --set-current 18 \
+    --failsafe-amps 14 \
+    --failsafe-timeout 90 \
+    --entity-prefix webasto_next_wallbox
+```
+
+The script exits successfully once all expected state transitions propagate. Failures are surfaced with actionable messages (missing entities, authentication errors, Modbus values not updating). Increase `--timeout` or `--poll-interval` if your environment updates slowly.
+
+If entities were renamed, adjust `--entity-prefix` to the new name (for example `webasto_next_garage_wallbox`). The prefix covers everything after the entity domain (`sensor.`, `number.`, etc.).
 
 ## Debug logging in Home Assistant
 

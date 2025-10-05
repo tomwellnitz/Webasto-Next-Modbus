@@ -6,14 +6,19 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-import voluptuous as vol
+try:
+	import voluptuous as vol
+except ModuleNotFoundError:  # pragma: no cover - handled at runtime
+	vol = None
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import selector
 
 from .const import (
 	CONF_SCAN_INTERVAL,
+	CONF_NAME,
 	CONF_UNIT_ID,
 	CONF_VARIANT,
 	DEFAULT_PORT,
@@ -30,11 +35,10 @@ from .hub import ModbusBridge, WebastoModbusError
 _LOGGER = logging.getLogger(__name__)
 
 
-class WebastoConfigFlow(config_entries.ConfigFlow):
+class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 	"""Handle a Webasto Next Modbus config flow."""
 
 	VERSION = 1
-	domain = DOMAIN
 
 	_host: str | None = None
 	_unit_id: int | None = None
@@ -44,11 +48,21 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 	) -> config_entries.ConfigFlowResult:
 		"""Handle the initial configuration step."""
 
+		if vol is None:
+			_LOGGER.error(
+				"Missing dependency 'voluptuous'; aborting config flow. Please ensure the Home Assistant "
+				"environment includes this package."
+			)
+			return self.async_abort(reason="missing_dependency")
+
 		errors: dict[str, str] = {}
 
+		normalized_input: dict[str, Any] | None = None
+
 		if user_input is not None:
+			normalized_input = _normalize_config_entry(user_input)
 			try:
-				await self._async_validate_and_connect(user_input)
+				await self._async_validate_and_connect(normalized_input)
 			except CannotConnect:
 				errors["base"] = "cannot_connect"
 			except TimeoutError:
@@ -57,31 +71,36 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 				errors["base"] = "unknown"
 				_LOGGER.exception("Unexpected error validating config: %s", err)
 			else:
+				assert normalized_input is not None
 				await self.async_set_unique_id(
-					_build_unique_id(user_input[CONF_HOST], user_input[CONF_UNIT_ID])
+					_build_unique_id(normalized_input[CONF_HOST], normalized_input[CONF_UNIT_ID])
 				)
 				self._abort_if_unique_id_configured()
 
-				data = {
-				CONF_HOST: user_input[CONF_HOST],
-				CONF_PORT: user_input[CONF_PORT],
-				CONF_UNIT_ID: user_input[CONF_UNIT_ID],
-				CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
-				CONF_VARIANT: user_input[CONF_VARIANT],
-			}
+				name = normalized_input.get(CONF_NAME, "")
 
-				title = f"{user_input[CONF_HOST]} (unit {user_input[CONF_UNIT_ID]})"
+				data = {
+					CONF_HOST: normalized_input[CONF_HOST],
+					CONF_PORT: normalized_input[CONF_PORT],
+					CONF_UNIT_ID: normalized_input[CONF_UNIT_ID],
+					CONF_SCAN_INTERVAL: normalized_input[CONF_SCAN_INTERVAL],
+					CONF_VARIANT: normalized_input[CONF_VARIANT],
+				}
+				if name:
+					data[CONF_NAME] = name
+
+				title = name or f"{normalized_input[CONF_HOST]} (unit {normalized_input[CONF_UNIT_ID]})"
 
 				return self.async_create_entry(
 					title=title,
 					data=data,
 					options={
-					CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
-					CONF_VARIANT: user_input[CONF_VARIANT],
-				},
+						CONF_SCAN_INTERVAL: normalized_input[CONF_SCAN_INTERVAL],
+						CONF_VARIANT: normalized_input[CONF_VARIANT],
+					},
 				)
 
-		defaults = user_input or {}
+		defaults = normalized_input or {}
 
 		data_schema = vol.Schema(
 			{
@@ -99,21 +118,33 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 				vol.Required(
 					CONF_UNIT_ID,
 					default=defaults.get(CONF_UNIT_ID, DEFAULT_UNIT_ID),
-				): vol.All(
-					vol.Coerce(int),
-					vol.Range(min=1, max=255),
+				): selector.NumberSelector(
+					selector.NumberSelectorConfig(
+						min=1,
+						max=255,
+						step=1,
+						mode=selector.NumberSelectorMode.BOX,
+					)
 				),
 				vol.Required(
 					CONF_SCAN_INTERVAL,
 					default=defaults.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-				): vol.All(
-					vol.Coerce(int),
-					vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+				): selector.NumberSelector(
+					selector.NumberSelectorConfig(
+						min=MIN_SCAN_INTERVAL,
+						max=MAX_SCAN_INTERVAL,
+						step=1,
+						mode=selector.NumberSelectorMode.SLIDER,
+					)
 				),
 				vol.Required(
-				CONF_VARIANT,
-				default=defaults.get(CONF_VARIANT, DEFAULT_VARIANT),
-			): vol.In(VARIANT_LABELS),
+					CONF_VARIANT,
+					default=defaults.get(CONF_VARIANT, DEFAULT_VARIANT),
+				): vol.In(VARIANT_LABELS),
+				vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "")): vol.All(
+					str,
+					vol.Length(max=100),
+				),
 			}
 		)
 
@@ -124,8 +155,8 @@ class WebastoConfigFlow(config_entries.ConfigFlow):
 
 		bridge = ModbusBridge(
 			host=data[CONF_HOST],
-			port=data[CONF_PORT],
-			unit_id=data[CONF_UNIT_ID],
+			port=int(data[CONF_PORT]),
+			unit_id=int(data[CONF_UNIT_ID]),
 		)
 
 		try:
@@ -157,6 +188,13 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 	) -> config_entries.ConfigFlowResult:
 		"""Manage the options."""
 
+		if vol is None:
+			_LOGGER.error(
+				"Missing dependency 'voluptuous'; aborting options flow. Please ensure the Home Assistant "
+				"environment includes this package."
+			)
+			return self.async_abort(reason="missing_dependency")
+
 		errors: dict[str, str] = {}
 		current_interval = self._config_entry.options.get(
 			CONF_SCAN_INTERVAL,
@@ -166,13 +204,27 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 			CONF_VARIANT,
 			self._config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
 		)
+		current_name = self._config_entry.data.get(CONF_NAME, "")
 
 		if user_input is not None:
-			interval = user_input[CONF_SCAN_INTERVAL]
+			interval = int(user_input[CONF_SCAN_INTERVAL])
 			variant = user_input[CONF_VARIANT]
+			name = str(user_input.get(CONF_NAME, "")).strip()
 			if interval < MIN_SCAN_INTERVAL or interval > MAX_SCAN_INTERVAL:
 				errors["base"] = "invalid_interval"
 			else:
+				updated_data = dict(self._config_entry.data)
+				if name:
+					updated_data[CONF_NAME] = name
+				elif CONF_NAME in updated_data:
+					updated_data.pop(CONF_NAME)
+				title = name or f"{updated_data[CONF_HOST]} (unit {updated_data[CONF_UNIT_ID]})"
+				if updated_data != self._config_entry.data or title != self._config_entry.title:
+					self.hass.config_entries.async_update_entry(
+						self._config_entry,
+						data=updated_data,
+						title=title,
+					)
 				return self.async_create_entry(
 					title="",
 					data={
@@ -183,10 +235,19 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 
 		data_schema = vol.Schema(
 			{
-				vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
-					vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
+				vol.Required(CONF_SCAN_INTERVAL, default=current_interval): selector.NumberSelector(
+					selector.NumberSelectorConfig(
+						min=MIN_SCAN_INTERVAL,
+						max=MAX_SCAN_INTERVAL,
+						step=1,
+						mode=selector.NumberSelectorMode.SLIDER,
+					)
 				),
 				vol.Required(CONF_VARIANT, default=current_variant): vol.In(VARIANT_LABELS),
+				vol.Optional(CONF_NAME, default=current_name): vol.All(
+					str,
+					vol.Length(max=100),
+				),
 			}
 		)
 
@@ -202,3 +263,15 @@ def _build_unique_id(host: str, unit_id: int) -> str:
 class CannotConnect(HomeAssistantError):
 	"""Error raised when the Modbus bridge cannot connect."""
 
+
+def _normalize_config_entry(data: Mapping[str, Any]) -> dict[str, Any]:
+	"""Return a sanitized copy of user supplied configuration values."""
+
+	return {
+		CONF_HOST: str(data[CONF_HOST]).strip(),
+		CONF_PORT: int(data[CONF_PORT]),
+		CONF_UNIT_ID: int(data[CONF_UNIT_ID]),
+		CONF_SCAN_INTERVAL: int(data[CONF_SCAN_INTERVAL]),
+		CONF_VARIANT: data.get(CONF_VARIANT, DEFAULT_VARIANT),
+		CONF_NAME: str(data.get(CONF_NAME, "")).strip(),
+	}

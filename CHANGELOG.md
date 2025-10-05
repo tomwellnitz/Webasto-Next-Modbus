@@ -7,6 +7,19 @@ All notable changes to this project are documented in this file. The format roug
 
 - _Nothing yet_
 
+## [0.3.0-beta.1] - 2025-10-05
+
+### Added
+
+- Configurable device name in the setup/options flow with end-to-end entity renaming support.
+- Start and stop charging buttons plus corresponding service coverage and tests.
+- Restore-on-start support for the charging current number entity to keep the last configured value.
+
+### Changed
+
+- Simplified repository assets now that branding lives in the upstream `home-assistant/brands` repository.
+- Removed the local branding export helper script; rely solely on the upstream brands repository workflows.
+
 ## [0.2.4-beta] - 2025-10-04
 
 ### Added
