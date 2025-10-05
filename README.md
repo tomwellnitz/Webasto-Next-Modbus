@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/tomwellnitz/Webasto-Next-Modbus.svg)](LICENSE)
 [![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/tomwellnitz/Webasto-Next-Modbus/commits/main)
 
-> 📚 Looking for the full documentation portal? Start with [`docs/README.md`](docs/README.md) for architecture notes, development guides, and support resources inspired by the excellent [Spook integration](https://github.com/frenck/spook).
+> 📚 Looking for the full documentation portal? Start with [`docs/README.md`](docs/README.md) for architecture notes, development guides, and support resources.
 > ⚠️ This project is a community-maintained integration that is not affiliated with, endorsed, or supported by Webasto, Ampure, or the Home Assistant project.
 
 ## At a glance
