@@ -3,9 +3,29 @@
 
 All notable changes to this project are documented in this file. The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0-beta.2] - 2025-10-08
 
-- _Nothing yet_
+### Added
+
+- Full Modbus register mapping and error code coverage based on manufacturer documentation
+- Improved simulator mirroring and address normalization for production parity
+- Lint and test automation (ruff, pytest) for CI/CD best practices
+- Updated documentation and changelog workflow for maintainability
+
+### Changed
+
+- Refactored code for production readiness and best practices
+- All constants, sensors, and error mappings now match official register tables
+- Simulator and integration logic now fully aligned with real device behavior
+
+### Fixed
+
+- Addressed edge cases in register mirroring and error handling
+- All tests pass for Python 3.12/3.13 matrix
+
+### Notes
+
+- This beta is production-ready: all registers, error codes, and behaviors are validated against manufacturer specs. Linting and tests are automated. See docs for integration and simulator usage.
 
 ## [0.4.0-beta.1] - 2025-10-08
 
