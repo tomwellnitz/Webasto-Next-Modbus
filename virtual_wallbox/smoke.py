@@ -16,8 +16,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from custom_components.webasto_next_modbus.const import (
     DOMAIN,
@@ -262,13 +263,16 @@ class IntegrationSmokeTest:
             "keepalive_button": f"button.{base}_send_keepalive",
         }
 
-        for friendly, entity_id in candidates.items():
+        for _friendly, entity_id in candidates.items():
             try:
                 self._read_state(entity_id)
             except RuntimeError as err:
                 raise RuntimeError(
-                    f"Entity '{entity_id}' not found via /api/states. If you renamed entities, pass the "
-                    "custom ID with --entity-prefix or Home Assistant's naming convention."
+                    (
+                        f"Entity '{entity_id}' not found via /api/states. "
+                        "If you renamed entities, pass the custom ID with "
+                        "--entity-prefix or Home Assistant's naming convention."
+                    )
                 ) from err
 
         return EntityRefs(
@@ -291,7 +295,9 @@ class IntegrationSmokeTest:
                 f"Unexpected {description} for {entity_id}: got '{state}', expected '{expected}'"
             )
 
-    def _assert_numeric(self, entity_id: str, *, expected: float, tolerance: float, description: str) -> None:
+    def _assert_numeric(
+        self, entity_id: str, *, expected: float, tolerance: float, description: str
+    ) -> None:
         value = self._read_numeric(entity_id)
         if value is None or abs(value - expected) > tolerance:
             raise RuntimeError(
