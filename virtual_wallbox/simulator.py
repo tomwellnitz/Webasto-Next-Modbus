@@ -160,7 +160,11 @@ class VirtualWallboxState:
             target[addr] = raw
             # Mirror value into the opposite register store so clients that
             # read via the other Modbus function code observe the update.
-            other = self._input_registers if definition.register_type != "input" else self._holding_registers
+            other = (
+                self._input_registers
+                if definition.register_type != "input"
+                else self._holding_registers
+            )
             other[addr] = raw
 
 

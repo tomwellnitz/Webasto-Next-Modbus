@@ -268,11 +268,9 @@ class IntegrationSmokeTest:
                 self._read_state(entity_id)
             except RuntimeError as err:
                 raise RuntimeError(
-                    (
-                        f"Entity '{entity_id}' not found via /api/states. "
-                        "If you renamed entities, pass the custom ID with "
-                        "--entity-prefix or Home Assistant's naming convention."
-                    )
+                    f"Entity '{entity_id}' not found via /api/states. "
+                    "If you renamed entities, pass the custom ID with "
+                    "--entity-prefix or Home Assistant's naming convention."
                 ) from err
 
         return EntityRefs(
