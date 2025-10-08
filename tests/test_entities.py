@@ -181,9 +181,7 @@ async def test_button_triggers_keepalive(coordinator_fixture) -> None:
         DEVICE_NAME,
     )
 
-    with patch(
-        "custom_components.webasto_next_modbus.button.async_fire_device_trigger"
-    ) as fire:
+    with patch("custom_components.webasto_next_modbus.button.async_fire_device_trigger") as fire:
         await button.async_press()
 
     bridge.async_write_register.assert_awaited_with(register, KEEPALIVE_TRIGGER_VALUE)

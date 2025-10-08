@@ -10,14 +10,14 @@ from typing import Any, cast
 import pytest
 
 from virtual_wallbox.simulator import (
-	FakeAsyncModbusTcpClient,
-	FakeModbusException,
-	VirtualWallboxState,
-	build_default_scenario,
-	register_virtual_wallbox,
+    FakeAsyncModbusTcpClient,
+    FakeModbusException,
+    VirtualWallboxState,
+    build_default_scenario,
+    register_virtual_wallbox,
 )
 from virtual_wallbox.simulator import (
-	registry as virtual_registry,
+    registry as virtual_registry,
 )
 
 _pymodbus_client = types.ModuleType("pymodbus.client")
@@ -39,15 +39,15 @@ _voluptuous = types.ModuleType("voluptuous")
 
 
 class _DummyValidator:
-	def __call__(self, value):
-		return value
+    def __call__(self, value):
+        return value
 
 
 def _pass_through(*args, **kwargs):
-	def _inner(value):
-		return value
+    def _inner(value):
+        return value
 
-	return _inner
+    return _inner
 
 
 cast(Any, _voluptuous).Schema = lambda schema: _DummyValidator()
@@ -61,20 +61,20 @@ sys.modules.setdefault("voluptuous", _voluptuous)
 
 @pytest.fixture(autouse=True)
 def _reset_virtual_wallbox_registry() -> Generator[None, None, None]:
-	"""Ensure each test starts with a clean virtual wallbox registry."""
+    """Ensure each test starts with a clean virtual wallbox registry."""
 
-	virtual_registry.clear()
-	yield
-	virtual_registry.clear()
+    virtual_registry.clear()
+    yield
+    virtual_registry.clear()
 
 
 @pytest.fixture()
 def default_virtual_wallbox() -> Generator[VirtualWallboxState, None, None]:
-	"""Provide a default virtual wallbox matching ModbusBridge defaults."""
+    """Provide a default virtual wallbox matching ModbusBridge defaults."""
 
-	with register_virtual_wallbox(
-		host="127.0.0.1",
-		port=15020,
-		scenario=build_default_scenario(),
-	) as state:
-		yield state
+    with register_virtual_wallbox(
+        host="127.0.0.1",
+        port=15020,
+        scenario=build_default_scenario(),
+    ) as state:
+        yield state

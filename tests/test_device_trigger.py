@@ -73,12 +73,15 @@ async def test_async_attach_trigger_invokes_action_on_dispatch() -> None:
     action = AsyncMock()
     trigger_info = cast(TriggerInfo, SimpleNamespace(context=None))
 
-    with patch(
-        "custom_components.webasto_next_modbus.device_trigger.dr.async_get",
-        return_value=registry,
-    ), patch(
-        "custom_components.webasto_next_modbus.device_trigger.async_dispatcher_connect",
-        side_effect=_fake_connect,
+    with (
+        patch(
+            "custom_components.webasto_next_modbus.device_trigger.dr.async_get",
+            return_value=registry,
+        ),
+        patch(
+            "custom_components.webasto_next_modbus.device_trigger.async_dispatcher_connect",
+            side_effect=_fake_connect,
+        ),
     ):
         await device_trigger.async_attach_trigger(
             hass,

@@ -10,11 +10,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-	DOMAIN,
-	MANUFACTURER,
-	MODEL,
-	RegisterDefinition,
-	build_device_slug,
+    DOMAIN,
+    MANUFACTURER,
+    MODEL,
+    RegisterDefinition,
+    build_device_slug,
 )
 from .coordinator import WebastoDataCoordinator
 from .hub import ModbusBridge, WebastoModbusError

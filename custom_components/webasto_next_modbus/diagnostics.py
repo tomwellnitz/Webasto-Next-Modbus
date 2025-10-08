@@ -15,29 +15,29 @@ TO_REDACT = {"host"}
 
 
 def _iso_or_none(value):
-	return value.isoformat() if value else None
+    return value.isoformat() if value else None
 
 
 async def async_get_config_entry_diagnostics(
-	hass: HomeAssistant,
-	entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> dict[str, Any]:
-	"""Return diagnostics for a config entry."""
+    """Return diagnostics for a config entry."""
 
-	runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
-	coordinator = runtime.coordinator
+    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    coordinator = runtime.coordinator
 
-	return {
-		"config_entry": {
-			"data": async_redact_data(dict(entry.data), TO_REDACT),
-			"options": async_redact_data(dict(entry.options), TO_REDACT),
-		},
-		"runtime": {
-			"variant": runtime.variant,
-			"max_current": runtime.max_current,
-			"last_success": _iso_or_none(getattr(coordinator, "last_success", None)),
-			"last_failure": _iso_or_none(getattr(coordinator, "last_failure", None)),
-			"consecutive_failures": getattr(coordinator, "consecutive_failures", 0),
-			"last_error": getattr(coordinator, "last_error", None),
-		},
-	}
+    return {
+        "config_entry": {
+            "data": async_redact_data(dict(entry.data), TO_REDACT),
+            "options": async_redact_data(dict(entry.options), TO_REDACT),
+        },
+        "runtime": {
+            "variant": runtime.variant,
+            "max_current": runtime.max_current,
+            "last_success": _iso_or_none(getattr(coordinator, "last_success", None)),
+            "last_failure": _iso_or_none(getattr(coordinator, "last_failure", None)),
+            "consecutive_failures": getattr(coordinator, "consecutive_failures", 0),
+            "last_error": getattr(coordinator, "last_error", None),
+        },
+    }

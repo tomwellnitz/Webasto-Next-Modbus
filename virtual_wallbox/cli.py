@@ -64,65 +64,65 @@ def _load_scenario(path: Path) -> Scenario:
 
 
 def _build_state(
-	scenario: Scenario,
-	overrides: dict[str, Any],
-	*,
-	unit_id: int | None,
+    scenario: Scenario,
+    overrides: dict[str, Any],
+    *,
+    unit_id: int | None,
 ) -> VirtualWallboxState:
-	"""Create a mutable state from the scenario and apply overrides."""
+    """Create a mutable state from the scenario and apply overrides."""
 
-	state = scenario.create_state()
-	if unit_id is not None:
-		state.unit_id = unit_id
-	if overrides:
-		state.apply_values(overrides)
-	return state
+    state = scenario.create_state()
+    if unit_id is not None:
+        state.unit_id = unit_id
+    if overrides:
+        state.apply_values(overrides)
+    return state
 
 
 def _build_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(
-		description="Run a virtual Webasto Next Modbus wallbox",
-	)
-	parser.add_argument(
-		"--host",
-		default="127.0.0.1",
-		help="Host/IP address to bind (default: %(default)s)",
-	)
-	parser.add_argument(
-		"--port",
-		type=int,
-		default=15020,
-		help="TCP port to expose (default: %(default)s)",
-	)
-	parser.add_argument(
-		"--unit",
-		type=int,
-		default=None,
-		help="Unit ID to advertise (overrides scenario)",
-	)
-	parser.add_argument(
-		"--scenario",
-		type=Path,
-		help="Path to a JSON scenario definition",
-	)
-	parser.add_argument(
-		"--set",
-		action="append",
-		metavar="KEY=VALUE",
-		help="Override a register value before starting the server (may be repeated)",
-	)
-	parser.add_argument(
-		"--zero-mode",
-		action="store_true",
-		help="Use zero-based addressing (advanced; defaults to 1-based Modbus addresses)",
-	)
-	parser.add_argument(
-		"--log-level",
-		default="INFO",
-		choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
-		help="Set logging verbosity",
-	)
-	return parser
+    parser = argparse.ArgumentParser(
+        description="Run a virtual Webasto Next Modbus wallbox",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host/IP address to bind (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=15020,
+        help="TCP port to expose (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--unit",
+        type=int,
+        default=None,
+        help="Unit ID to advertise (overrides scenario)",
+    )
+    parser.add_argument(
+        "--scenario",
+        type=Path,
+        help="Path to a JSON scenario definition",
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Override a register value before starting the server (may be repeated)",
+    )
+    parser.add_argument(
+        "--zero-mode",
+        action="store_true",
+        help="Use zero-based addressing (advanced; defaults to 1-based Modbus addresses)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+        help="Set logging verbosity",
+    )
+    return parser
 
 
 async def _async_main(args: argparse.Namespace) -> None:
