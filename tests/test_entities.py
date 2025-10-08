@@ -364,6 +364,19 @@ async def test_phase_configuration_sensor_maps_enum(coordinator_fixture) -> None
     assert sensor.native_value == "three_phase"
 
 
+async def test_fault_code_sensor_maps_and_uses_translation_key(coordinator_fixture) -> None:
+    """Fault code sensor should expose mapped label and translation key."""
+
+    coordinator, bridge = coordinator_fixture
+    register = get_register("fault_code")
+    coordinator.data = {register.key: 1}
+
+    sensor = WebastoSensor(coordinator, bridge, "203.0.113.20", 4, register, DEVICE_NAME)
+
+    assert sensor.native_value == "power_switch_failure_closed"
+    assert sensor.translation_key == "fault_code"
+
+
 async def test_write_only_number_restores_last_value(coordinator_fixture) -> None:
     """Write-only number should restore and re-apply last charging current."""
 

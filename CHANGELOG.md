@@ -7,6 +7,17 @@ All notable changes to this project are documented in this file. The format roug
 
 - _Nothing yet_
 
+## [0.4.0-beta.1] - 2025-10-08
+
+### Added
+
+- Bumped integration to 0.4.0-beta.1 with sensor handling improvements and translation updates.
+
+### Changed
+
+- Updated sensor platform behavior and restored translations; adjusted tests to match behavior changes.
+- Integration version updated in manifest and constants.
+
 ## [0.3.0-beta.1] - 2025-10-05
 
 ### Added

@@ -72,6 +72,8 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
 		self._options_map = register.options
 		if register.options:
 			self._attr_options = list(register.options.values())
+		if register.translation_key:
+			self._attr_translation_key = register.translation_key
 
 		value = coordinator.data.get(register.key) if coordinator.data else None
 		if value is not None:

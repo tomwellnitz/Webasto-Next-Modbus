@@ -38,5 +38,30 @@
     "abort": {
       "missing_dependency": "Required package 'voluptuous' is missing in this Home Assistant environment."
     }
+  },
+  "entity": {
+    "sensor": {
+      "fault_code": {
+        "state": {
+          "ok": "No error",
+          "power_switch_failure_closed": "Power switch failure (relay welded closed)",
+          "internal_error_aux_voltage": "Internal error (auxiliary voltage)",
+          "ev_communication_error_control_pilot": "EV communication error (control pilot)",
+          "over_voltage": "Over voltage",
+          "under_voltage": "Under voltage",
+          "over_current_failure": "Over current failure",
+          "vac_frequency_error": "VAC frequency error",
+          "ground_failure": "Ground failure",
+          "rcm_self_test_error": "Residual current monitor self test error",
+          "over_temperature": "Over temperature",
+          "proximity_pilot_error": "Proximity pilot error",
+          "shutter_error": "Shutter error",
+          "phase_check_error": "Phase check error",
+          "pwr_internal_error": "Internal power error",
+          "ev_communication_error_negative_pilot": "EV communication error (negative pilot)",
+          "dc_residual_current_error": "DC residual current error"
+        }
+      }
+    }
   }
 }

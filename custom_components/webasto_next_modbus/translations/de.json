@@ -16,6 +16,31 @@
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen. Host, Port oder Modbus-Konfiguration prüfen.",
       "unknown": "Unerwarteter Fehler"
+  },
+  "entity": {
+    "sensor": {
+      "fault_code": {
+        "state": {
+          "ok": "Kein Fehler",
+          "power_switch_failure_closed": "Leistungsschalter-Fehler (Relais fest geschlossen)",
+          "internal_error_aux_voltage": "Interner Fehler (Hilfsspannung)",
+          "ev_communication_error_control_pilot": "EV-Kommunikationsfehler (Control Pilot)",
+          "over_voltage": "Überspannung",
+          "under_voltage": "Unterspannung",
+          "over_current_failure": "Überstromfehler",
+          "vac_frequency_error": "Netzfrequenzfehler",
+          "ground_failure": "Erdungsfehler",
+          "rcm_self_test_error": "RCM-Selbsttestfehler",
+          "over_temperature": "Übertemperatur",
+          "proximity_pilot_error": "Proximity-Pilot-Fehler",
+          "shutter_error": "Shutter-Fehler",
+          "phase_check_error": "Phasenprüfungsfehler",
+          "pwr_internal_error": "Interner Leistungsfehler",
+          "ev_communication_error_negative_pilot": "EV-Kommunikationsfehler (negativer Pilot)",
+          "dc_residual_current_error": "Fehler Gleichfehlerstrom"
+        }
+      }
+    }
     },
     "abort": {
       "already_configured": "Diese Wallbox ist bereits eingerichtet.",
