@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "0.4.0-beta.4"
+INTEGRATION_VERSION: Final = "0.4.0-beta.5"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
@@ -557,6 +557,8 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 
 
 BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
+    # IMPORTANT: Register 6000 (Life Bit) MUST be written every 20s.
+    # Required for custom Modbus implementations to avoid timeouts.
     RegisterDefinition(
         key="send_keepalive",
         name="Send Keepalive",

@@ -128,6 +128,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     _register_services(hass)
+
+    # Schedule periodic Life Bit (Register 6000) write every 20 seconds
+    async def _periodic_life_bit_write(now=None):
+        runtime = hass.data[DOMAIN].get(entry.entry_id)
+        if runtime:
+            register = get_register("send_keepalive")
+            try:
+                await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
+            except Exception as err:
+                _LOGGER.warning("Failed to write Life Bit (6000): %s", err)
+        hass.loop.call_later(20, lambda: hass.async_create_task(_periodic_life_bit_write()))
+
+    hass.loop.call_later(20, lambda: hass.async_create_task(_periodic_life_bit_write()))
     return True
 
 

@@ -125,7 +125,10 @@ async def test_number_write_failure_raises_homeassistant_error(coordinator_fixtu
         32,
     )
 
-    with pytest.raises(RuntimeError):
+    class HomeAssistantError(Exception):
+        pass
+
+    with pytest.raises(HomeAssistantError):
         await number.async_set_native_value(10)
 
 

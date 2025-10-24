@@ -1,4 +1,19 @@
 # Changelog
+## [0.4.0-beta.5] - 2025-10-24
+
+### Added
+- Automatic periodic write to Modbus register 6000 (Life Bit) every 20 seconds to prevent timeouts
+
+### Changed
+- Lint and formatting fixes (ruff compliance, line length)
+- Version bump in all files for release consistency
+
+### Fixed
+- All tests pass, including HomeAssistantError handling
+
+### Notes
+- This pre-release is production-ready and strictly follows Webasto Modbus spec
+
 ## [0.4.0-beta.3] - 2025-10-24
 
 ### Changed
