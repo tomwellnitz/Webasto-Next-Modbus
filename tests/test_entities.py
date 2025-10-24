@@ -125,7 +125,7 @@ async def test_number_write_failure_raises_homeassistant_error(coordinator_fixtu
         32,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         await number.async_set_native_value(10)
 
 
