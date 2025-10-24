@@ -282,11 +282,6 @@ def build_default_scenario(*, unit_id: int = 255) -> Scenario:
     return Scenario(
         unit_id=unit_id,
         values={
-            "serial_number": "SIM-WB-0001",
-            "charge_point_id": "SIMULATOR",
-            "charge_point_brand": "Webasto",
-            "charge_point_model": "Next",
-            "firmware_version": "1.0.0",
             "charge_point_state": 0,
             "charging_state": 0,
             "equipment_state": 1,
@@ -312,8 +307,6 @@ def build_default_scenario(*, unit_id: int = 255) -> Scenario:
             "session_start_time": 0,
             "session_duration_s": 0,
             "session_end_time": 0,
-            "rated_power_w": 22000,
-            "phase_configuration": 1,
             "charge_power_w": 0,
             "failsafe_current_a": 16,
             "failsafe_timeout_s": 60,

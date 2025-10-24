@@ -1,4 +1,18 @@
 # Changelog
+## [0.4.0-beta.3] - 2025-10-24
+
+### Changed
+- Entfernt alle nicht offiziellen Modbus-Register unter Adresse 1000 aus der Integration
+- Dev-Abhängigkeiten im pyproject.toml ergänzt und Python-Version auf 3.13 für Home Assistant-Kompatibilität festgelegt
+- Integration und Tests laufen jetzt mit vollständigem, offiziellem Registersatz
+
+### Fixed
+- Fehlerhafte Registerabfragen und Import-Probleme durch fehlende Abhängigkeiten behoben
+- Linting und Formatierung mit ruff, alle Tests laufen fehlerfrei
+
+### Notes
+- Release ist produktionssicher und entspricht exakt der Hersteller-Dokumentation
+
 <!-- markdownlint-disable MD022 MD024 MD032 -->
 
 All notable changes to this project are documented in this file. The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

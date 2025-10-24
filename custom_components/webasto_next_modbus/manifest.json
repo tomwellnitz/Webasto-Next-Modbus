@@ -1,7 +1,7 @@
 {
   "domain": "webasto_next_modbus",
   "name": "Webasto Next Modbus",
-  "version": "0.4.0-beta.2",
+  "version": "0.4.0-beta.3",
   "documentation": "https://github.com/tomwellnitz/Webasto-Next-Modbus",
   "issue_tracker": "https://github.com/tomwellnitz/Webasto-Next-Modbus/issues",
   "requirements": [

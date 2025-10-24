@@ -53,7 +53,6 @@ async def test_bridge_reads_data_from_virtual_wallbox(
     bridge = await _make_bridge(monkeypatch, host, port, unit)
     data = await bridge.async_read_data()
 
-    assert data["serial_number"] == "SIM-WB-0001"
     assert data["charging_state"] == 0
     assert data["active_power_total_w"] == 0
 
@@ -89,7 +88,6 @@ async def test_custom_scenario_values_are_exposed(
 
     sim = Scenario(
         values={
-            "serial_number": "WB-TEST-999",
             "charging_state": 1,
             "active_power_total_w": 11800,
         },
@@ -101,7 +99,6 @@ async def test_custom_scenario_values_are_exposed(
         bridge = await _make_bridge(monkeypatch, host, port, state.unit_id)
         payload = await bridge.async_read_data()
 
-    assert payload["serial_number"] == "WB-TEST-999"
     assert payload["active_power_total_w"] == 11800
     assert payload["charging_state"] == 1
 

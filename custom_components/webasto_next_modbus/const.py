@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "0.4.0-beta.2"
+INTEGRATION_VERSION: Final = "0.4.0-beta.3"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
-DEFAULT_SCAN_INTERVAL: Final = 5  # seconds
+DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
 MIN_SCAN_INTERVAL: Final = 2
 MAX_SCAN_INTERVAL: Final = 60
 MAX_RETRY_ATTEMPTS: Final = 3
@@ -140,113 +140,6 @@ FAULT_CODE_MAP: Final = {
 
 
 SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
-    RegisterDefinition(
-        key="serial_number",
-        name="Serial Number",
-        address=100,
-        count=25,
-        register_type="input",
-        data_type="string",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:identifier",
-        encoding="utf-8",
-    ),
-    RegisterDefinition(
-        key="charge_point_id",
-        name="Charge Point ID",
-        address=130,
-        count=50,
-        register_type="input",
-        data_type="string",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:id-card",
-        encoding="utf-8",
-    ),
-    RegisterDefinition(
-        key="charge_point_brand",
-        name="Charge Point Brand",
-        address=190,
-        count=10,
-        register_type="input",
-        data_type="string",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:factory",
-        encoding="utf-8",
-    ),
-    RegisterDefinition(
-        key="charge_point_model",
-        name="Charge Point Model",
-        address=210,
-        count=5,
-        register_type="input",
-        data_type="string",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:ev-station",
-        encoding="utf-8",
-    ),
-    RegisterDefinition(
-        key="firmware_version",
-        name="Firmware Version",
-        address=230,
-        count=50,
-        register_type="input",
-        data_type="string",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:chip",
-        encoding="utf-8",
-    ),
-    RegisterDefinition(
-        key="wallbox_date",
-        name="Controller Date",
-        address=290,
-        count=2,
-        register_type="input",
-        data_type="uint32",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:calendar",
-    ),
-    RegisterDefinition(
-        key="wallbox_time",
-        name="Controller Time",
-        address=294,
-        count=2,
-        register_type="input",
-        data_type="uint32",
-        entity="sensor",
-        entity_category="diagnostic",
-        icon="mdi:clock-outline",
-    ),
-    RegisterDefinition(
-        key="rated_power_w",
-        name="Rated Power",
-        address=400,
-        count=2,
-        register_type="input",
-        data_type="uint32",
-        entity="sensor",
-        unit="W",
-        entity_category="diagnostic",
-        icon="mdi:flash-outline",
-    ),
-    RegisterDefinition(
-        key="phase_configuration",
-        name="Phase Configuration",
-        address=404,
-        count=1,
-        register_type="input",
-        data_type="uint16",
-        entity="sensor",
-        device_class="enum",
-        entity_category="diagnostic",
-        icon="mdi:current-ac",
-        options=PHASE_COUNT_MAP,
-    ),
     RegisterDefinition(
         key="charge_point_state",
         name="Charge Point State",

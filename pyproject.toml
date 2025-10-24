@@ -1,6 +1,6 @@
 [project]
 name = "webasto-next-modbus"
-version = "0.3.0-beta.1"
+version = "0.4.0-beta.3"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
@@ -19,7 +19,9 @@ dev = [
   "pytest-cov==6.0.0",
   "ruff>=0.5",
   "mypy>=1.8",
-  "pymodbus>=3.11.2,<4"
+  "pymodbus>=3.11.2,<4",
+  "homeassistant",
+  "voluptuous"
 ]
 
 [tool.pytest.ini_options]
