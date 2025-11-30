@@ -12,7 +12,7 @@ webasto-smoke = "virtual_wallbox.smoke:main"
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.3.4,<9",
+  "pytest>=8.3.4,<10",
   "pytest-homeassistant-custom-component==0.13.200",
   "pytest-asyncio>=0.24,<2",
   "coverage==7.6.8",
