@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -14,6 +15,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     CONF_NAME,
@@ -58,6 +60,7 @@ class RuntimeData:
     max_current: int
     device_slug: str
     device_name: str
+    cancel_keepalive: Callable[[], None] | None = None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -114,6 +117,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
+    # Schedule periodic Life Bit (Register 6000) write every 15 seconds
+    # Using async_track_time_interval is more robust than call_later recursion
+    async def _periodic_life_bit_write(now=None):
+        # We access the runtime data directly from the entry_id
+        # This is safe because the timer is cancelled on unload
+        runtime = hass.data[DOMAIN].get(entry.entry_id)
+        if runtime and isinstance(runtime, RuntimeData):
+            register = get_register("send_keepalive")
+            try:
+                await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
+            except Exception as err:
+                _LOGGER.warning("Failed to write Life Bit (6000): %s", err)
+
+    cancel_keepalive = async_track_time_interval(
+        hass,
+        _periodic_life_bit_write,
+        timedelta(seconds=15),
+    )
+
     domain_data[entry.entry_id] = RuntimeData(
         bridge=bridge,
         coordinator=coordinator,
@@ -121,6 +143,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         max_current=max_current,
         device_slug=device_slug,
         device_name=device_name,
+        cancel_keepalive=cancel_keepalive,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -129,18 +152,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _register_services(hass)
 
-    # Schedule periodic Life Bit (Register 6000) write every 20 seconds
-    async def _periodic_life_bit_write(now=None):
-        runtime = hass.data[DOMAIN].get(entry.entry_id)
-        if runtime:
-            register = get_register("send_keepalive")
-            try:
-                await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
-            except Exception as err:
-                _LOGGER.warning("Failed to write Life Bit (6000): %s", err)
-        hass.loop.call_later(20, lambda: hass.async_create_task(_periodic_life_bit_write()))
-
-    hass.loop.call_later(20, lambda: hass.async_create_task(_periodic_life_bit_write()))
     return True
 
 
@@ -152,6 +163,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = hass.data.get(DOMAIN, {})
     runtime: RuntimeData | None = data.pop(entry.entry_id, None)
     if runtime:
+        if runtime.cancel_keepalive:
+            runtime.cancel_keepalive()
         await runtime.bridge.async_close()
 
     if unload_ok and not data:

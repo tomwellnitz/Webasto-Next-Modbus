@@ -1,4 +1,13 @@
 # Changelog
+
+## [0.4.0-beta.6] - 2025-11-30
+
+### Changed
+
+- Improved connection stability: The "Life Bit" (keepalive) is now sent every 15 seconds (previously 20s) using `async_track_time_interval` for better reliability and to prevent timeouts on some firmware versions.
+- Fixed potential issue where the keepalive timer was not correctly cancelled when unloading the integration.
+- Updated documentation to clarify the automatic keepalive behavior.
+
 ## [0.4.0-beta.5] - 2025-10-24
 
 ### Added

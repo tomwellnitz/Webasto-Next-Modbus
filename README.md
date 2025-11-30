@@ -116,6 +116,10 @@ The following services are available under the `webasto_next_modbus` domain. Whe
 
 Each service writes to the appropriate Modbus register and forces an immediate refresh so dashboards reflect state changes right away.
 
+### Connection Stability (Keepalive)
+
+The integration automatically sends a "Life Bit" (keepalive) to the wallbox every 15 seconds to prevent the Modbus connection from timing out. This is handled in the background and requires no user configuration.
+
 ## Monitoring & automations
 
 ### Device triggers
