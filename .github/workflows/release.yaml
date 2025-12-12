@@ -36,8 +36,25 @@ jobs:
       - name: Build distribution
         run: uv build
 
+      - name: Extract release notes
+        id: extract_release_notes
+        run: |
+          # Get the tag name (e.g., v0.4.0-beta.9)
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # Remove 'v' prefix to match changelog version (e.g., 0.4.0-beta.9)
+          VERSION=${TAG_NAME#v}
+          
+          # Extract the section from CHANGELOG.md
+          # Find the line with the version, print until the next version header
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > RELEASE_NOTES.md
+          
+          # If empty (e.g. first release or format mismatch), fallback to simple message
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release $TAG_NAME" > RELEASE_NOTES.md
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
