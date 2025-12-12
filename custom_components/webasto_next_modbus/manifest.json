@@ -13,10 +13,9 @@
   "zeroconf": [
     {
       "type": "_http._tcp.local.",
-      "name": "NEXT-WS*"
+      "name": "next-ws*"
     }
   ],
-  "homeassistant": "2024.6.0",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "loggers": ["pymodbus", "custom_components.webasto_next_modbus"]
