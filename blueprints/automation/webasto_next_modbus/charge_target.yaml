@@ -1,0 +1,116 @@
+---
+blueprint:
+  name: Webasto Next – Charge Target (kWh)
+  description: >-
+    Charges the vehicle for a specific amount of energy (kWh) and then stops.
+    Requires an Input Number helper (for the target amount) and an Input Boolean
+    helper (to activate the logic). Inspired by the work of @cdrfun.
+  domain: automation
+  input:
+    webasto_device:
+      name: Webasto Next Wallbox
+      description: The wallbox device to control.
+      selector:
+        device:
+          integration: webasto_next_modbus
+          entity:
+            domain: sensor
+            device_class: energy
+    target_kwh_helper:
+      name: Target Energy Helper (kWh)
+      description: >-
+        Input Number helper to set the desired energy amount (e.g., 0-100 kWh).
+      selector:
+        entity:
+          domain: input_number
+          unit_of_measurement: kWh
+    active_switch_helper:
+      name: Activation Switch
+      description: Input Boolean helper to start/stop the target charging logic.
+      selector:
+        entity:
+          domain: input_boolean
+    session_energy_sensor:
+      name: Session Energy Sensor
+      description: >-
+        The sensor providing the current session's charged energy
+        (usually 'sensor.webasto_..._meter_reading_session').
+      selector:
+        entity:
+          domain: sensor
+          device_class: energy
+    notify_device:
+      name: Notification Device (Optional)
+      description: Device to notify when the target is reached.
+      default: []
+      selector:
+        device:
+          integration: mobile_app
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input active_switch_helper
+    to: "on"
+    id: "start"
+  - platform: state
+    entity_id: !input session_energy_sensor
+    id: "update"
+
+variables:
+  target_kwh: !input target_kwh_helper
+  active_switch: !input active_switch_helper
+  energy_sensor: !input session_energy_sensor
+  # Store the start energy in a variable when the switch is turned on?
+  # Blueprints are stateless across restarts, but variables are local to the
+  # run.
+  # We need a way to know the "start" value.
+  # A robust way is to reset the session energy on the wallbox, but we can't
+  # always do that. Alternatively, we assume "Session Energy" sensor starts at 0
+  # or near 0 for a new session. If the user uses the "Session Energy" sensor
+  # from the integration, it resets on new session start.
+  # So we can just check if session_energy >= target.
+
+action:
+  - choose:
+      # Case 1: User turned the switch ON -> Start charging
+      - conditions:
+          - condition: trigger
+            id: "start"
+        sequence:
+          - action: webasto_next_modbus.start_session
+            data:
+              config_entry_id: >-
+                {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+
+      # Case 2: Energy updated -> Check if target reached
+      - conditions:
+          - condition: trigger
+            id: "update"
+          - condition: state
+            entity_id: !input active_switch_helper
+            state: "on"
+          - condition: template
+            # Check if current session energy >= target
+            value_template: >-
+              {{ states(energy_sensor) | float(0) / 1000 >=
+                 states(target_kwh) | float(0) }}
+              {# Note: Integration provides Wh, input_number is usually kWh. #}
+              {# The integration sensor 'meter_reading_session' is in Wh. #}
+        sequence:
+          - action: webasto_next_modbus.stop_session
+            data:
+              config_entry_id: >-
+                {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input active_switch_helper
+          - choose:
+              - conditions: "{{ inputs.notify_device != [] }}"
+                sequence:
+                  - domain: mobile_app
+                    type: notify
+                    device_id: !input notify_device
+                    message: "Target energy reached. Charging stopped."

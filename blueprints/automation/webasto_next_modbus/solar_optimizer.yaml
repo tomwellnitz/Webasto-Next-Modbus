@@ -1,0 +1,121 @@
+---
+blueprint:
+  name: Webasto Next – Solar Surplus Optimizer
+  description: >-
+    Adjusts the charging current based on grid export/import to maximize solar
+    self-consumption. Requires a grid power sensor (negative = export, positive
+    = import).
+  domain: automation
+  input:
+    current_entity:
+      name: Charging Current Entity
+      description: >-
+        The entity controlling the wallbox current
+        (e.g., number.webasto_..._charge_current_limit).
+      selector:
+        entity:
+          domain: number
+          device_class: current
+    grid_sensor:
+      name: Grid Power Sensor (Watts)
+      description: >-
+        Sensor measuring grid power. Negative value must mean export (surplus).
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+          unit_of_measurement: W
+    min_current:
+      name: Minimum Current (A)
+      description: Minimum charging current (usually 6A).
+      default: 6
+      selector:
+        number:
+          min: 6
+          max: 32
+          unit_of_measurement: A
+    max_current:
+      name: Maximum Current (A)
+      description: Maximum charging current allowed.
+      default: 16
+      selector:
+        number:
+          min: 6
+          max: 32
+          unit_of_measurement: A
+    watts_per_amp:
+      name: Watts per Ampere
+      description: >-
+        Conversion factor. For 3-phase charging at 230V: ~690 W/A.
+        For 1-phase: ~230 W/A.
+      default: 690
+      selector:
+        number:
+          min: 200
+          max: 22000
+          unit_of_measurement: W/A
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input grid_sensor
+
+variables:
+  grid_sensor: !input grid_sensor
+  current_entity: !input current_entity
+  min_amp: !input min_current
+  max_amp: !input max_current
+  w_per_amp: !input watts_per_amp
+
+  # Get current values
+  grid_power: "{{ states(grid_sensor) | float(0) }}"
+  current_setpoint: "{{ states(current_entity) | float(min_amp) }}"
+
+  # Calculate surplus (Export is negative, so Surplus = -Grid)
+  # If Grid is -2000W (Export), Surplus is 2000W.
+  surplus: "{{ -1 * grid_power }}"
+
+  # Calculate available power for charging
+  # Available = Current_Charging_Power + Surplus
+  # Current_Charging_Power = Setpoint * W_per_Amp
+  current_load_watts: "{{ current_setpoint * w_per_amp }}"
+  available_watts: "{{ current_load_watts + surplus }}"
+
+  # Calculate new target amps
+  target_amps_raw: "{{ available_watts / w_per_amp }}"
+
+  # Round down to be safe (avoid importing)
+  target_amps: "{{ target_amps_raw | int }}"
+
+action:
+  - choose:
+      # Only update if the target amps are within range and different from
+      # current
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ target_amps >= min_amp and target_amps <= max_amp }}
+          - condition: template
+            value_template: "{{ target_amps != current_setpoint }}"
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: "{{ target_amps }}"
+
+      # If calculated amps < min_amp, we might want to stop charging or set to
+      # min. For this simple blueprint, we just set to min if we are currently
+      # above min.
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ target_amps < min_amp and current_setpoint > min_amp }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: "{{ min_amp }}"

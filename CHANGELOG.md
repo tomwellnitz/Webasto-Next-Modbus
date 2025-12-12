@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0-beta.8] - 2025-12-12
+
+### Added
+- New automation blueprints to match and exceed competitor features:
+  - **Charge Target (kWh)**: Automatically stop charging after a specific energy amount is delivered.
+  - **Charge Until Full (Auto-Stop)**: Detect when the battery is full (power drop) and stop the session.
+  - **Solar Surplus Optimizer**: Dynamically adjust charging current based on grid export/import.
+
+### Changed
+- Updated all blueprints to use modern Home Assistant syntax (`action` instead of `service`) for 2025.x compatibility.
+- Validated and fixed YAML syntax/style in all blueprints (line lengths, formatting).
+
 ## [0.4.0-beta.7] - 2025-12-12
 
 ### Added

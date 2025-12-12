@@ -1,3 +1,4 @@
+---
 blueprint:
   name: Webasto Next – FastCharge/FullCharge Steuerung
   description: >-
@@ -10,8 +11,8 @@ blueprint:
     config_entry_id:
       name: Integrations-ID
       description: >-
-        `config_entry_id` der Webasto Next Modbus-Integration (siehe Einstellungen →
-        Geräte & Dienste → Integration → ⋮ → Informationen).
+        `config_entry_id` der Webasto Next Modbus-Integration (siehe
+        Einstellungen → Geräte & Dienste → Integration → ⋮ → Informationen).
       selector:
         text:
           multiline: false
@@ -55,25 +56,25 @@ action:
   - choose:
       - conditions: "{{ trigger.id == 'start' }}"
         sequence:
-          - service: webasto_next_modbus.start_session
+          - action: webasto_next_modbus.start_session
             data:
               config_entry_id: "{{ i('config_entry_id') }}"
           - if:
               - condition: template
                 value_template: "{{ i('reset_helpers') }}"
             then:
-              - service: homeassistant.turn_off
+              - action: homeassistant.turn_off
                 target:
                   entity_id: "{{ i('fastcharge_helper') }}"
       - conditions: "{{ trigger.id == 'stop' }}"
         sequence:
-          - service: webasto_next_modbus.stop_session
+          - action: webasto_next_modbus.stop_session
             data:
               config_entry_id: "{{ i('config_entry_id') }}"
           - if:
               - condition: template
                 value_template: "{{ i('reset_helpers') }}"
             then:
-              - service: homeassistant.turn_off
+              - action: homeassistant.turn_off
                 target:
                   entity_id: "{{ i('fullcharge_helper') }}"

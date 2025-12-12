@@ -1,0 +1,84 @@
+---
+blueprint:
+  name: Webasto Next – Charge Until Full (Auto-Stop)
+  description: >-
+    Automatically stops the charging session when the power drops below a
+    threshold for a set duration, indicating the battery is full.
+    Inspired by the work of @cdrfun.
+  domain: automation
+  input:
+    webasto_device:
+      name: Webasto Next Wallbox
+      description: The wallbox device to control.
+      selector:
+        device:
+          integration: webasto_next_modbus
+          entity:
+            domain: sensor
+            device_class: power
+    power_sensor:
+      name: Power Sensor
+      description: >-
+        The sensor providing the total active power
+        (e.g., 'sensor.webasto_..._active_power_total').
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+          unit_of_measurement: W
+    power_threshold:
+      name: Power Threshold (Watts)
+      description: Stop charging if power drops below this value.
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: W
+    duration:
+      name: Duration (Minutes)
+      description: >-
+        How long the power must stay below the threshold before stopping.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+    notify_device:
+      name: Notification Device (Optional)
+      description: Device to notify when charging is finished.
+      default: []
+      selector:
+        device:
+          integration: mobile_app
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input power_sensor
+    below: !input power_threshold
+    for:
+      minutes: !input duration
+
+condition:
+  # Only stop if we are actually in a charging session.
+  # We can check the power sensor itself (redundant but safe) or just assume the
+  # trigger is enough. Better: Check if the wallbox status is 'Charging' (IEC
+  # State C). But accessing that specific entity via device selector is hard in
+  # blueprints without asking for it explicitly.
+  # We'll rely on the power drop trigger.
+  []
+
+action:
+  - action: webasto_next_modbus.stop_session
+    data:
+      config_entry_id: >-
+        {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+  - choose:
+      - conditions: "{{ inputs.notify_device != [] }}"
+        sequence:
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device
+            message: >-
+              Charging finished (power dropped below threshold).

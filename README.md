@@ -87,7 +87,7 @@ During the onboarding wizard you will be asked for:
 - **Host** – IP address or DNS hostname of the wallbox.
 - **Port** – Modbus TCP port (default `502`).
 - **Unit ID** – Modbus unit ID/slave ID (default `255`).
-- **Scan interval** – Polling interval in seconds (`2–60`, default `5`).
+- **Scan interval** – Polling interval in seconds (`2–60`, default `10`).
 - **Variant** – Hardware tier (11 kW/16 A or 22 kW/32 A). Write actions are automatically clamped to the selected limit.
 
 The config flow validates credentials by reading a known register set and stores a deterministic unique ID (`<host>-<unit_id>`) to avoid duplicate entries.
@@ -118,7 +118,7 @@ Each service writes to the appropriate Modbus register and forces an immediate r
 
 ### Connection Stability (Keepalive)
 
-The integration automatically sends a "Life Bit" (keepalive) to the wallbox every 15 seconds to prevent the Modbus connection from timing out. This is handled in the background and requires no user configuration.
+The integration automatically handles the "Life Bit" handshake in the background. It writes `1` to the keepalive register and polls it until the wallbox resets it to `0`. This cycle repeats continuously to prevent the wallbox from entering failsafe mode. This behavior is dynamic and respects the configured failsafe timeout.
 
 ## Monitoring & automations
 
@@ -134,9 +134,14 @@ The integration automatically sends a "Life Bit" (keepalive) to the wallbox ever
 
 Create automations via **Settings → Automations & Scenes → Add Automation → Device Trigger** and select your wallbox device.
 
-### Blueprint
+### Blueprints
 
-`blueprints/automation/webasto_next_modbus/fastcharge_fullcharge.yaml` links two helpers (for example “FastCharge” and “FullCharge”) to the `start_session` and `stop_session` services. Import the blueprint through Home Assistant’s Blueprint UI, select the config entry ID of your wallbox, and pick two toggles to act as virtual buttons.
+This integration includes several automation blueprints to jump-start your setup. You can import them directly via the Home Assistant UI.
+
+- **Charge Target (kWh):** Charge a specific amount of energy (e.g., 10 kWh) and then stop automatically.
+- **Charge Until Full (Auto-Stop):** Detects when the car is full (power drops below threshold) and stops the session.
+- **Solar Surplus Optimizer:** Adjusts charging current based on grid export/import to maximize solar self-consumption.
+- **FastCharge/FullCharge:** Simple toggle-based control to start/stop sessions (legacy).
 
 ### Virtual wallbox simulator
 
@@ -168,8 +173,8 @@ English is the default language. A German translation ships in `translations/de.
 
 ## Development & testing
 
-- Create a virtual environment, install the project with `pip install -e '.[dev]'`, and run `pytest` to execute the full test suite.
-- Use `python -m ruff check` for static analysis and formatting guardrails.
+- Install dependencies with `uv sync` and run `uv run pytest` to execute the full test suite.
+- Use `uv run ruff check .` for static analysis and formatting guardrails.
 - The virtual wallbox simulator (see above) mirrors the register map and powers both automated and manual tests.
 - `docker/docker-compose.yml` provides an opt-in Home Assistant sandbox that mounts the integration live for UI-level testing.
 - Development documentation lives in `docs/development.md`.
@@ -193,11 +198,15 @@ English is the default language. A German translation ships in `translations/de.
 
 - Work through the [support checklist](docs/support.md) before opening a bug report; collecting diagnostics and debug logs up front keeps the issue tracker actionable.
 - Post “how do I…” and automation questions in the [GitHub discussions board](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions).
-- Security disclosures should be sent privately to `security@tomwellnitz.de`.
+- Security disclosures should be reported via GitHub Security Advisories or by opening a private issue if available.
 
 ## Contributing
 
-We welcome pull requests and documentation improvements. Read the new [`CONTRIBUTING.md`](CONTRIBUTING.md) to learn how to set up your environment, run the tooling suite, and follow the release playbook. Please run `python -m ruff check` and `python -m pytest` before submitting changes.
+We welcome pull requests and documentation improvements. Read the new [`CONTRIBUTING.md`](CONTRIBUTING.md) to learn how to set up your environment, run the tooling suite, and follow the release playbook. Please run `uv run ruff check .` and `uv run pytest` before submitting changes.
+
+## Credits
+
+- **[@cdrfun](https://github.com/cdrfun)** for the [webasto_next](https://github.com/cdrfun/webasto_next) project, which provided inspiration for the "Target Charge" and "Auto-Stop" blueprints and valuable insights into the wallbox behavior.
 
 ## License
 
