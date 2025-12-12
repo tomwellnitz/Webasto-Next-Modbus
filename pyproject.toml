@@ -1,10 +1,10 @@
 [project]
 name = "webasto-next-modbus"
-version = "0.4.0-beta.7"
+version = "0.4.0-beta.8"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13.2"
 dependencies = [
     "pymodbus>=3.11.2,<4",
 ]
@@ -36,13 +36,15 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
-    "coverage==7.6.8",
+    "colorlog>=6.10.1",
+    "coverage>=7.10.6",
     "homeassistant>=2025.1.0b7",
     "mypy>=1.8",
-    "pytest>=8.3.4,<9",
+    "pycares<5.0.0",
+    "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
-    "pytest-cov==6.0.0",
-    "pytest-homeassistant-custom-component==0.13.200",
+    "pytest-cov==7.0.0",
+    "pytest-homeassistant-custom-component==0.13.300",
     "ruff>=0.5",
     "voluptuous>=0.15.2",
 ]
