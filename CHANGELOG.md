@@ -1,12 +1,16 @@
 # Changelog
 
-## [0.4.0-beta.9] - 2025-12-12
+## [0.4.0-beta.10] - 2025-12-12
 
 ### Added
 
 - **Auto-Discovery**: Automatically detects Webasto Next wallboxes in the network via Zeroconf/mDNS.
 - **Tooling**: Added `mdformat` for Markdown formatting and `vulture` for dead code detection.
 - **Documentation**: Added `AGENTS.md` for AI agents and updated developer guides.
+
+### Fixed
+
+- **Manifest**: Fixed validation errors in `manifest.json` (Zeroconf naming, key sorting) and `hacs.json`.
 
 ### Changed
 
