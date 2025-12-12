@@ -138,10 +138,26 @@ Create automations via **Settings → Automations & Scenes → Add Automation �
 
 This integration includes several automation blueprints to jump-start your setup. You can import them directly via the Home Assistant UI.
 
-- **Charge Target (kWh):** Charge a specific amount of energy (e.g., 10 kWh) and then stop automatically.
-- **Charge Until Full (Auto-Stop):** Detects when the car is full (power drops below threshold) and stops the session.
-- **Solar Surplus Optimizer:** Adjusts charging current based on grid export/import to maximize solar self-consumption.
-- **FastCharge/FullCharge:** Simple toggle-based control to start/stop sessions (legacy).
+#### Charge Target (kWh)
+Charges a specific amount of energy (e.g., 10 kWh) and then stops automatically.
+**Requirements:**
+- **Input Number Helper:** To set the target amount (e.g., `input_number.charge_target`).
+- **Input Boolean Helper:** To activate/deactivate the logic (e.g., `input_boolean.charge_target_active`).
+
+#### Charge Until Full (Auto-Stop)
+Detects when the car is full (power drops below threshold) and stops the session.
+**Requirements:**
+- No manual helpers needed. Select your wallbox power sensor and a notification device.
+
+#### Solar Surplus Optimizer
+Adjusts charging current based on grid export/import to maximize solar self-consumption.
+**Requirements:**
+- **Grid Power Sensor:** A sensor where negative values represent export (surplus) and positive values represent import.
+
+#### FastCharge/FullCharge (Legacy)
+Simple toggle-based control to start/stop sessions.
+**Requirements:**
+- **Two Input Boolean Helpers:** One for "Fast Charge" (Start) and one for "Full Charge" (Stop).
 
 ### Virtual wallbox simulator
 

@@ -45,6 +45,6 @@ Releases follow the checklist in [`docs/development.md`](docs/development.md#rel
 
 ## Code of conduct
 
-We follow the [Home Assistant Code of Conduct](https://www.home-assistant.io/code-of-conduct/). Be welcoming, constructive, and respectful when interacting with other contributors.
+We follow the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). Be welcoming, constructive, and respectful when interacting with other contributors.
 
 If you have questions about this guide, open a discussion topic with the `maintenance` category or mention `@tomwellnitz` on GitHub.
