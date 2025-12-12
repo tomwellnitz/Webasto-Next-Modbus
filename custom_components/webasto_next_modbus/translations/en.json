@@ -6,7 +6,7 @@
         "title": "Connect to Webasto Next",
         "description": "Enter the connection details for your wallbox.",
         "data": {
-          "host": "Host",
+          "host": "Host (IP address or hostname)",
           "port": "Port",
           "unit_id": "Unit ID",
           "scan_interval": "Update interval (seconds)"

@@ -23,7 +23,8 @@ set_current:
 
 set_failsafe:
   name: Configure fail-safe parameters
-  description: Set the fallback charging current and optional timeout used when the energy management system drops offline.
+  description: >-
+    Set the fallback charging current and optional timeout used when the energy management system drops offline.
   fields:
     config_entry_id:
       name: Config entry ID

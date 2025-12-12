@@ -33,7 +33,47 @@ jobs:
       - name: Lint with Ruff
         run: |
           uv run ruff check custom_components/webasto_next_modbus tests
+          uv run ruff format --check custom_components/webasto_next_modbus tests
+
+      - name: Check spelling with codespell
+        run: |
+          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf" --quiet-level=2
+
+      - name: Lint YAML with yamllint
+        run: |
+          uv run yamllint .
+
+      - name: Security check with bandit
+        run: |
+          uv run bandit -r custom_components/webasto_next_modbus --skip B101,B110
+
+      - name: Check dependencies with deptry
+        run: |
+          uv run deptry .
+
+      - name: Check for dead code with vulture
+        run: |
+          uv run vulture custom_components/webasto_next_modbus .vulture_whitelist.py
+
+      - name: Type check with mypy
+        run: |
+          uv run mypy custom_components/webasto_next_modbus
 
       - name: Run tests
         run: |
           uv run pytest
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master
+

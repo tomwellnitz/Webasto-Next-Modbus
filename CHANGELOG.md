@@ -1,29 +1,47 @@
 # Changelog
 
+## [0.4.0-beta.9] - 2025-12-12
+
+### Added
+
+- **Auto-Discovery**: Automatically detects Webasto Next wallboxes in the network via Zeroconf/mDNS.
+- **Tooling**: Added `mdformat` for Markdown formatting and `vulture` for dead code detection.
+- **Documentation**: Added `AGENTS.md` for AI agents and updated developer guides.
+
+### Changed
+
+- Improved CI pipeline with comprehensive checks (linting, types, spelling, security).
+- Updated `pyproject.toml` dependencies and configuration.
+
 ## [0.4.0-beta.8] - 2025-12-12
 
 ### Added
+
 - New automation blueprints to match and exceed competitor features:
   - **Charge Target (kWh)**: Automatically stop charging after a specific energy amount is delivered.
   - **Charge Until Full (Auto-Stop)**: Detect when the battery is full (power drop) and stop the session.
   - **Solar Surplus Optimizer**: Dynamically adjust charging current based on grid export/import.
 
 ### Changed
+
 - Updated all blueprints to use modern Home Assistant syntax (`action` instead of `service`) for 2025.x compatibility.
 - Validated and fixed YAML syntax/style in all blueprints (line lengths, formatting).
 
 ## [0.4.0-beta.7] - 2025-12-12
 
 ### Added
+
 - Implemented robust "Life Bit" handshake (Write 1 -> Poll 0) to reliably prevent wallbox failsafe mode.
 - Added connection retry logic (3 attempts) with user notifications during setup to handle transient network issues.
 
 ### Changed
+
 - Migrated project tooling from `pip` to `uv` for faster and more reliable dependency management.
 - Pinned project to Python 3.12 to ensure compatibility with all dependencies.
 - Updated GitHub Actions workflows to use `uv`.
 
 ### Fixed
+
 - Corrected Modbus register map based on vendor PDF: removed unsupported voltage sensors and fixed data types.
 - Removed write-only `charge_power_w` register to prevent read errors.
 - Fixed `KeyError` in simulator by removing obsolete registers from default scenario.
@@ -39,30 +57,37 @@
 ## [0.4.0-beta.5] - 2025-10-24
 
 ### Added
+
 - Automatic periodic write to Modbus register 6000 (Life Bit) every 20 seconds to prevent timeouts
 
 ### Changed
+
 - Lint and formatting fixes (ruff compliance, line length)
 - Version bump in all files for release consistency
 
 ### Fixed
+
 - All tests pass, including HomeAssistantError handling
 
 ### Notes
+
 - This pre-release is production-ready and strictly follows Webasto Modbus spec
 
 ## [0.4.0-beta.3] - 2025-10-24
 
 ### Changed
+
 - Entfernt alle nicht offiziellen Modbus-Register unter Adresse 1000 aus der Integration
 - Dev-Abhängigkeiten im pyproject.toml ergänzt und Python-Version auf 3.13 für Home Assistant-Kompatibilität festgelegt
 - Integration und Tests laufen jetzt mit vollständigem, offiziellem Registersatz
 
 ### Fixed
+
 - Fehlerhafte Registerabfragen und Import-Probleme durch fehlende Abhängigkeiten behoben
 - Linting und Formatierung mit ruff, alle Tests laufen fehlerfrei
 
 ### Notes
+
 - Release ist produktionssicher und entspricht exakt der Hersteller-Dokumentation
 
 <!-- markdownlint-disable MD022 MD024 MD032 -->
@@ -132,19 +157,23 @@ All notable changes to this project are documented in this file. The format roug
 ## [0.2.3-beta] - 2025-10-03
 
 ### Fixed
+
 - Pin `setuptools.packages` discovery to the integration module so editable installs succeed when blueprints are bundled.
 
 ### Changed
+
 - Document the local workflow for validating both Python 3.12 and 3.13 matrix jobs before opening a pull request.
 
 ## [0.2.2-beta] - 2025-10-03
 
 ### Added
+
 - Two explicit services (`webasto_next_modbus.start_session` / `stop_session`) and a bundled blueprint to toggle FastCharge/FullCharge helpers.
 - Extended sensor coverage for static metadata (serial, firmware, backend IDs), EV max current, charged energy, and live charge power.
 - Dedicated tests for Modbus string decoding and the new service helpers.
 
 ### Changed
+
 - Lazily import `pymodbus` to improve diagnostics for missing dependencies.
 - Decode string registers with UTF-8 trimming while preserving existing numeric handling.
 - Surface additional register metadata in the developer documentation.
@@ -152,25 +181,30 @@ All notable changes to this project are documented in this file. The format roug
 ## [0.2.1-beta] - 2025-10-03
 
 ### Added
+
 - Repository branding assets (logo/icon) rendered in HACS and documentation for easier discovery.
 
 ### Changed
+
 - Declare minimum Home Assistant version and integration type in the manifest for HACS validation.
 - Raise the minimum supported Python runtime to 3.12 and align dev tooling (coverage, pytest-cov, pytest-homeassistant-custom-component) with the latest compatible matrix.
 
 ## [0.2.0] - 2025-10-03
 
 ### Added
+
 - Device automation triggers for charging events, connection changes, and manual keep-alive actions.
 - Expanded documentation covering manual verification, release workflow, and debug logging.
 - Consistent Material Design Icons for sensors, numbers, and button entities.
 
 ### Changed
+
 - README restructured into production-ready guidance with clear installation, usage, and troubleshooting sections.
 
 ## [0.1.0] - 2025-10-03
 
 ### Added
+
 - Initial Home Assistant integration for Webasto Next / Ampure Unite wallboxes with sensor, number, and button entities.
 - Config flow including connection validation and variant-specific current clamping.
 - Service helpers for dynamic current, fail-safe configuration, and keep-alive frames.

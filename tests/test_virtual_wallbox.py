@@ -29,9 +29,6 @@ async def _make_bridge(
     # Reset cached client classes inside the hub module.
     from custom_components.webasto_next_modbus import hub as hub_module
 
-    monkeypatch.setattr(hub_module, "_ASYNC_CLIENT_CLASS", None)
-    monkeypatch.setattr(hub_module, "_MODBUS_EXCEPTION_CLASS", None)
-
     def _ensure_fake():
         return FakeAsyncModbusTcpClient, FakeModbusException
 
@@ -211,8 +208,6 @@ async def test_bridge_prefers_device_id_keyword(monkeypatch: pytest.MonkeyPatch)
 
     DeviceIdClient.expected_device_id = 42
 
-    monkeypatch.setattr(hub_module, "_ASYNC_CLIENT_CLASS", None)
-    monkeypatch.setattr(hub_module, "_MODBUS_EXCEPTION_CLASS", None)
     monkeypatch.setattr(
         hub_module,
         "_ensure_pymodbus",

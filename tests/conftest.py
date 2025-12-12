@@ -60,7 +60,7 @@ sys.modules.setdefault("voluptuous", _voluptuous)
 
 
 @pytest.fixture(autouse=True)
-def _reset_virtual_wallbox_registry() -> Generator[None, None, None]:
+def _reset_virtual_wallbox_registry() -> Generator[None]:
     """Ensure each test starts with a clean virtual wallbox registry."""
 
     virtual_registry.clear()
@@ -69,7 +69,7 @@ def _reset_virtual_wallbox_registry() -> Generator[None, None, None]:
 
 
 @pytest.fixture()
-def default_virtual_wallbox() -> Generator[VirtualWallboxState, None, None]:
+def default_virtual_wallbox() -> Generator[VirtualWallboxState]:
     """Provide a default virtual wallbox matching ModbusBridge defaults."""
 
     with register_virtual_wallbox(

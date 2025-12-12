@@ -11,14 +11,13 @@ Thanks for taking the time to improve Webasto Next Modbus! The notes below summa
    source .venv/bin/activate
    ```
 
-2. Run the tooling suite before opening a pull request:
+1. Run the tooling suite before opening a pull request:
 
    ```bash
-   uv run ruff check .
-   uv run pytest
+   ./scripts/check.sh
    ```
 
-3. Optional: Start the bundled Home Assistant sandbox for manual verification (`docker/docker-compose.yml`).
+1. Optional: Start the bundled Home Assistant sandbox for manual verification (`docker/docker-compose.yml`).
 
 More detailed instructions live in [`docs/development.md`](docs/development.md).
 
@@ -33,7 +32,7 @@ More detailed instructions live in [`docs/development.md`](docs/development.md).
 - Keep changes focused and describe the motivation in the pull request template.
 - Update tests and documentation when behaviour changes. The README and files under `docs/` should mirror the user experience.
 - Follow the existing code style (100-character line length, type hints, async patterns). Let `ruff` fix imports and formatting where possible.
-- Verify that `uv run pytest` passes and that `uv run ruff check .` reports no new issues.
+- Verify that `./scripts/check.sh` passes locally. This script runs all CI checks (tests, linting, types, security).
 
 ## Release workflow
 

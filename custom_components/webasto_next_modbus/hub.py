@@ -23,11 +23,8 @@ try:  # pragma: no cover - optional dependency import
     from pymodbus.client import AsyncModbusTcpClient as _AsyncModbusTcpClient
     from pymodbus.exceptions import ModbusException as _ModbusException
 except ImportError:  # pragma: no cover - handled at runtime
-    _AsyncModbusTcpClient = None  # type: ignore[assignment]
-    _ModbusException = None  # type: ignore[assignment]
-
-_ASYNC_CLIENT_CLASS: type[Any] | None = cast("type[Any] | None", _AsyncModbusTcpClient)
-_MODBUS_EXCEPTION_CLASS: type[Exception] | None = cast("type[Exception] | None", _ModbusException)
+    _AsyncModbusTcpClient = None  # type: ignore[assignment, misc]
+    _ModbusException = None  # type: ignore[assignment, misc]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,14 +112,13 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
 def _ensure_pymodbus() -> tuple[type[Any], type[Exception]]:
     """Ensure pymodbus is imported and return the relevant classes."""
 
-    global _ASYNC_CLIENT_CLASS, _MODBUS_EXCEPTION_CLASS
-    if _ASYNC_CLIENT_CLASS is None or _MODBUS_EXCEPTION_CLASS is None:
+    if _AsyncModbusTcpClient is None or _ModbusException is None:
         raise RuntimeError(
             "pymodbus is required for the Webasto Next Modbus integration. "
             "Install it by adding 'pymodbus' to your environment."
         )
 
-    return cast(type[Any], _ASYNC_CLIENT_CLASS), cast(type[Exception], _MODBUS_EXCEPTION_CLASS)
+    return cast(type[Any], _AsyncModbusTcpClient), cast(type[Exception], _ModbusException)
 
 
 T = TypeVar("T")
@@ -339,7 +335,10 @@ class ModbusBridge:
         assert last_err is not None
         raise last_err
 
-    async def _async_read_register_once(self, register: RegisterDefinition) -> int | float | None:
+    async def _async_read_register_once(
+        self,
+        register: RegisterDefinition,
+    ) -> int | float | str | None:
         modbus_exception = self._modbus_exception
         async with self._lock:
             await self.async_connect()

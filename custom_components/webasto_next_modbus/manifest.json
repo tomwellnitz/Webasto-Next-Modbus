@@ -1,7 +1,7 @@
 {
   "domain": "webasto_next_modbus",
   "name": "Webasto Next Modbus",
-  "version": "0.4.0-beta.8",
+  "version": "0.4.0-beta.9",
   "documentation": "https://github.com/tomwellnitz/Webasto-Next-Modbus",
   "issue_tracker": "https://github.com/tomwellnitz/Webasto-Next-Modbus/issues",
   "requirements": [
@@ -10,6 +10,12 @@
   "dependencies": [],
   "codeowners": ["@tomwellnitz"],
   "config_flow": true,
+  "zeroconf": [
+    {
+      "type": "_http._tcp.local.",
+      "name": "NEXT-WS*"
+    }
+  ],
   "homeassistant": "2024.6.0",
   "integration_type": "hub",
   "iot_class": "local_polling",

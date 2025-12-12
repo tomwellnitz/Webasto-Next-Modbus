@@ -69,11 +69,11 @@ The register ranges are derived from community research and vendor documentation
 ## Data flow
 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
-2. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
-3. The `ModbusBridge` starts a background task that writes `1` to register `6000` and polls it until it becomes `0` (Life Bit handshake).
-4. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
-5. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
-6. Write operations (`set_current`, `set_failsafe`) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
+1. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
+1. The `ModbusBridge` starts a background task that writes `1` to register `6000` and polls it until it becomes `0` (Life Bit handshake).
+1. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
+1. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
+1. Write operations (`set_current`, `set_failsafe`) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
 
 ## Error handling
 

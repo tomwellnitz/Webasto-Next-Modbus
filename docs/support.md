@@ -5,12 +5,16 @@ Need help? We've got you covered.
 ## 🔍 Before Opening a Ticket
 
 1. **Check the Basics**: Ensure your wallbox is powered on and reachable via network.
-2. **Download Diagnostics**:
+
+1. **Download Diagnostics**:
+
    - Go to **Settings** → **Devices & Services** → **Webasto Next Modbus**.
    - Click the **⋮** menu → **Download diagnostics**.
    - *Attach this JSON file to your issue!*
-3. **Enable Debug Logging**:
+
+1. **Enable Debug Logging**:
    Add this to your `configuration.yaml` to see what's happening under the hood:
+
    ```yaml
    logger:
      default: info

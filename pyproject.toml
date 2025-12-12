@@ -1,6 +1,6 @@
 [project]
 name = "webasto-next-modbus"
-version = "0.4.0-beta.8"
+version = "0.4.0-beta.9"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
@@ -20,9 +20,13 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100
+exclude = [".vulture_whitelist.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "C4", "TID"]
+
+[tool.bandit]
+skips = ["B101", "B110"]
 
 [tool.setuptools]
 packages = [
@@ -36,9 +40,13 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.2",
+    "codespell>=2.4.1",
     "colorlog>=6.10.1",
     "coverage>=7.10.6",
+    "deptry>=0.24.0",
     "homeassistant>=2025.1.0b7",
+    "mdformat>=0.7.19",
     "mypy>=1.8",
     "pycares<5.0.0",
     "pytest>=9.0.0",
@@ -47,4 +55,15 @@ dev = [
     "pytest-homeassistant-custom-component==0.13.300",
     "ruff>=0.5",
     "voluptuous>=0.15.2",
+    "vulture>=2.14",
+    "yamllint>=1.37.1",
 ]
+
+[tool.deptry.per_rule_ignores]
+DEP003 = ["custom_components"]
+DEP004 = ["homeassistant", "voluptuous"]
+
+[tool.codespell]
+skip = "*.pdf,*.log,*.log.*,*.csv"
+ignore-words-list = "hass,alle,unter,adresse,ist,oder,paket,intervall,stopp,startet"
+

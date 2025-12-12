@@ -156,12 +156,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     return True
 
-    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
-
-    _register_services(hass)
-
-    return True
-
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""

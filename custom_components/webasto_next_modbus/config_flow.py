@@ -6,15 +6,13 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-try:
-    import voluptuous as vol
-except ModuleNotFoundError:  # pragma: no cover - handled at runtime
-    vol = None
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     CONF_NAME,
@@ -42,6 +40,21 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     _host: str | None = None
     _unit_id: int | None = None
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> config_entries.ConfigFlowResult:
+        """Handle zeroconf discovery."""
+        self._host = discovery_info.host
+
+        # Check if already configured
+        self._async_abort_entries_match({CONF_HOST: self._host})
+
+        # Extract friendly name from discovery (e.g. NEXT-WS-123456)
+        name = discovery_info.name.split(".")[0]
+        self.context.update({"title_placeholders": {"name": name}})
+
+        return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: Mapping[str, Any] | None = None
@@ -106,7 +119,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): vol.All(
+                vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, self._host or "")): vol.All(
                     str,
                     vol.Length(min=1),
                 ),

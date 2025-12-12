@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.webasto_next_modbus.config_flow import (
@@ -81,6 +83,32 @@ async def test_user_step_cannot_connect() -> None:
 
     assert result.get("type") == FlowResultType.FORM
     assert result.get("errors") == {"base": "cannot_connect"}
+
+
+async def test_zeroconf_step() -> None:
+    """Verify zeroconf discovery populates the host."""
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()  # Mock context as a real dict, not mappingproxy
+    flow.context = {}
+    discovery_info = ZeroconfServiceInfo(
+        ip_address=ip_address("192.168.1.100"),
+        ip_addresses=[ip_address("192.168.1.100")],
+        hostname="NEXT-WS-123456.local.",
+        name="NEXT-WS-123456._http._tcp.local.",
+        port=80,
+        properties={},
+        type="_http._tcp.local.",
+    )
+
+    with patch.object(WebastoConfigFlow, "_async_abort_entries_match") as abort_match:
+        result = await flow.async_step_zeroconf(discovery_info)
+
+    abort_match.assert_called_once_with({CONF_HOST: "192.168.1.100"})
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "user"
+    assert flow._host == "192.168.1.100"
+    assert flow.context["title_placeholders"] == {"name": "NEXT-WS-123456"}
 
 
 async def test_options_flow_updates_interval() -> None:
