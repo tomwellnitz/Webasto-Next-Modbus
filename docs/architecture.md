@@ -31,40 +31,36 @@ The register ranges are derived from community research and vendor documentation
 
 | Key | Address | Type | Scale | Description |
 | --- | --- | --- | --- | --- |
-| `serial_number` | 100 | string | – | Wallbox serial number |
-| `charge_point_id` | 130 | string | – | Backend charge point identifier |
-| `charge_point_brand` | 190 | string | – | Advertised brand name |
-| `charge_point_model` | 210 | string | – | Model designation |
-| `firmware_version` | 230 | string | – | Firmware version |
-| `wallbox_date` | 290 | uint32 | – | Controller date (`YYYYMMDD`) |
-| `wallbox_time` | 294 | uint32 | – | Controller time (`HHMMSS`) |
-| `rated_power_w` | 400 | uint32 | – | Rated charging power |
-| `phase_configuration` | 404 | uint16 | – | Phase configuration (`0 = single-phase`, `1 = three-phase`) |
-| `charge_point_state` | 1000 | uint16 | – | IEC 61851 charge point state (`0–8`) |
-| `charging_state` | 1001 | uint16 | – | Charging active (`0/1`) |
-| `equipment_state` | 1002 | uint16 | – | EVSE equipment state |
-| `cable_state` | 1004 | uint16 | – | Cable/vehicle state |
-| `fault_code` | 1006 | uint16 | – | Vendor-specific error code |
-| `current_l{1..3}` | 1008/1010/1012 | uint16 | ×0.001 | Phase currents |
-| `voltage_l{1..3}` | 1014/1016/1018 | uint16 | – | Phase voltages |
-| `active_power_total` | 1020 | uint32 | – | Total active power |
-| `active_power_l{1..3}` | 1024/1028/1032 | uint32 | – | Per-phase active power |
-| `energy_total` | 1036 | uint32 | ×0.001 | Lifetime energy counter |
-| `ev_max_current` | 1108 | uint16 | – | Max allowable EV current |
-| `charged_energy_wh` | 1502 | uint16 | – | Energy for the current session |
-| `session_*` | 1504–1512 | uint32 | – | Session timestamps and durations |
-| `failsafe_current` | 2000 | uint16 | – | Fail-safe current |
-| `failsafe_timeout` | 2002 | uint16 | – | Fail-safe timeout |
-| `charge_power_w` | 5000 | uint32 | – | Live charging power (holding register) |
-| `set_current` | 5004 | uint16 | – | Writable dynamic current limit |
-| `session_command` | 5006 | uint16 | – | Start/stop command register |
-| `alive` | 6000 | uint16 | – | Keep-alive toggle |
+| `charge_point_id` | 1000 | uint32 | – | Charge Point ID |
+| `serial_number` | 1002 | uint32 | – | Serial Number |
+| `product_type` | 1004 | uint32 | – | Product Type |
+| `firmware_version` | 1006 | uint16 | – | Firmware Version |
+| `modbus_table_version` | 1008 | uint16 | – | Modbus Table Version |
+| `grid_phase_config` | 1010 | uint16 | – | Grid Phase Configuration |
+| `max_station_current` | 1012 | uint16 | – | Max Station Current |
+| `evse_state` | 1100 | uint16 | – | IEC 61851 State (A-F) |
+| `cable_state` | 1102 | uint16 | – | Cable State |
+| `error_code` | 1104 | uint16 | – | Error Code |
+| `charging_state` | 1106 | uint16 | – | Charging State |
+| `current_l{1..3}` | 1108/1110/1112 | uint16 | – | Phase Currents (A) |
+| `active_power_total` | 1114 | uint32 | – | Active Power Total (W) |
+| `meter_reading_session` | 1116 | uint32 | – | Meter Reading Session (Wh) |
+| `meter_reading_total` | 1118 | uint32 | – | Meter Reading Total (Wh) |
+| `safe_current` | 1500 | uint16 | – | Safe Current (A) |
+| `connection_timeout` | 1502 | uint16 | – | Connection Timeout (s) |
+| `vehicle_max_current` | 1618 | uint16 | – | Vehicle Max Current (A) |
+| `smart_vehicle_detected` | 1620 | uint32 | – | Smart Vehicle Detected |
+| `charge_current_limit` | 2000 | uint16 | – | Charge Current Limit (A) |
+| `charge_mode` | 2002 | uint16 | – | Charge Mode |
+| `life_bit` | 6000 | uint16 | – | Life Bit (Keep-alive) |
+
+*Note: Voltage sensors (1014-1018) and Charge Power (5000) were removed as they are not supported or write-only.*
 
 ## Software components
 
-- `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap.
+- `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
 - `const.py` – Constants, version metadata, register descriptions, and enum mappings.
-- `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, and exposes read/write helpers.
+- `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
 - `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles and normalises raw register values.
 - `config_flow.py` – User and options flows with validation and duplicate protection.
 - Platform modules (`sensor.py`, `number.py`, `button.py`) – Entity classes backed by static descriptions.
@@ -74,17 +70,18 @@ The register ranges are derived from community research and vendor documentation
 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
 2. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
-3. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
-4. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
-5. Write operations (`set_current`, `set_failsafe`, start/stop commands) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
-6. The keep-alive button/service toggles register `6000` and triggers an on-demand refresh to keep dashboards responsive.
+3. The `ModbusBridge` starts a background task that writes `1` to register `6000` and polls it until it becomes `0` (Life Bit handshake).
+4. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
+5. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
+6. Write operations (`set_current`, `set_failsafe`) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
 
 ## Error handling
 
-- Communication errors raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
-- Individual register errors are logged and surfaced as `None` without blocking the entire payload.
-- Write helpers clamp values to safe ranges and surface validation errors back to the UI.
-- Persistent connectivity failures publish Home Assistant notifications to alert the user.
+- **Connection Retries**: During setup, the integration attempts to connect 3 times with a delay, notifying the user if it fails.
+- **Communication errors**: Raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
+- **Individual register errors**: Logged and surfaced as `None` without blocking the entire payload.
+- **Write helpers**: Clamp values to safe ranges and surface validation errors back to the UI.
+- **Persistent connectivity failures**: Publish Home Assistant notifications to alert the user.
 
 ## Testing strategy
 

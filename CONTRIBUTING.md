@@ -4,19 +4,18 @@ Thanks for taking the time to improve Webasto Next Modbus! The notes below summa
 
 ## Quick start
 
-1. Clone this repository and create a virtual environment:
+1. Clone this repository and install dependencies using `uv`:
 
    ```bash
-   python3 -m venv .venv
+   uv sync
    source .venv/bin/activate
-   pip install -e '.[dev]'
    ```
 
 2. Run the tooling suite before opening a pull request:
 
    ```bash
-   python -m ruff check custom_components/webasto_next_modbus tests
-   python -m pytest
+   uv run ruff check .
+   uv run pytest
    ```
 
 3. Optional: Start the bundled Home Assistant sandbox for manual verification (`docker/docker-compose.yml`).
@@ -34,7 +33,7 @@ More detailed instructions live in [`docs/development.md`](docs/development.md).
 - Keep changes focused and describe the motivation in the pull request template.
 - Update tests and documentation when behaviour changes. The README and files under `docs/` should mirror the user experience.
 - Follow the existing code style (100-character line length, type hints, async patterns). Let `ruff` fix imports and formatting where possible.
-- Verify that `python -m pytest` passes and that `python -m ruff check` reports no new issues.
+- Verify that `uv run pytest` passes and that `uv run ruff check .` reports no new issues.
 
 ## Release workflow
 

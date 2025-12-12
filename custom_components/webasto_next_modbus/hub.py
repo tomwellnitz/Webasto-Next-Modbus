@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import time
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Final, TypeVar, cast
@@ -15,6 +16,7 @@ from .const import (
     RETRY_BACKOFF_SECONDS,
     RegisterDefinition,
     all_registers,
+    get_register,
 )
 
 try:  # pragma: no cover - optional dependency import
@@ -147,6 +149,60 @@ class ModbusBridge:
         self._client: Any | None = None
         self._lock = asyncio.Lock()
         self._read_plan = _build_read_plan(all_registers(include_write_only=False))
+        self._life_bit_task: asyncio.Task[None] | None = None
+
+    async def start_life_bit_loop(self) -> None:
+        """Start the background life bit loop."""
+        if self._life_bit_task and not self._life_bit_task.done():
+            return
+        self._life_bit_task = asyncio.create_task(self._life_bit_loop())
+
+    async def stop_life_bit_loop(self) -> None:
+        """Stop the background life bit loop."""
+        if self._life_bit_task:
+            self._life_bit_task.cancel()
+            try:
+                await self._life_bit_task
+            except asyncio.CancelledError:
+                pass
+            self._life_bit_task = None
+
+    async def _life_bit_loop(self) -> None:
+        """Background loop to handle the life bit protocol."""
+        life_bit_reg = get_register("send_keepalive")
+        timeout_reg = get_register("failsafe_timeout_s")
+
+        while True:
+            poll_timeout = 60  # Default
+            try:
+                # Refresh timeout value dynamically
+                try:
+                    val = await self.async_read_register(timeout_reg)
+                    if isinstance(val, (int, float)):
+                        poll_timeout = int(val)
+                except Exception:
+                    # Ignore read errors for timeout, use default/last known or just proceed
+                    pass
+
+                # Write 1 to Life Bit register
+                await self.async_write_register(life_bit_reg, 1)
+                
+                # Poll until cleared to 0
+                start_time = time.time()
+                while time.time() - start_time < poll_timeout:
+                    val = await self.async_read_register(life_bit_reg)
+                    if val == 0:
+                        _LOGGER.debug(
+                            "Life bit cleared after %.2f seconds", time.time() - start_time
+                        )
+                        break
+                    await asyncio.sleep(1)
+                
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                _LOGGER.warning("Life bit loop error: %s", err)
+                await asyncio.sleep(5)
 
     async def _invoke_with_unit(
         self,

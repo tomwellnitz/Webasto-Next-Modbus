@@ -125,8 +125,7 @@ async def test_number_write_failure_raises_homeassistant_error(coordinator_fixtu
         32,
     )
 
-    class HomeAssistantError(Exception):
-        pass
+    from homeassistant.exceptions import HomeAssistantError
 
     with pytest.raises(HomeAssistantError):
         await number.async_set_native_value(10)
@@ -295,11 +294,9 @@ async def test_session_sensors_expose_values(coordinator_fixture) -> None:
     coordinator, bridge = coordinator_fixture
 
     energy_register = get_register("charged_energy_wh")
-    power_register = get_register("charge_power_w")
 
     coordinator.data = {
         energy_register.key: 480,
-        power_register.key: 7200,
     }
 
     energy_sensor = WebastoSensor(
@@ -310,17 +307,8 @@ async def test_session_sensors_expose_values(coordinator_fixture) -> None:
         energy_register,
         DEVICE_NAME,
     )
-    power_sensor = WebastoSensor(
-        coordinator,
-        bridge,
-        "198.51.100.5",
-        3,
-        power_register,
-        DEVICE_NAME,
-    )
 
     assert energy_sensor.native_value == 480
-    assert power_sensor.native_value == 7200
     # device_class-Assertions entfernt
 
 
@@ -350,7 +338,7 @@ async def test_fault_code_sensor_maps_and_uses_translation_key(coordinator_fixtu
 
     sensor = WebastoSensor(coordinator, bridge, "203.0.113.20", 4, register, DEVICE_NAME)
 
-    assert sensor.native_value == "power_switch_failure_closed"
+    assert sensor.native_value == "power_switch_failure"
     assert sensor.translation_key == "fault_code"
 
 

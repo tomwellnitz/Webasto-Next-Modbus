@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,13 +10,13 @@ from datetime import timedelta
 from pathlib import Path
 
 import voluptuous as vol
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     CONF_NAME,
@@ -27,8 +28,10 @@ from .const import (
     DEVICE_NAME,
     DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
+    MAX_RETRY_ATTEMPTS,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    RETRY_BACKOFF_SECONDS,
     SERVICE_SEND_KEEPALIVE,
     SERVICE_SET_CURRENT,
     SERVICE_SET_FAILSAFE,
@@ -60,7 +63,6 @@ class RuntimeData:
     max_current: int
     device_slug: str
     device_name: str
-    cancel_keepalive: Callable[[], None] | None = None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -100,10 +102,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
 
-    try:
-        await bridge.async_connect()
-    except WebastoModbusError as err:
-        raise ConfigEntryNotReady(str(err)) from err
+    notification_id = f"{DOMAIN}_setup_{entry.entry_id}"
+
+    for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
+        try:
+            await bridge.async_connect()
+            persistent_notification.async_dismiss(hass, notification_id)
+            break
+        except WebastoModbusError as err:
+            msg = f"Verbindungsversuch {attempt}/{MAX_RETRY_ATTEMPTS} fehlgeschlagen: {err}"
+            _LOGGER.warning(msg)
+
+            if attempt == MAX_RETRY_ATTEMPTS:
+                persistent_notification.async_dismiss(hass, notification_id)
+                raise ConfigEntryNotReady(msg) from err
+
+            persistent_notification.async_create(
+                hass,
+                f"{msg}\nNächster Versuch in wenigen Sekunden...",
+                title="Webasto Next Verbindung",
+                notification_id=notification_id,
+            )
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    # Start the Life Bit loop immediately after connection
+    await bridge.start_life_bit_loop()
 
     update_interval = timedelta(seconds=_clamp(scan_interval, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL))
     coordinator = WebastoDataCoordinator(
@@ -117,25 +140,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
-    # Schedule periodic Life Bit (Register 6000) write every 15 seconds
-    # Using async_track_time_interval is more robust than call_later recursion
-    async def _periodic_life_bit_write(now=None):
-        # We access the runtime data directly from the entry_id
-        # This is safe because the timer is cancelled on unload
-        runtime = hass.data[DOMAIN].get(entry.entry_id)
-        if runtime and isinstance(runtime, RuntimeData):
-            register = get_register("send_keepalive")
-            try:
-                await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
-            except Exception as err:
-                _LOGGER.warning("Failed to write Life Bit (6000): %s", err)
-
-    cancel_keepalive = async_track_time_interval(
-        hass,
-        _periodic_life_bit_write,
-        timedelta(seconds=15),
-    )
-
     domain_data[entry.entry_id] = RuntimeData(
         bridge=bridge,
         coordinator=coordinator,
@@ -143,10 +147,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         max_current=max_current,
         device_slug=device_slug,
         device_name=device_name,
-        cancel_keepalive=cancel_keepalive,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
+    _register_services(hass)
+
+    return True
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
@@ -163,8 +172,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = hass.data.get(DOMAIN, {})
     runtime: RuntimeData | None = data.pop(entry.entry_id, None)
     if runtime:
-        if runtime.cancel_keepalive:
-            runtime.cancel_keepalive()
+        await runtime.bridge.stop_life_bit_loop()
         await runtime.bridge.async_close()
 
     if unload_ok and not data:

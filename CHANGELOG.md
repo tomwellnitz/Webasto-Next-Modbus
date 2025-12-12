@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0-beta.7] - 2025-12-12
+
+### Added
+- Implemented robust "Life Bit" handshake (Write 1 -> Poll 0) to reliably prevent wallbox failsafe mode.
+- Added connection retry logic (3 attempts) with user notifications during setup to handle transient network issues.
+
+### Changed
+- Migrated project tooling from `pip` to `uv` for faster and more reliable dependency management.
+- Pinned project to Python 3.12 to ensure compatibility with all dependencies.
+- Updated GitHub Actions workflows to use `uv`.
+
+### Fixed
+- Corrected Modbus register map based on vendor PDF: removed unsupported voltage sensors and fixed data types.
+- Removed write-only `charge_power_w` register to prevent read errors.
+- Fixed `KeyError` in simulator by removing obsolete registers from default scenario.
+
 ## [0.4.0-beta.6] - 2025-11-30
 
 ### Changed

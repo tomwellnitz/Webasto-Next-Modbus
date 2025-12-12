@@ -96,7 +96,7 @@ The config flow validates credentials by reading a known register set and stores
 
 | Category | Highlights |
 | --- | --- |
-| Sensors | Charging state, IEC 61851 status, per-phase current/voltage, instantaneous power, session energy, EV limits, timestamps, serial number, charge point ID, firmware, rated power, phase configuration. |
+| Sensors | Charging state, IEC 61851 status, per-phase current, instantaneous power, session energy, EV limits, timestamps, serial number, charge point ID, firmware, rated power, phase configuration. |
 | Numbers | Dynamic charging current, fail-safe current, fail-safe timeout. |
 | Buttons | `Send Keepalive`, `Start Charging`, `Stop Charging` for quick manual overrides. |
 

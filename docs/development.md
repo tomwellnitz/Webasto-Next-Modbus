@@ -10,16 +10,15 @@ This document describes how to set up a local development environment, run the t
 
 ## Environment setup
 
+This project uses `uv` for dependency management.
+
 ```bash
-# Create and activate a virtual environment
-python3 -m venv .venv
+# Install dependencies (creates .venv automatically)
+uv sync
+
+# Activate the virtual environment
 source .venv/bin/activate
-
-# Install the project in editable mode with development dependencies
-pip install -e '.[dev]'
 ```
-
-If you prefer Poetry or another environment manager, make sure the packages listed in the `dev` extra (pytest, pytest-homeassistant-custom-component, ruff, mypy, etc.) are available in your environment.
 
 ### Optional: Home Assistant test instance via Docker Compose
 
@@ -42,25 +41,25 @@ On first start Home Assistant seeds the entire configuration inside `ha-config/`
 Run the full test suite:
 
 ```bash
-python -m pytest
+uv run pytest
 ```
 
 Lint the codebase (sensors, numbers, tests, etc.):
 
 ```bash
-python -m ruff check custom_components/webasto_next_modbus tests
+uv run ruff check .
 ```
 
-Lint only the integration package:
+Format the codebase:
 
 ```bash
-python -m ruff check custom_components/webasto_next_modbus
+uv run ruff format .
 ```
 
 Execute a subset of tests while iterating on a feature:
 
 ```bash
-python -m pytest -k services
+uv run pytest -k services
 ```
 
 ## Virtual wallbox simulator
