@@ -36,7 +36,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
-    "coverage==7.6.8",
+    "coverage==7.13.0",
     "homeassistant>=2025.1.0b7",
     "mypy>=1.8",
     "pytest>=8.3.4,<9",
