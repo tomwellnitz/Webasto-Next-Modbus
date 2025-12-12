@@ -325,10 +325,6 @@ async def test_ev_max_current_sensor_available(coordinator_fixture) -> None:
     # device_class-Assertion entfernt
 
 
-
-
-
-
 async def test_fault_code_sensor_maps_and_uses_translation_key(coordinator_fixture) -> None:
     """Fault code sensor should expose mapped label and translation key."""
 

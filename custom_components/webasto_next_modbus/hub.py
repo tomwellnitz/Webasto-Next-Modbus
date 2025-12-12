@@ -186,7 +186,7 @@ class ModbusBridge:
 
                 # Write 1 to Life Bit register
                 await self.async_write_register(life_bit_reg, 1)
-                
+
                 # Poll until cleared to 0
                 start_time = time.time()
                 while time.time() - start_time < poll_timeout:
@@ -197,7 +197,7 @@ class ModbusBridge:
                         )
                         break
                     await asyncio.sleep(1)
-                
+
             except asyncio.CancelledError:
                 raise
             except Exception as err:
