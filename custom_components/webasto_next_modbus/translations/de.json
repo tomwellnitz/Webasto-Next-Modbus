@@ -16,6 +16,11 @@
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen. Host, Port oder Modbus-Konfiguration prüfen.",
       "unknown": "Unerwarteter Fehler"
+    },
+    "abort": {
+      "already_configured": "Diese Wallbox ist bereits eingerichtet.",
+      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
+    }
   },
   "entity": {
     "sensor": {
@@ -84,12 +89,83 @@
           "ev_communication_error_negative_pilot": "EV-Kommunikationsfehler (negativer Pilot)",
           "dc_residual_current_error": "Fehler Gleichfehlerstrom"
         }
+      },
+      "current_l1_a": {
+        "name": "Strom L1"
+      },
+      "current_l2_a": {
+        "name": "Strom L2"
+      },
+      "current_l3_a": {
+        "name": "Strom L3"
+      },
+      "active_power_total_w": {
+        "name": "Wirkleistung Gesamt"
+      },
+      "active_power_l1_w": {
+        "name": "Wirkleistung L1"
+      },
+      "active_power_l2_w": {
+        "name": "Wirkleistung L2"
+      },
+      "active_power_l3_w": {
+        "name": "Wirkleistung L3"
+      },
+      "energy_total_kwh": {
+        "name": "Energie Gesamt"
+      },
+      "session_max_current_a": {
+        "name": "Maximaler Strom"
+      },
+      "evse_min_current_a": {
+        "name": "EVSE Min Strom"
+      },
+      "evse_max_current_a": {
+        "name": "EVSE Max Strom"
+      },
+      "cable_max_current_a": {
+        "name": "Kabel Max Strom"
+      },
+      "ev_max_current_a": {
+        "name": "EV Max Strom"
+      },
+      "charged_energy_wh": {
+        "name": "Geladene Energie"
+      },
+      "session_start_time": {
+        "name": "Startzeit (hhmmss)"
+      },
+      "session_duration_s": {
+        "name": "Ladedauer"
+      },
+      "session_end_time": {
+        "name": "Endzeit (hhmmss)"
+      },
+      "session_user_id": {
+        "name": "Benutzer ID"
       }
-    }
     },
-    "abort": {
-      "already_configured": "Diese Wallbox ist bereits eingerichtet.",
-      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
+    "number": {
+      "failsafe_current_a": {
+        "name": "Failsafe Strom"
+      },
+      "failsafe_timeout_s": {
+        "name": "Failsafe Timeout"
+      },
+      "set_current_a": {
+        "name": "Ladestrom Limit"
+      }
+    },
+    "button": {
+      "send_keepalive": {
+        "name": "Keepalive senden"
+      },
+      "start_session": {
+        "name": "Ladung starten"
+      },
+      "stop_session": {
+        "name": "Ladung stoppen"
+      }
     }
   },
   "options": {

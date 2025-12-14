@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0-beta.14] - 2025-12-14
+
+### Fixed
+
+- **Translations**: Fixed an issue where German translations were not being applied because the `translation_key` was missing in the register definitions.
+- **JSON Structure**: Corrected the structure of the German translation file (`de.json`) to ensure all keys are properly nested.
+
 ## [0.4.0-beta.13] - 2025-12-14
 
 ### Added
