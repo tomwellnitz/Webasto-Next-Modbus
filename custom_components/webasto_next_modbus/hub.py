@@ -206,7 +206,7 @@ class ModbusBridge:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        """Call a pymodbus coroutine, handling differing unit keyword names."""
+        """Call a pymodbus coroutine, handling differing device_id keyword names."""
 
         base_kwargs = dict(kwargs)
         for keyword in ("device_id", "unit", "slave"):
@@ -227,11 +227,11 @@ class ModbusBridge:
             except TypeError as err_positional:
                 if self._is_positional_only_error(err_positional):
                     raise WebastoModbusError(
-                        "Modbus client does not support unit/slave parameter"
+                        "Modbus client does not support device_id/unit/slave parameter"
                     ) from err_positional
                 raise WebastoModbusError(str(err_positional)) from err_positional
 
-        raise WebastoModbusError("Modbus client does not support unit/slave parameter")
+        raise WebastoModbusError("Modbus client does not support device_id/unit/slave parameter")
 
     @staticmethod
     def _is_keyword_unsupported(err: TypeError, keyword: str) -> bool:
@@ -262,7 +262,7 @@ class ModbusBridge:
         await client.connect()
         if not client.connected:
             raise WebastoModbusError(
-                f"Unable to connect to {self._host}:{self._port} (unit {self._unit_id})"
+                f"Unable to connect to {self._host}:{self._port} (device_id {self._unit_id})"
             )
         self._client = client
         _LOGGER.debug("Modbus connection established to %s:%s", self._host, self._port)
@@ -439,7 +439,7 @@ class ModbusBridge:
     def endpoint(self) -> str:
         """Return the Modbus endpoint for logging/diagnostics."""
 
-        return f"{self._host}:{self._port} (unit {self._unit_id})"
+        return f"{self._host}:{self._port} (device_id {self._unit_id})"
 
 
 def _decode_register(definition: RegisterDefinition, data: list[int]) -> float | int | str:
