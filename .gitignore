@@ -21,3 +21,4 @@ ha-config/
 !ha-config/.gitkeep
 *.egg-info/
 .DS_Store
+scripts/life_bit_minimal.py
