@@ -66,13 +66,15 @@ If you want to run a specific check individually, you can use the `uv run <tool>
 1. **Update Version**:
 
    - Bump version in `custom_components/webasto_next_modbus/manifest.json`.
+   - Bump version in `custom_components/webasto_next_modbus/const.py` (`INTEGRATION_VERSION`).
    - Update `CHANGELOG.md`.
 
 1. **Verify**:
 
+   Run the full check suite to ensure everything is correct:
+
    ```bash
-   uv run ruff check .
-   uv run pytest
+   ./scripts/check.sh
    ```
 
 1. **Tag & Release**:
