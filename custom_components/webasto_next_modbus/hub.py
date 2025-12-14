@@ -156,12 +156,16 @@ class ModbusBridge:
     async def stop_life_bit_loop(self) -> None:
         """Stop the background life bit loop."""
         if self._life_bit_task:
+            _LOGGER.debug("Stopping life bit loop...")
             self._life_bit_task.cancel()
             try:
-                await self._life_bit_task
+                await asyncio.wait_for(self._life_bit_task, timeout=5.0)
             except asyncio.CancelledError:
                 pass
+            except TimeoutError:
+                _LOGGER.warning("Life bit loop did not stop within timeout")
             self._life_bit_task = None
+            _LOGGER.debug("Life bit loop stopped")
 
     async def _life_bit_loop(self) -> None:
         """Background loop to handle the life bit protocol."""
@@ -269,12 +273,27 @@ class ModbusBridge:
 
     async def async_close(self) -> None:
         """Close the Modbus connection."""
-
-        if self._client is not None:
-            close_result = self._client.close()
-            if inspect.isawaitable(close_result):
-                await close_result
+        _LOGGER.debug("Closing Modbus connection to %s...", self._host)
+        # Use a short timeout for acquiring the lock to avoid blocking shutdown
+        try:
+            async with asyncio.timeout(2.0):
+                async with self._lock:
+                    client = self._client
+                    self._client = None
+        except TimeoutError:
+            _LOGGER.warning("Could not acquire lock for close, forcing close for %s", self._host)
+            client = self._client
             self._client = None
+
+        if client is not None:
+            try:
+                close_result = client.close()
+                if inspect.isawaitable(close_result):
+                    await asyncio.wait_for(close_result, timeout=3.0)
+            except TimeoutError:
+                _LOGGER.warning("Modbus close timed out for %s", self._host)
+            except Exception as err:
+                _LOGGER.warning("Error closing Modbus connection: %s", err)
             _LOGGER.debug("Modbus connection to %s closed", self._host)
 
     async def async_test_connection(self) -> None:
@@ -319,6 +338,9 @@ class ModbusBridge:
         for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
             try:
                 return await func()
+            except asyncio.CancelledError:
+                # Re-raise cancellation immediately to allow clean shutdown
+                raise
             except WebastoModbusError as err:
                 last_err = err
                 _LOGGER.warning(

@@ -124,9 +124,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
 
-    # Start the Life Bit loop immediately after connection
-    await bridge.start_life_bit_loop()
-
     update_interval = timedelta(seconds=_clamp(scan_interval, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL))
     coordinator = WebastoDataCoordinator(
         hass,
@@ -138,6 +135,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await coordinator.async_config_entry_first_refresh()
+
+    # Start the Life Bit loop after coordinator is ready
+    await bridge.start_life_bit_loop()
 
     domain_data[entry.entry_id] = RuntimeData(
         bridge=bridge,
@@ -159,19 +159,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    _LOGGER.debug("Unloading config entry %s", entry.entry_id)
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     data = hass.data.get(DOMAIN, {})
     runtime: RuntimeData | None = data.pop(entry.entry_id, None)
     if runtime:
+        _LOGGER.debug("Stopping life bit loop and closing connection...")
         await runtime.bridge.stop_life_bit_loop()
         await runtime.bridge.async_close()
+        _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
     if unload_ok and not data:
         _unregister_services(hass)
         hass.data.pop(DOMAIN, None)
 
+    _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
     return unload_ok
 
 

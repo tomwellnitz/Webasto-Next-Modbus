@@ -27,6 +27,11 @@ async def async_get_config_entry_diagnostics(
     runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
     coordinator = runtime.coordinator
 
+    # Include current register values for debugging
+    register_data: dict[str, Any] = {}
+    if coordinator.data:
+        register_data = dict(coordinator.data)
+
     return {
         "config_entry": {
             "data": async_redact_data(dict(entry.data), TO_REDACT),
@@ -40,4 +45,5 @@ async def async_get_config_entry_diagnostics(
             "consecutive_failures": getattr(coordinator, "consecutive_failures", 0),
             "last_error": getattr(coordinator, "last_error", None),
         },
+        "registers": register_data,
     }

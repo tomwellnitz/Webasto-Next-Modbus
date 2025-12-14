@@ -6,30 +6,33 @@ This script attempts to write to the keepalive register (6000) and read the
 failsafe timeout register (2002) to verify communication.
 """
 
-import asyncio
+from __future__ import annotations
+
 import argparse
+import asyncio
 import inspect
 import logging
+from collections.abc import Awaitable
+from typing import cast
 
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%H:%M:%S"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
 )
 _LOGGER = logging.getLogger("life_bit_minimal")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Webasto Next Modbus keepalive (life bit) minimal test")
+    parser = argparse.ArgumentParser(
+        description="Webasto Next Modbus keepalive (life bit) minimal test"
+    )
     parser.add_argument("host", nargs="?", default="192.168.178.109")
     parser.add_argument("--port", type=int, default=502)
     parser.add_argument("--device-id", type=int, default=255, dest="device_id")
     parser.add_argument("--keepalive-reg", type=int, default=6000, dest="keepalive_reg")
     parser.add_argument("--failsafe-reg", type=int, default=2002, dest="failsafe_reg")
-    parser.add_argument("--interval", type=float, default=5.0, help="Seconds between keepalive writes")
     parser.add_argument("--cycles", type=int, default=30, help="Number of keepalive cycles to run")
     parser.add_argument("--timeout", type=float, default=3.0, help="Modbus TCP socket timeout")
     parser.add_argument(
@@ -43,9 +46,10 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _maybe_close(client: AsyncModbusTcpClient) -> None:
-    close_result = client.close()
+    close_result: object = client.close()
     if inspect.isawaitable(close_result):
-        await close_result
+        await cast(Awaitable[object], close_result)
+    # If close_result is not awaitable, do nothing (close was synchronous)
 
 
 async def run() -> int:
@@ -64,7 +68,6 @@ async def run() -> int:
         args.failsafe_reg,
     )
 
-    keepalive_value = 0
     successful_writes = 0
     cycle = 0
 
@@ -88,10 +91,10 @@ async def run() -> int:
                     else:
                         _LOGGER.info("Failsafe Timeout: %s s", rr.registers[0])
 
-                keepalive_value = 1 - keepalive_value
+                _LOGGER.info("Writing keepalive=1 (cycle %s/%s)", cycle + 1, args.cycles)
                 wr = await client.write_register(
                     args.keepalive_reg,
-                    keepalive_value,
+                    1,
                     device_id=args.device_id,
                 )
                 if wr.isError():
@@ -100,12 +103,35 @@ async def run() -> int:
                 successful_writes += 1
                 cycle += 1
                 _LOGGER.info(
-                    "Keepalive write ok (%s/%s): wrote %s",
+                    "Keepalive write ok (%s/%s); polling for clear to 0",
                     cycle,
                     args.cycles,
-                    keepalive_value,
                 )
-                await asyncio.sleep(args.interval)
+
+                poll_count = 0
+                while True:
+                    await asyncio.sleep(1.0)
+                    poll_count += 1
+                    rr = await client.read_holding_registers(
+                        args.keepalive_reg,
+                        count=1,
+                        device_id=args.device_id,
+                    )
+                    if rr.isError():
+                        raise ModbusException(f"keepalive read error: {rr!r}")
+
+                    current_value = rr.registers[0]
+                    _LOGGER.info(
+                        "Poll %s: keepalive register value=%s",
+                        poll_count,
+                        current_value,
+                    )
+
+                    if current_value == 0:
+                        _LOGGER.info(
+                            "Wallbox cleared keepalive register to 0; will write 1 again"
+                        )
+                        break
 
             except (ConnectionError, OSError, ModbusException) as exc:
                 _LOGGER.error("Communication error: %s", exc)
@@ -119,8 +145,9 @@ async def run() -> int:
     _LOGGER.info("Done. Successful keepalive writes: %s", successful_writes)
     return 0 if successful_writes else 2
 
+
 if __name__ == "__main__":
     try:
         raise SystemExit(asyncio.run(run()))
     except KeyboardInterrupt:
-        raise SystemExit(130)
+        raise SystemExit(130) from None

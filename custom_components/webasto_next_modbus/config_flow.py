@@ -167,12 +167,21 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_validate_and_connect(self, data: Mapping[str, Any]) -> None:
         """Validate user input by performing a Modbus test read."""
+        host = data[CONF_HOST]
+        port = int(data[CONF_PORT])
+        unit_id = int(data[CONF_UNIT_ID])
 
-        bridge = ModbusBridge(
-            host=data[CONF_HOST],
-            port=int(data[CONF_PORT]),
-            unit_id=int(data[CONF_UNIT_ID]),
-        )
+        # Check if there's already a running entry for this host - reuse its bridge
+        existing_bridge = self._get_existing_bridge(host, unit_id)
+        if existing_bridge is not None:
+            try:
+                await existing_bridge.async_test_connection()
+                return
+            except WebastoModbusError as err:
+                raise CannotConnect from err
+
+        # No existing bridge, create a temporary one for validation
+        bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
 
         try:
             await bridge.async_connect()
@@ -181,6 +190,23 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             raise CannotConnect from err
         finally:
             await bridge.async_close()
+
+    def _get_existing_bridge(self, host: str, unit_id: int) -> ModbusBridge | None:
+        """Return the bridge for an existing entry if available."""
+        from . import RuntimeData
+
+        domain_data = self.hass.data.get(DOMAIN)
+        if not domain_data:
+            return None
+
+        for value in domain_data.values():
+            if not isinstance(value, RuntimeData):
+                continue
+            bridge = value.bridge
+            # Check if this bridge matches the host/unit_id we're testing
+            if bridge._host == host and bridge._unit_id == unit_id:
+                return bridge
+        return None
 
     @staticmethod
     @callback

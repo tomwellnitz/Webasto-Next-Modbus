@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0-beta.11] - 2025-12-14
+
+### Fixed
+
+- **Connection Stability**: Fixed issue where disabling the integration in HA did not properly close the Modbus connection, blocking external tools from connecting.
+- **Life Bit Loop**: Now starts after coordinator initialization to avoid race conditions.
+- **Graceful Shutdown**: Added timeouts and proper lock handling for connection close to prevent hangs during unload.
+- **CancelledError Handling**: Life bit loop and retry logic now properly propagate cancellation for clean shutdown.
+
+### Changed
+
+- **Config Flow**: Now reuses existing bridge connection when reconfiguring, preventing temporary second connections that would be rejected by the wallbox.
+- **Diagnostics**: Now includes current register values for easier debugging.
+
+### Improved
+
+- Added debug logging throughout the unload process for better troubleshooting.
+
 ## [0.4.0-beta.10] - 2025-12-12
 
 ### Added
