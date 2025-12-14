@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0-beta.15] - 2025-12-14
+
+### Fixed
+
+- **Build**: Fixed version mismatch in `pyproject.toml` causing release artifacts to have the wrong version number.
+
 ## [0.4.0-beta.14] - 2025-12-14
 
 ### Fixed
