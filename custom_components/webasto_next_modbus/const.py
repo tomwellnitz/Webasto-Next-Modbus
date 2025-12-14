@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "0.4.0-beta.11"
+INTEGRATION_VERSION: Final = "0.4.0-beta.13"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
@@ -80,13 +80,10 @@ class RegisterDefinition:
 CHARGE_POINT_STATE_MAP: Final = {
     0: "available",
     1: "preparing",
-    2: "charging",
-    3: "suspended_evse",
-    4: "suspended_ev",
-    5: "finishing",
-    6: "reserved",
-    7: "unavailable",
-    8: "faulted",
+    3: "charging",
+    4: "suspended",
+    7: "error",
+    8: "reserved",
 }
 
 CHARGING_STATE_MAP: Final = {
@@ -152,6 +149,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="enum",
         icon="mdi:ev-station",
         options=CHARGE_POINT_STATE_MAP,
+        translation_key="charge_point_state",
     ),
     RegisterDefinition(
         key="charging_state",
@@ -164,6 +162,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="enum",
         icon="mdi:battery-charging",
         options=CHARGING_STATE_MAP,
+        translation_key="charging_state",
     ),
     RegisterDefinition(
         key="equipment_state",
@@ -176,6 +175,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="enum",
         icon="mdi:cog-outline",
         options=EQUIPMENT_STATE_MAP,
+        translation_key="equipment_state",
     ),
     RegisterDefinition(
         key="cable_state",
@@ -188,6 +188,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="enum",
         icon="mdi:cable-data",
         options=CABLE_STATE_MAP,
+        translation_key="cable_state",
     ),
     RegisterDefinition(
         key="fault_code",
@@ -451,6 +452,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         icon="mdi:car-connected",
         options=SMART_VEHICLE_STATE_MAP,
         optional=True,  # Only available on TQ-DM100
+        translation_key="smart_vehicle_detected",
     ),
 )
 

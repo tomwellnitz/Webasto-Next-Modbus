@@ -41,7 +41,52 @@
   },
   "entity": {
     "sensor": {
+      "charge_point_state": {
+        "name": "Charge Point State",
+        "state": {
+          "available": "Available",
+          "preparing": "Preparing",
+          "charging": "Charging",
+          "suspended": "Suspended",
+          "error": "Error",
+          "reserved": "Reserved"
+        }
+      },
+      "charging_state": {
+        "name": "Charging State",
+        "state": {
+          "idle": "Idle",
+          "charging": "Charging"
+        }
+      },
+      "equipment_state": {
+        "name": "EVSE State",
+        "state": {
+          "starting": "Starting",
+          "running": "Running",
+          "fault": "Fault",
+          "disabled": "Disabled",
+          "updating": "Updating"
+        }
+      },
+      "cable_state": {
+        "name": "Cable State",
+        "state": {
+          "disconnected": "Disconnected",
+          "cable_only": "Cable connected",
+          "vehicle_connected": "Vehicle connected",
+          "vehicle_locked": "Vehicle locked"
+        }
+      },
+      "smart_vehicle_detected": {
+        "name": "Smart Vehicle Detected",
+        "state": {
+          "not_detected": "Not detected",
+          "detected": "Detected"
+        }
+      },
       "fault_code": {
+        "name": "EVSE Fault Code",
         "state": {
           "ok": "No error",
           "power_switch_failure_closed": "Power switch failure (relay welded closed)",
@@ -60,8 +105,82 @@
           "pwr_internal_error": "Internal power error",
           "ev_communication_error_negative_pilot": "EV communication error (negative pilot)",
           "dc_residual_current_error": "DC residual current error"
-        }
+        }      },
+      "current_l1_a": {
+        "name": "Current L1"
+      },
+      "current_l2_a": {
+        "name": "Current L2"
+      },
+      "current_l3_a": {
+        "name": "Current L3"
+      },
+      "active_power_total_w": {
+        "name": "Active Power Total"
+      },
+      "active_power_l1_w": {
+        "name": "Active Power L1"
+      },
+      "active_power_l2_w": {
+        "name": "Active Power L2"
+      },
+      "active_power_l3_w": {
+        "name": "Active Power L3"
+      },
+      "energy_total_kwh": {
+        "name": "Energy Total"
+      },
+      "session_max_current_a": {
+        "name": "Max Current"
+      },
+      "evse_min_current_a": {
+        "name": "EVSE Min Current"
+      },
+      "evse_max_current_a": {
+        "name": "EVSE Max Current"
+      },
+      "cable_max_current_a": {
+        "name": "Cable Max Current"
+      },
+      "ev_max_current_a": {
+        "name": "EV Max Current"
+      },
+      "charged_energy_wh": {
+        "name": "Charged Energy"
+      },
+      "session_start_time": {
+        "name": "Start Time (hhmmss)"
+      },
+      "session_duration_s": {
+        "name": "Charging Time"
+      },
+      "session_end_time": {
+        "name": "End Time (hhmmss)"
+      },
+      "session_user_id": {
+        "name": "User ID"
       }
+    },
+    "number": {
+      "failsafe_current_a": {
+        "name": "Failsafe Current"
+      },
+      "failsafe_timeout_s": {
+        "name": "Failsafe Timeout"
+      },
+      "set_current_a": {
+        "name": "Charging Current Limit"
+      }
+    },
+    "button": {
+      "send_keepalive": {
+        "name": "Send Keepalive"
+      },
+      "start_session": {
+        "name": "Start Charging"
+      },
+      "stop_session": {
+        "name": "Stop Charging"      }
     }
   }
 }

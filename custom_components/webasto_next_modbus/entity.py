@@ -39,7 +39,8 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._register = register
         self._unique_prefix = build_device_slug(host, unit_id)
 
-        self._attr_name = register.name
+        self._attr_has_entity_name = True
+        self._attr_translation_key = register.translation_key or register.key
         self._attr_unique_id = f"{self._unique_prefix}-{register.key}"
 
         if register.icon:

@@ -69,7 +69,7 @@ async def test_bridge_write_actions_update_simulated_state(
         await bridge.async_write_register(get_register("session_command"), 1)
         data = await bridge.async_read_data()
         assert data["charging_state"] == 1
-        assert data["charge_point_state"] == 2
+        assert data["charge_point_state"] == 3
 
         await bridge.async_write_register(get_register("session_command"), 2)
         data_after_stop = await bridge.async_read_data()

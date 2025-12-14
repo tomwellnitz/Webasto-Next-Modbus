@@ -52,12 +52,29 @@ async def test_sensor_maps_enum_value(coordinator_fixture) -> None:
 
     coordinator, bridge = coordinator_fixture
     register = get_register("charge_point_state")
-    coordinator.data = {register.key: 2}
+    coordinator.data = {register.key: 3}
 
     sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", 7, register, DEVICE_NAME)
 
     assert sensor.unique_id == "192.0.2.10-7-charge_point_state"
     assert sensor.native_value == "charging"
+
+
+async def test_entity_has_correct_translation_attributes(coordinator_fixture) -> None:
+    """Ensure entities have has_entity_name set and correct translation key."""
+    coordinator, bridge = coordinator_fixture
+    register = get_register("charge_point_state")
+    
+    sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", 7, register, DEVICE_NAME)
+    
+    assert sensor.has_entity_name is True
+    assert sensor.translation_key == "charge_point_state"
+    # Name should be None or handled by HA when has_entity_name is True
+    # In our implementation we removed _attr_name, so name property might behave differently 
+    # depending on base class, but usually it returns None if _attr_name is not set 
+    # and has_entity_name is True (HA constructs it).
+    # Let's check _attr_name is not set or None
+    assert not hasattr(sensor, "_attr_name") or sensor._attr_name is None
 
 
 async def test_number_clamps_and_writes(coordinator_fixture) -> None:

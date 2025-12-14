@@ -119,7 +119,7 @@ async def test_coordinator_emits_charging_started_trigger() -> None:
     """Starting to charge should fire the charging_started trigger."""
 
     bridge = AsyncMock(spec=ModbusBridge)
-    bridge.async_read_data = AsyncMock(return_value={"charging_state": 1, "charge_point_state": 2})
+    bridge.async_read_data = AsyncMock(return_value={"charging_state": 1, "charge_point_state": 3})
     entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
 
     coordinator = _build_coordinator(bridge, entry)
@@ -137,7 +137,7 @@ async def test_coordinator_emits_charging_started_trigger() -> None:
         {
             "charging_state": 1,
             "previous_state": 0,
-            "charge_point_state": 2,
+            "charge_point_state": 3,
         },
     )
 

@@ -1,6 +1,6 @@
 [project]
 name = "webasto-next-modbus"
-version = "0.4.0-beta.12"
+version = "0.4.0-beta.13"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"
@@ -27,6 +27,14 @@ select = ["E", "F", "I", "B", "UP", "ASYNC", "C4", "TID"]
 
 [tool.bandit]
 skips = ["B101", "B110"]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["custom_components", "virtual_wallbox", "scripts"]
+sort_by_size = true
+verbose = false
+exclude = [".venv", ".git", "__pycache__"]
+ignore_names = ["_attr_has_entity_name"]
 
 [tool.setuptools]
 packages = [

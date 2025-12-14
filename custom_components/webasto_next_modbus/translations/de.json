@@ -19,7 +19,52 @@
   },
   "entity": {
     "sensor": {
+      "charge_point_state": {
+        "name": "Ladepunkt Status",
+        "state": {
+          "available": "Verfügbar",
+          "preparing": "Vorbereitung",
+          "charging": "Lädt",
+          "suspended": "Pausiert",
+          "error": "Fehler",
+          "reserved": "Reserviert"
+        }
+      },
+      "charging_state": {
+        "name": "Ladestatus",
+        "state": {
+          "idle": "Leerlauf",
+          "charging": "Lädt"
+        }
+      },
+      "equipment_state": {
+        "name": "EVSE Status",
+        "state": {
+          "starting": "Startet",
+          "running": "Betriebsbereit",
+          "fault": "Fehler",
+          "disabled": "Deaktiviert",
+          "updating": "Update läuft"
+        }
+      },
+      "cable_state": {
+        "name": "Kabel Status",
+        "state": {
+          "disconnected": "Getrennt",
+          "cable_only": "Kabel angeschlossen",
+          "vehicle_connected": "Fahrzeug verbunden",
+          "vehicle_locked": "Fahrzeug verriegelt"
+        }
+      },
+      "smart_vehicle_detected": {
+        "name": "Smart Vehicle Erkannt",
+        "state": {
+          "not_detected": "Nicht erkannt",
+          "detected": "Erkannt"
+        }
+      },
       "fault_code": {
+        "name": "EVSE Fehlercode",
         "state": {
           "ok": "Kein Fehler",
           "power_switch_failure_closed": "Leistungsschalter-Fehler (Relais fest geschlossen)",

@@ -311,7 +311,7 @@ def build_default_scenario(*, unit_id: int = 255) -> Scenario:
             "session_command": {
                 SESSION_COMMAND_START_VALUE: {
                     "charging_state": 1,
-                    "charge_point_state": 2,
+                    "charge_point_state": 3,
                     "active_power_total_w": 7400,
                     "active_power_l1_w": 2466,
                     "active_power_l2_w": 2466,

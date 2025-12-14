@@ -75,25 +75,37 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
         if register.translation_key:
             self._attr_translation_key = register.translation_key
 
-        value = coordinator.data.get(register.key) if coordinator.data else None
-        if value is not None:
-            if self._options_map:
-                try:
-                    value = self._options_map.get(int(value), str(value))
-                except (ValueError, TypeError):
-                    pass
-            self._attr_native_value = value
+        self._update_value()
 
     def _handle_coordinator_update(self) -> None:
         """Update state from coordinator data."""
+        self._update_value()
+        super()._handle_coordinator_update()
 
+    def _update_value(self) -> None:
+        """Update the native value from the coordinator."""
         value = self.get_coordinator_value()
-        if value is not None and self._options_map:
+
+        if value is None:
+            self._attr_native_value = None
+            return
+
+        # Handle time formatting for start/end time (hhmmss -> HH:MM:SS)
+        if self._register.key in ("session_start_time", "session_end_time"):
+            try:
+                val_int = int(value)
+                # Pad with zeros to ensure 6 digits (e.g., 93000 -> 093000)
+                val_str = f"{val_int:06d}"
+                self._attr_native_value = f"{val_str[:2]}:{val_str[2:4]}:{val_str[4:]}"
+                return
+            except (ValueError, TypeError):
+                # Fallback to raw value if formatting fails
+                pass
+
+        if self._options_map:
             try:
                 self._attr_native_value = self._options_map.get(int(value), str(value))
             except (ValueError, TypeError):
                 self._attr_native_value = value
         else:
             self._attr_native_value = value
-
-        super()._handle_coordinator_update()
