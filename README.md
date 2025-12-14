@@ -74,8 +74,8 @@
 
 | Category | Description |
 | :--- | :--- |
-| **Sensors** | Charging state, IEC status, current/power per phase, session energy, EV limits, serial number, firmware. |
-| **Numbers** | Dynamic charging current limit, fail-safe current, fail-safe timeout. |
+| **Sensors** | Charge point state, charging state, EVSE state, cable state, fault code, current/power per phase, total energy, session energy, session times, EV limits, smart vehicle detection. |
+| **Numbers** | Dynamic charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
 | **Buttons** | `Start Charging`, `Stop Charging`, `Send Keepalive`. |
 
 ### Services
@@ -85,7 +85,7 @@ Available under the `webasto_next_modbus` domain:
 | Service | Description |
 | :--- | :--- |
 | `set_current` | Set dynamic charging current (0–32 A). |
-| `set_failsafe` | Configure fail-safe current and timeout (6–120 s). |
+| `set_failsafe` | Configure fail-safe current (6–32 A) and optional timeout (6–120 s). |
 | `start_session` | Start charging (FastCharge). |
 | `stop_session` | Stop charging (FullCharge). |
 | `send_keepalive` | Manually trigger keep-alive frame. |

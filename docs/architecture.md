@@ -29,32 +29,49 @@ This document captures architectural goals, the Modbus register model, and the h
 
 The register ranges are derived from community research and vendor documentation. Values are batched into segments of up to 110 registers to minimise Modbus overhead.
 
-| Key | Address | Type | Scale | Description |
-| --- | --- | --- | --- | --- |
-| `charge_point_id` | 1000 | uint32 | – | Charge Point ID |
-| `serial_number` | 1002 | uint32 | – | Serial Number |
-| `product_type` | 1004 | uint32 | – | Product Type |
-| `firmware_version` | 1006 | uint16 | – | Firmware Version |
-| `modbus_table_version` | 1008 | uint16 | – | Modbus Table Version |
-| `grid_phase_config` | 1010 | uint16 | – | Grid Phase Configuration |
-| `max_station_current` | 1012 | uint16 | – | Max Station Current |
-| `evse_state` | 1100 | uint16 | – | IEC 61851 State (A-F) |
-| `cable_state` | 1102 | uint16 | – | Cable State |
-| `error_code` | 1104 | uint16 | – | Error Code |
-| `charging_state` | 1106 | uint16 | – | Charging State |
-| `current_l{1..3}` | 1108/1110/1112 | uint16 | – | Phase Currents (A) |
-| `active_power_total` | 1114 | uint32 | – | Active Power Total (W) |
-| `meter_reading_session` | 1116 | uint32 | – | Meter Reading Session (Wh) |
-| `meter_reading_total` | 1118 | uint32 | – | Meter Reading Total (Wh) |
-| `safe_current` | 1500 | uint16 | – | Safe Current (A) |
-| `connection_timeout` | 1502 | uint16 | – | Connection Timeout (s) |
-| `vehicle_max_current` | 1618 | uint16 | – | Vehicle Max Current (A) |
-| `smart_vehicle_detected` | 1620 | uint32 | – | Smart Vehicle Detected |
-| `charge_current_limit` | 2000 | uint16 | – | Charge Current Limit (A) |
-| `charge_mode` | 2002 | uint16 | – | Charge Mode |
-| `life_bit` | 6000 | uint16 | – | Life Bit (Keep-alive) |
+### Sensor Registers (Read-Only)
 
-*Note: Voltage sensors (1014-1018) and Charge Power (5000) were removed as they are not supported or write-only.*
+| Key | Address | Type | Description |
+| --- | --- | --- | --- |
+| `charge_point_state` | 1000 | uint16 | Charge Point State (enum) |
+| `charging_state` | 1001 | uint16 | Charging State (idle/charging) |
+| `equipment_state` | 1002 | uint16 | EVSE State (starting/running/fault/disabled) |
+| `cable_state` | 1004 | uint16 | Cable State |
+| `fault_code` | 1006 | uint16 | EVSE Fault Code |
+| `current_l1_a` | 1008 | uint16 | Phase 1 Current (mA scale) |
+| `current_l2_a` | 1010 | uint16 | Phase 2 Current (mA scale) |
+| `current_l3_a` | 1012 | uint16 | Phase 3 Current (mA scale) |
+| `active_power_total_w` | 1020 | uint32 | Total Active Power (W) |
+| `active_power_l{1,2,3}_w` | 1024/1028/1032 | uint32 | Per-Phase Power (W) |
+| `energy_total_kwh` | 1036 | uint32 | Total Energy (Wh scale) |
+| `session_max_current_a` | 1100 | uint16 | Session Max Current (A) |
+| `evse_min/max_current_a` | 1102/1104 | uint16 | EVSE Current Limits (A) |
+| `cable_max_current_a` | 1106 | uint16 | Cable Max Current (A) |
+| `ev_max_current_a` | 1108 | uint16 | EV Reported Max Current (A) |
+| `charged_energy_wh` | 1502 | uint16 | Session Charged Energy (Wh) |
+| `session_start_time` | 1504 | uint32 | Session Start Time (hhmmss) |
+| `session_duration_s` | 1508 | uint32 | Session Duration (s) |
+| `session_end_time` | 1512 | uint32 | Session End Time (hhmmss) |
+| `session_user_id` | 1600 | string | User ID (20 chars) |
+| `smart_vehicle_detected` | 1620 | uint32 | Smart Vehicle Detection |
+
+### Number Registers (Read/Write)
+
+| Key | Address | Type | Range | Description |
+| --- | --- | --- | --- | --- |
+| `failsafe_current_a` | 2000 | uint16 | 6–32 A | Fallback current when EMS offline |
+| `failsafe_timeout_s` | 2002 | uint16 | 6–120 s | Time before failsafe activates |
+| `set_current_a` | 5004 | uint16 | 0–32 A | Dynamic charging current limit (write-only) |
+
+### Button/Control Registers (Write-Only)
+
+| Key | Address | Value | Description |
+| --- | --- | --- | --- |
+| `send_keepalive` | 6000 | 1 | Life Bit – must be written regularly |
+| `start_session` | 5006 | 1 | Start charging session |
+| `stop_session` | 5006 | 2 | Stop charging session |
+
+*Note: Voltage sensors and some other registers from the vendor PDF are not exposed as they returned invalid data in testing.*
 
 ## Software components
 
@@ -70,10 +87,12 @@ The register ranges are derived from community research and vendor documentation
 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
 1. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
-1. The `ModbusBridge` starts a background task that writes `1` to register `6000` and polls it until it becomes `0` (Life Bit handshake).
+1. After the coordinator completes its first refresh, the `ModbusBridge` starts a background "Life Bit" task.
+1. The Life Bit task writes `1` to register `6000`, then polls every second until the wallbox clears it to `0`, then repeats. This prevents failsafe mode.
 1. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
 1. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
 1. Write operations (`set_current`, `set_failsafe`) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
+1. All operations share a single TCP connection protected by an asyncio lock.
 
 ## Error handling
 

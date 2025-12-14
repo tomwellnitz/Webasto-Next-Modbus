@@ -13,7 +13,7 @@ This document provides context and guidelines for AI agents working on this code
 
 ## 🛠️ Tech Stack & Tooling
 
-- **Language**: Python 3.13+
+- **Language**: Python 3.13.2+
 - **Framework**: Home Assistant (Custom Component)
 - **Dependency Management**: `uv` (replaces pip/poetry)
 - **Linting & Formatting**: `ruff`
@@ -98,16 +98,19 @@ This script executes:
 
 ## 🔑 Key Files to Know
 
-- **`custom_components/webasto_next_modbus/const.py`**: Contains the `RegisterDefinition` dataclasses. **Edit this file to add new sensors.**
-- **`custom_components/webasto_next_modbus/hub.py`**: Handles the low-level Modbus TCP connection and reading/writing registers.
+- **`custom_components/webasto_next_modbus/const.py`**: Contains the `RegisterDefinition` dataclasses and all register addresses. **Edit this file to add new sensors.**
+- **`custom_components/webasto_next_modbus/hub.py`**: Handles the low-level Modbus TCP connection, reading/writing registers, and the background Life Bit loop.
 - **`custom_components/webasto_next_modbus/coordinator.py`**: Manages the polling interval and data distribution to entities.
+- **`custom_components/webasto_next_modbus/__init__.py`**: Component setup/teardown, service registration, connection retries.
+- **`custom_components/webasto_next_modbus/config_flow.py`**: UI configuration and options flow.
 
 ## 🚀 Common Tasks
 
 ### Adding a new Sensor
 
-1. Define the register in `const.py` (add to `all_registers`).
-1. Update `translations/en.json` and `de.json`.
+1. Define the register in `const.py` (add to `SENSOR_REGISTERS`, `NUMBER_REGISTERS`, or `BUTTON_REGISTERS`).
+1. The entity will be auto-created based on the `entity` field in the definition.
+1. Update `translations/en.json` and `de.json` if using `translation_key`.
 1. Run `./scripts/check.sh` to verify types and tests.
 
 ### Updating Dependencies
