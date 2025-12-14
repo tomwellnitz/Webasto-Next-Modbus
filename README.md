@@ -16,7 +16,7 @@
 
 - 🔌 **Guided Onboarding**: Auto-discovery (Zeroconf), live connection validation, and duplicate protection.
 - ⚡ **Rich Entities**: Async coordinator for stable refreshes and immediate state updates.
-- ��️ **Service Helpers**: Session start/stop, keep-alive frames, dynamic current, and fail-safe parameters.
+- 🛠️ **Service Helpers**: Session start/stop, keep-alive frames, dynamic current, and fail-safe parameters.
 - 🤖 **Automations**: Device triggers and powerful blueprints included.
 - 🛡️ **Reliable**: Comprehensive tests, virtual wallbox simulator, and robust error handling.
 
@@ -51,14 +51,14 @@
 
 ### Configuration
 
-**Option 1: Auto-Discovery (Recommended)**
+#### Option 1: Auto-Discovery (Recommended)
 
 1. Ensure your wallbox is on the same network as Home Assistant.
 1. Go to **Settings** → **Devices & Services**.
 1. Look for the **Discovered** section.
 1. Click **Configure** on the Webasto Next entry.
 
-**Option 2: Manual Setup**
+#### Option 2: Manual Setup
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**.
 1. Search for **Webasto Next Modbus**.
@@ -132,7 +132,7 @@ Simple toggle control.
 
 ## 🛠️ Troubleshooting
 
-- **Connection Failed**: Check IP, Port (502), and Unit ID (255). Verify network reachability.
+- **Connection Failed**: Check IP, Port (e.g. 502), and Unit ID (255). Verify network reachability.
 - **Stale Data**: Check logs. The integration retries transient errors automatically.
 - **Diagnostics**: Go to the integration entry → **⋮** → **Download diagnostics**.
 
