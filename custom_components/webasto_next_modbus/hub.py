@@ -393,9 +393,15 @@ class ModbusBridge:
                     raise WebastoModbusError(str(err)) from err
 
                 if response.isError():  # type: ignore[attr-defined]
-                    raise WebastoModbusError(
-                        f"Modbus error reading block @{request.start_address} ({request.count})"
+                    _LOGGER.warning(
+                        "Modbus error reading block @%s (%s): %r",
+                        request.start_address,
+                        request.count,
+                        response,
                     )
+                    for definition in request.registers:
+                        data[definition.key] = None
+                    continue
 
                 registers = response.registers  # type: ignore[attr-defined]
                 for definition in request.registers:
