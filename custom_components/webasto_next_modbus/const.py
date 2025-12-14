@@ -73,6 +73,7 @@ class RegisterDefinition:
     step: float | None = None
     encoding: str | None = None
     translation_key: str | None = None
+    optional: bool = False  # If True, register will be skipped if unsupported
 
 
 # Enumerations mapped to user friendly strings.
@@ -196,6 +197,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         register_type="holding",
         data_type="uint16",
         entity="sensor",
+        device_class="enum",
         icon="mdi:alert",
         entity_category="diagnostic",
         options=FAULT_CODE_MAP,
@@ -385,7 +387,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity="sensor",
         unit="Wh",
         device_class="energy",
-        state_class="measurement",
+        state_class="total",
         icon="mdi:battery-clock",
     ),
     RegisterDefinition(
@@ -448,6 +450,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity_category="diagnostic",
         icon="mdi:car-connected",
         options=SMART_VEHICLE_STATE_MAP,
+        optional=True,  # Only available on TQ-DM100
     ),
 )
 

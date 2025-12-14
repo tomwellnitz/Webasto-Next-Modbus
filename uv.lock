@@ -3403,7 +3403,7 @@ wheels = [
 
 [[package]]
 name = "webasto-next-modbus"
-version = "0.4.0b11"
+version = "0.4.0b12"
 source = { editable = "." }
 dependencies = [
     { name = "pymodbus" },

@@ -144,7 +144,9 @@ class ModbusBridge:
         self._modbus_exception = exception_cls
         self._client: Any | None = None
         self._lock = asyncio.Lock()
-        self._read_plan = _build_read_plan(all_registers(include_write_only=False))
+        self._read_plan: tuple[ReadRequest, ...] = _build_read_plan(
+            all_registers(include_write_only=False)
+        )
         self._life_bit_task: asyncio.Task[None] | None = None
 
     async def start_life_bit_loop(self) -> None:
@@ -415,12 +417,25 @@ class ModbusBridge:
                     raise WebastoModbusError(str(err)) from err
 
                 if response.isError():  # type: ignore[attr-defined]
-                    _LOGGER.warning(
-                        "Modbus error reading block @%s (%s): %r",
-                        request.start_address,
-                        request.count,
-                        response,
-                    )
+                    # Check if all registers in this block are optional
+                    all_optional = all(reg.optional for reg in request.registers)
+                    if all_optional:
+                        _LOGGER.info(
+                            "Removing optional register block @%s from read plan "
+                            "(not supported by this wallbox)",
+                            request.start_address,
+                        )
+                        # Remove this block from future reads
+                        self._read_plan = tuple(
+                            r for r in self._read_plan if r.start_address != request.start_address
+                        )
+                    else:
+                        _LOGGER.warning(
+                            "Modbus error reading block @%s (%s): %r",
+                            request.start_address,
+                            request.count,
+                            response,
+                        )
                     for definition in request.registers:
                         data[definition.key] = None
                     continue
