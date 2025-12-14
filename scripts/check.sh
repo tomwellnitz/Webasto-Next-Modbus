@@ -10,14 +10,14 @@ echo "📦 Checking dependencies (deptry)..."
 uv run deptry .
 
 echo "🧹 Linting (ruff)..."
-uv run ruff check .
-uv run ruff format --check .
+uv run ruff check --fix .
+uv run ruff format .
 
 echo "📝 Checking spelling (codespell)..."
 uv run codespell
 
-echo "� Formatting Markdown (mdformat)..."
-uv run mdformat --check .
+echo " Formatting Markdown (mdformat)..."
+uv run mdformat .
 
 echo "�📄 Checking YAML (yamllint)..."
 uv run yamllint .
