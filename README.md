@@ -156,12 +156,6 @@ Adjusts charging current based on grid export to maximize self-consumption.
 
 - **Requires**: Grid power sensor (negative value = export).
 
-### ⚡ FastCharge/FullCharge (Legacy)
-
-Simple toggle control.
-
-- **Requires**: Two `input_boolean` helpers.
-
 ## 🛠️ Troubleshooting
 
 - **Connection Failed**: Check IP, Port (e.g. 502), and Unit ID (255). Verify network reachability.
