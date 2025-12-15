@@ -1,6 +1,6 @@
 [project]
 name = "webasto-next-modbus"
-version = "0.4.0-beta.15"
+version = "1.0.0"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP"
 authors = [{ name = "Webasto Next Modbus maintainers" }]
 readme = "README.md"

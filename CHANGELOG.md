@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0] - 2025-12-15
+
+### Added
+
+- **Translations**: Full support for English and German translations for all entities and status values.
+- **Optional Registers**: Automatic detection and handling of unsupported registers (e.g. for different hardware variants).
+
+### Changed
+
+- **Charge Point State**: Corrected state mapping to match Webasto Modbus specification.
+- **Time Formatting**: Session times are now formatted as `HH:MM:SS`.
+
+### Fixed
+
+- **Build**: Corrected versioning in build artifacts.
+- **Translations**: Fixed issues with German translation keys and JSON structure.
+
 ## [0.4.0-beta.15] - 2025-12-14
 
 ### Fixed

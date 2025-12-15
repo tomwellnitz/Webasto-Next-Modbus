@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "0.4.0-beta.15"
+INTEGRATION_VERSION: Final = "1.0.0"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
