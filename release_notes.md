@@ -22,4 +22,3 @@ This major update introduces optional **REST API support**, enabling advanced fe
 - Corrected charge point state mappings.
 - Fixed API communication for configuration updates.
 - Handled API field name inconsistencies (typos in firmware).
-- Added separate diagnostic sensors for LAN and WLAN MAC addresses.

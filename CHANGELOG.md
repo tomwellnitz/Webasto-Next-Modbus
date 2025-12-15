@@ -14,7 +14,6 @@
 - **REST API**: Robust retry and error handling, fixed HTTP 405/400 errors on updates.
 - **Signal Voltage**: Improved parsing for various firmware formats (comma-separated, labeled).
 - **Free Charging Tag ID**: Fixed API field name typos and converted to editable text entity.
-- **MAC Addresses**: Added separate diagnostic sensors for LAN and WLAN MAC addresses.
 - **Charge Point State**: Corrected mapping per Webasto specification.
 
 ### Changed

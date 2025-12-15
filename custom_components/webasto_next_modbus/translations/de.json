@@ -152,12 +152,6 @@
       "powerboard_firmware": {
         "name": "Powerboard Firmware"
       },
-      "mac_address_ethernet": {
-        "name": "MAC-Adresse (LAN)"
-      },
-      "mac_address_wifi": {
-        "name": "MAC-Adresse (WLAN)"
-      },
       "plug_cycles": {
         "name": "Steckzyklen"
       },
