@@ -354,8 +354,8 @@ class RestClient:
         json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
     ) -> Any:
         """Make authenticated request with retry logic."""
-        if self._session is None:
-            await self._ensure_session()
+        await self._ensure_session()
+        await self._ensure_token()
 
         assert self._session is not None  # noqa: S101
         assert self._token is not None  # noqa: S101

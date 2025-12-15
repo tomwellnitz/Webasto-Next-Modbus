@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.1] - 2025-12-15
+
+### Fixed
+
+- **Connection Handling**: Improved error handling for network disconnections - OSError is now properly caught during connection attempts, enabling the retry mechanism.
+- **REST API**: Fixed potential crash when making requests without valid token - added proper token validation.
+- **Free Charging Switch**: Fixed entity state updates by adding missing `super()._handle_coordinator_update()` call.
+
+______________________________________________________________________
+
 ## [1.1.0] - 2025-12-15
 
 ### Added
