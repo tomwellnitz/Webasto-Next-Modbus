@@ -43,6 +43,16 @@ REST_SENSORS: list[RestSensorDefinition] = [
         icon="mdi:chip",
     ),
     RestSensorDefinition(
+        key="mac_address_ethernet",
+        value_fn=lambda d: d.mac_address_ethernet,
+        icon="mdi:ethernet",
+    ),
+    RestSensorDefinition(
+        key="mac_address_wifi",
+        value_fn=lambda d: d.mac_address_wifi,
+        icon="mdi:wifi",
+    ),
+    RestSensorDefinition(
         key="plug_cycles",
         value_fn=lambda d: d.plug_cycles,
         icon="mdi:ev-plug-type2",

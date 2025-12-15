@@ -1,36 +1,25 @@
-## Changes in 1.1.0-beta.2
+## Webasto Next Integration v1.1.0
 
-## Changes in 1.1.0-beta.3
+This major update introduces optional **REST API support**, enabling advanced features not available via Modbus TCP.
 
-### Changed
+### 🌟 New Features (REST API)
 
-- **REST API**: Retry- und Error-Handling jetzt identisch robust wie bei Modbus. Nach Verbindungsabbrüchen werden Anfragen mehrfach mit Backoff neu versucht, Sessions werden sauber neu aufgebaut. Fehler werden nach maximalen Versuchen an Home Assistant weitergegeben.
+- **LED Control**: Adjust the wallbox LED brightness (0-100%).
+- **Diagnostics**: View firmware versions, hardware info, and active errors.
+- **Network Info**: See MAC addresses and IP configuration.
+- **Free Charging**: Enable/disable free charging mode and manage the Tag ID alias.
+- **System Control**: Restart the wallbox directly from Home Assistant.
 
-### Technical
+### 🛠️ Improvements
 
-- **Code Quality**: REST-Client nutzt jetzt explizites Session-Reset und Logging für alle Verbindungsfehler. Asyncio-Cancellation wird korrekt behandelt. Kein endloses Blockieren bei Ausfall.
+- **Robustness**: Enhanced error handling and retry logic for network connections.
+- **Compatibility**: Improved parsing for signal voltages across different firmware versions.
+- **Usability**: Full German and English translations for all new entities.
+- **Standards**: Added Code of Conduct and Security Policy; achieved "Silver" quality scale.
 
-### Added
+### 🐛 Fixes
 
-- **Community Standards**: Added CODE_OF_CONDUCT.md and SECURITY.md for better community governance.
-- **Quality Scale**: Integration now declares "silver" quality scale in manifest.
-
-### Changed
-
-- **Integration Name**: Simplified to "Webasto Next" (was "Webasto Next Modbus") to reflect both Modbus TCP and REST API support.
-- **Documentation**: Updated all documentation to mention both communication protocols.
-- **Dependencies**: Added aiohttp to manifest.json requirements.
-
-______________________________________________________________________
-
-## Changes in 1.1.0-beta.1
-
-### Added
-
-- **REST API Integration**: Optional connection for LED control, firmware info, diagnostics, and more.
-- **Translations**: Full English and German support for all entities.
-
-### Changed
-
-- **Charge Point State**: Corrected mapping per Webasto specification.
-- **Time Formatting**: Session times now formatted as `HH:MM:SS`.
+- Corrected charge point state mappings.
+- Fixed API communication for configuration updates.
+- Handled API field name inconsistencies (typos in firmware).
+- Added separate diagnostic sensors for LAN and WLAN MAC addresses.
