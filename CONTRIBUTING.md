@@ -4,22 +4,55 @@ Thanks for taking the time to improve Webasto Next! The notes below summarise ho
 
 ## Quick start
 
-1. Clone this repository and install dependencies using `uv`:
+1. **Fork and clone** this repository:
+
+   ```bash
+   gh repo fork tomwellnitz/Webasto-Next-Modbus --clone
+   cd Webasto-Next-Modbus
+   ```
+
+2. **Install dependencies** using `uv`:
 
    ```bash
    uv sync
    source .venv/bin/activate
    ```
 
-1. Run the tooling suite before opening a pull request:
+3. **Create a feature branch**:
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+4. **Make your changes** and verify quality:
 
    ```bash
    ./scripts/check.sh
    ```
 
-1. Optional: Start the bundled Home Assistant sandbox for manual verification (`docker/docker-compose.yml`).
+5. **Commit and push**:
+
+   ```bash
+   git add .
+   git commit -m "Add your feature"
+   git push origin feature/your-feature-name
+   ```
+
+6. **Open a Pull Request** on GitHub and wait for CI checks to pass.
 
 More detailed instructions live in [`docs/development.md`](docs/development.md).
+
+## Branch protection & workflow
+
+This repository uses **branch protection** on `main`:
+
+- ✅ All changes must go through Pull Requests
+- ✅ CI checks must pass before merging
+- ✅ One approval required (for external contributors)
+- ✅ Linear history enforced (squash merge only)
+- ✅ Branch protection applies to **everyone** (including admins)
+
+**This means**: Even maintainers work on feature branches and create PRs. Direct pushes to `main` are blocked.
 
 ## Opening an issue
 
