@@ -265,7 +265,13 @@ class ModbusBridge:
             return
 
         client = self._client_cls(self._host, port=self._port, timeout=self._timeout)
-        await client.connect()
+        try:
+            await client.connect()
+        except (OSError, self._modbus_exception) as err:
+            raise WebastoModbusError(
+                f"Failed to connect to {self._host}:{self._port}: {err}"
+            ) from err
+
         if not client.connected:
             raise WebastoModbusError(
                 f"Unable to connect to {self._host}:{self._port} (device_id {self._unit_id})"

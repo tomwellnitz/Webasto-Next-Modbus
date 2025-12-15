@@ -68,12 +68,10 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):  # type: ignor
         """Handle updated data from the coordinator."""
         if self._pending_state is not None:
             self._attr_is_on = self._pending_state
-            self.async_write_ha_state()
-            return
-
-        rest_data = self.coordinator.rest_data
-        self._attr_is_on = None if rest_data is None else rest_data.free_charging_enabled
-        self.async_write_ha_state()
+        else:
+            rest_data = self.coordinator.rest_data
+            self._attr_is_on = None if rest_data is None else rest_data.free_charging_enabled
+        super()._handle_coordinator_update()
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Enable free charging."""
