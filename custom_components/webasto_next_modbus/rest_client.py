@@ -317,11 +317,15 @@ class RestClient:
         }
 
         last_error: Exception | None = None
-        for attempt in range(MAX_RETRY_ATTEMPTS):
+        for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
             try:
+                await self._ensure_session()
+                assert self._session is not None  # noqa: S101
+
                 async with self._session.request(method, url, headers=headers, json=json) as resp:
                     if resp.status == 401:
                         # Token expired, re-authenticate
+                        _LOGGER.debug("Token expired (401), re-authenticating...")
                         await self._login()
                         headers["Authorization"] = f"Bearer {self._token}"
                         continue
@@ -337,17 +341,31 @@ class RestClient:
                         return await resp.json()
                     return await resp.text()
 
+            except asyncio.CancelledError:
+                raise
             except aiohttp.ClientError as err:
                 last_error = err
-                if attempt < MAX_RETRY_ATTEMPTS - 1:
-                    await asyncio.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
-                    continue
-                msg = f"Request to {path} failed after {MAX_RETRY_ATTEMPTS} attempts"
-                raise RestClientError(msg) from err
+                _LOGGER.warning(
+                    "Attempt %s/%s to %s failed: %s",
+                    attempt,
+                    MAX_RETRY_ATTEMPTS,
+                    f"{method} {path}",
+                    err,
+                )
 
+                # Force session close to ensure fresh connection on retry
+                if self._session and not self._session.closed:
+                    await self._session.close()
+                self._session = None
+
+                if attempt == MAX_RETRY_ATTEMPTS:
+                    break
+
+                await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+        msg = f"Request to {path} failed after {MAX_RETRY_ATTEMPTS} attempts"
         if last_error:
-            raise RestClientError(str(last_error)) from last_error
-        msg = "Request failed for unknown reason"
+            raise RestClientError(msg) from last_error
         raise RestClientError(msg)
 
     async def _get_section(self, section: str) -> list[dict[str, Any]]:
