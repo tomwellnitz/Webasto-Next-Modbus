@@ -1,10 +1,10 @@
-# 🤖 AI Agent Guide for Webasto Next Modbus
+# 🤖 AI Agent Guide for Webasto Next
 
 This document provides context and guidelines for AI agents working on this codebase. It summarizes the architecture, tooling, and coding standards to ensure consistent and high-quality contributions.
 
 ## 🌍 Project Overview
 
-**Webasto Next Modbus** is a custom integration for Home Assistant that communicates with Webasto Next and Ampure Unite wallboxes via Modbus TCP and optionally via the REST API.
+**Webasto Next** is a custom integration for Home Assistant that communicates with Webasto Next and Ampure Unite wallboxes via Modbus TCP (for real-time charging data) and REST API (for configuration, diagnostics, and advanced features).
 
 - **Domain**: `webasto_next_modbus`
 - **Communication**:

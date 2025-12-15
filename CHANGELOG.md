@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0-beta.2] - 2025-12-15
+
+### Added
+
+- **Community Standards**: Added CODE_OF_CONDUCT.md following Contributor Covenant 2.1.
+- **Security Policy**: Added SECURITY.md with vulnerability reporting guidelines and security best practices.
+- **Quality Scale**: Declared "silver" quality scale in manifest.json as per Home Assistant integration quality standards.
+
+### Changed
+
+- **Integration Name**: Simplified display name from "Webasto Next Modbus" to "Webasto Next" to reflect both Modbus TCP and REST API support.
+- **Documentation**: Updated all user-facing documentation to reflect the integrated nature of Modbus TCP and REST API features.
+- **Dependencies**: Added aiohttp to manifest.json requirements (was previously only in pyproject.toml).
+
+### Technical
+
+- **Manifest**: Added `quality_scale` field and consolidated all dependencies.
+- **Translations**: Updated integration title in English and German translation files.
+
 ## [1.1.0-beta.1] - 2025-12-15
 
 ### Added

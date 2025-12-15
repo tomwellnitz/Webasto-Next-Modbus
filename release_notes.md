@@ -1,11 +1,26 @@
-## Changes
+## Changes in 1.1.0-beta.2
 
 ### Added
 
-- **Translations**: Added full support for entity name translations. Entity names are now automatically translated based on the Home Assistant language (English and German supported).
-- **Enum Translations**: All state values for enum sensors (e.g., Charge Point State, Error Codes) are now translated.
+- **Community Standards**: Added CODE_OF_CONDUCT.md and SECURITY.md for better community governance.
+- **Quality Scale**: Integration now declares "silver" quality scale in manifest.
 
 ### Changed
 
-- **Charge Point State**: Updated mapping for `charge_point_state` to correctly reflect the Webasto Modbus specification (Charging is now 3, Suspended is 4).
-- **Time Formatting**: Session start and end times are now formatted as `HH:MM:SS` instead of raw integers.
+- **Integration Name**: Simplified to "Webasto Next" (was "Webasto Next Modbus") to reflect both Modbus TCP and REST API support.
+- **Documentation**: Updated all documentation to mention both communication protocols.
+- **Dependencies**: Added aiohttp to manifest.json requirements.
+
+______________________________________________________________________
+
+## Changes in 1.1.0-beta.1
+
+### Added
+
+- **REST API Integration**: Optional connection for LED control, firmware info, diagnostics, and more.
+- **Translations**: Full English and German support for all entities.
+
+### Changed
+
+- **Charge Point State**: Corrected mapping per Webasto specification.
+- **Time Formatting**: Session times now formatted as `HH:MM:SS`.

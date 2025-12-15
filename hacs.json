@@ -1,5 +1,5 @@
 {
-  "name": "Webasto Next Modbus",
+  "name": "Webasto Next",
   "render_readme": true,
   "homeassistant": "2024.6.0",
   "content_in_root": false

@@ -1,6 +1,6 @@
-# Webasto Next Modbus for Home Assistant
+# Webasto Next for Home Assistant
 
-> Bring Webasto Next / Ampure Unite wallboxes into Home Assistant with a Modbus TCP integration.
+> Bring Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP and REST API.
 
 [![Release](https://img.shields.io/github/v/release/tomwellnitz/Webasto-Next-Modbus?display_name=release)](https://github.com/tomwellnitz/Webasto-Next-Modbus/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/tomwellnitz/Webasto-Next-Modbus/ci.yaml?branch=main)](https://github.com/tomwellnitz/Webasto-Next-Modbus/actions/workflows/ci.yaml)
@@ -37,7 +37,7 @@
 1. Open HACS in Home Assistant.
 1. Go to **Integrations** → **⋮** → **Custom repositories**.
 1. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` as type **Integration**.
-1. Install **Webasto Next Modbus** and restart Home Assistant.
+1. Install **Webasto Next** and restart Home Assistant.
 
 </details>
 
@@ -62,7 +62,7 @@
 #### Option 2: Manual Setup
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**.
-1. Search for **Webasto Next Modbus**.
+1. Search for **Webasto Next**.
 1. Enter your wallbox details:
    - **Host**: IP address or hostname (e.g., `192.168.1.50` or `webasto.local`).
    - **Port**: Default `502`.

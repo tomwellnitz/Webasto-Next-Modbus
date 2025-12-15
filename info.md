@@ -1,6 +1,6 @@
-# Webasto Next Modbus
+# Webasto Next
 
-Bring Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP.
+Bring Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP and REST API.
 
 ## Highlights
 

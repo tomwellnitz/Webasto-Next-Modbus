@@ -8,7 +8,7 @@ Need help? We've got you covered.
 
 1. **Download Diagnostics**:
 
-   - Go to **Settings** → **Devices & Services** → **Webasto Next Modbus**.
+   - Go to **Settings** → **Devices & Services** → **Webasto Next**.
    - Click the **⋮** menu → **Download diagnostics**.
    - *Attach this JSON file to your issue!*
 

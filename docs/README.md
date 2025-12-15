@@ -1,6 +1,6 @@
 # Documentation portal
 
-Welcome! This folder collects the human-facing documentation for the Webasto Next Modbus integration. Inspired by the structure of the [Spook](https://github.com/frenck/spook) project, the goal is to keep a single entry point that guides you to the right level of detail.
+Welcome! This folder collects the human-facing documentation for the Webasto Next integration. Inspired by the structure of the [Spook](https://github.com/frenck/spook) project, the goal is to keep a single entry point that guides you to the right level of detail.
 
 ## Getting started
 

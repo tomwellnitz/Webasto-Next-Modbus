@@ -1,6 +1,6 @@
-# Webasto Next Modbus Home Assistant Integration
+# Webasto Next Home Assistant Integration
 
-This document captures architectural goals, the Modbus register model, and the high-level software design that powers the Webasto Next Modbus integration.
+This document captures architectural goals, the communication protocols (Modbus TCP and REST API), and the high-level software design that powers the Webasto Next integration.
 
 ## Objectives
 

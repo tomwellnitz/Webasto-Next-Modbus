@@ -1,6 +1,6 @@
 {
   "domain": "webasto_next_modbus",
-  "name": "Webasto Next Modbus",
+  "name": "Webasto Next",
   "codeowners": [
     "@tomwellnitz"
   ],
@@ -14,10 +14,12 @@
     "pymodbus",
     "custom_components.webasto_next_modbus"
   ],
+  "quality_scale": "silver",
   "requirements": [
-    "pymodbus>=3.11.2,<4"
+    "pymodbus>=3.11.2,<4",
+    "aiohttp>=3.9.0"
   ],
-  "version": "1.1.0-beta.1",
+  "version": "1.1.0-beta.2",
   "zeroconf": [
     {
       "type": "_http._tcp.local.",
