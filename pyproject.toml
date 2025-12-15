@@ -57,7 +57,7 @@ dev = [
     "homeassistant>=2025.1.0b7",
     "mdformat>=0.7.19",
     "mypy>=1.8",
-    "pycares<5.0.0",
+    "pycares<6.0.0",
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.0.0",
