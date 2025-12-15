@@ -296,14 +296,15 @@ Authorization: Bearer <access_token>
 Update one or more configuration fields.
 
 ```http
-PUT /api/configuration-updates
+POST /api/configuration-updates
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 [
   {
     "fieldKey": "led-brightness",
-    "value": 50
+    "value": 50,
+    "configurationFieldUpdateType": "number-configuration-field-update"
   }
 ]
 ```
@@ -593,13 +594,17 @@ class WebastoAPI:
         return self.session.get(f"{self.base_url}/sections/{section}").json()
     
     def update_config(self, updates: list) -> dict:
-        return self.session.put(
+        return self.session.post(
             f"{self.base_url}/configuration-updates",
             json=updates
         ).json()
     
     def set_led_brightness(self, brightness: int):
-        return self.update_config([{"fieldKey": "led-brightness", "value": brightness}])
+        return self.update_config([{
+            "fieldKey": "led-brightness", 
+            "value": brightness,
+            "configurationFieldUpdateType": "number-configuration-field-update"
+        }])
     
     def restart(self):
         return self.session.post(f"{self.base_url}/custom-actions/restart-system")
