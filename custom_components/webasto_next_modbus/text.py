@@ -63,7 +63,9 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: igno
     @property
     def native_value(self) -> str | None:
         """Return the current value."""
-        return self.coordinator.data.get("free_charging_tag_id")
+        if not self.coordinator.rest_data:
+            return None
+        return self.coordinator.rest_data.free_charging_tag_id
 
     async def async_set_value(self, value: str) -> None:
         """Set the text value."""

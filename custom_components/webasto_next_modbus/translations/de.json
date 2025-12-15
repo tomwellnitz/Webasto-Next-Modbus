@@ -204,6 +204,11 @@
         "name": "Wallbox neustarten"
       }
     },
+    "text": {
+      "free_charging_tag_id": {
+        "name": "Freies Laden Tag ID"
+      }
+    },
     "switch": {
       "free_charging": {
         "name": "Freies Laden"

@@ -486,7 +486,7 @@ class RestClient:
 
             if key == "free-charging":
                 values["free_charging_enabled"] = bool(value)
-            elif key == "free-charging-alais":
+            elif key in ("free-charging-alais", "free-charging-alias"):
                 values["free_charging_tag_id"] = value
 
     @staticmethod
@@ -533,7 +533,22 @@ class RestClient:
             except ValueError:
                 continue
 
-        return parsed_values or None
+        if parsed_values:
+            return parsed_values
+
+        # Fallback: Try comma-separated list "228 V, 227 V, 229 V"
+        # Remove "V" and split by comma
+        parts = [p.strip().replace("V", "").strip() for p in text.split(",")]
+        if len(parts) == 3:
+            try:
+                parsed_values["l1"] = float(parts[0].replace(",", "."))
+                parsed_values["l2"] = float(parts[1].replace(",", "."))
+                parsed_values["l3"] = float(parts[2].replace(",", "."))
+                return parsed_values
+            except ValueError:
+                pass
+
+        return None
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:

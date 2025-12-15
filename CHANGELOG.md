@@ -5,7 +5,8 @@
 ### Fixed
 
 - **REST API**: Fixed HTTP 405/400 errors when updating configuration (LED brightness, Free Charging). Now uses `POST` with correct `configurationFieldUpdateType`.
-- **Signal Voltage**: Fixed parsing of voltage values containing decimal commas (e.g., "230,5 V").
+- **Signal Voltage**: Fixed parsing of voltage values for both "L1: 230V" format and comma-separated lists (e.g., "228 V, 227 V, 229 V").
+- **Free Charging Tag ID**: Fixed reading of tag ID by handling API field name typos (`free-charging-alais`).
 - **Translations**: Added missing translations for Config Flow and new entities.
 
 ### Changed
