@@ -152,7 +152,7 @@ custom_components/webasto_next_modbus/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Coordinator                              │
+│                     Coordinator                             │
 │  ┌─────────────────────┐    ┌─────────────────────┐         │
 │  │      hub.py         │    │   rest_client.py    │         │
 │  │   (Modbus TCP)      │    │   (REST API)        │         │
