@@ -9,7 +9,9 @@
           "host": "Host (IP address or hostname)",
           "port": "Port",
           "unit_id": "Unit ID",
-          "scan_interval": "Update interval (seconds)"
+          "scan_interval": "Update interval (seconds)",
+          "variant": "Variant",
+          "name": "Name (optional)"
         }
       }
     },
@@ -29,6 +31,8 @@
         "description": "Adjust advanced settings.",
         "data": {
           "scan_interval": "Update interval (seconds)",
+          "variant": "Variant",
+          "name": "Name (optional)",
           "rest_enabled": "Enable REST API",
           "rest_username": "REST API Username",
           "rest_password": "REST API Password"
@@ -41,6 +45,8 @@
     },
     "error": {
       "invalid_interval": "Interval is outside the supported range.",
+      "rest_password_required": "REST API is enabled but no password is stored.",
+      "rest_cannot_connect": "Could not connect to REST API. Check credentials and network.",
       "rest_connection_failed": "Could not connect to REST API. Check credentials and network."
     },
     "abort": {
@@ -189,11 +195,13 @@
       "signal_voltage_l3": {
         "name": "Voltage L3"
       },
-      "free_charging_tag_id": {
-        "name": "Free Charging Tag ID"
-      },
       "active_errors": {
         "name": "Active Errors"
+      }
+    },
+    "text": {
+      "free_charging_tag_id": {
+        "name": "Free Charging Tag ID"
       }
     },
     "number": {

@@ -109,6 +109,11 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._rest_data = None
 
     @property
+    def rest_client(self) -> RestClient | None:
+        """Return the REST client instance."""
+        return self._rest_client
+
+    @property
     def rest_enabled(self) -> bool:
         """Return True if REST client is active."""
         return self._rest_client is not None

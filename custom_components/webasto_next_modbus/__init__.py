@@ -52,7 +52,13 @@ from .hub import ModbusBridge, WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.SWITCH]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.NUMBER,
+    Platform.BUTTON,
+    Platform.SWITCH,
+    Platform.TEXT,
+]
 
 
 @dataclass(slots=True)

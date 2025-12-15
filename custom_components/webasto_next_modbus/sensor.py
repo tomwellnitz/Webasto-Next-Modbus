@@ -79,11 +79,6 @@ REST_SENSORS: list[RestSensorDefinition] = [
         entity_category=None,
     ),
     RestSensorDefinition(
-        key="free_charging_tag_id",
-        value_fn=lambda d: d.free_charging_tag_id,
-        icon="mdi:card-account-details",
-    ),
-    RestSensorDefinition(
         key="active_errors",
         value_fn=lambda d: ", ".join(d.active_errors) if d.active_errors else "None",
         icon="mdi:alert",

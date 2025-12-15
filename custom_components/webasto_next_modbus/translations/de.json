@@ -9,7 +9,9 @@
           "host": "Host (IP-Adresse oder Hostname)",
           "port": "Port",
           "unit_id": "Unit-ID",
-          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "variant": "Variante",
+          "name": "Name (optional)"
         }
       }
     },
@@ -165,11 +167,13 @@
       "signal_voltage_l3": {
         "name": "Spannung L3"
       },
-      "free_charging_tag_id": {
-        "name": "Freies Laden Tag ID"
-      },
       "active_errors": {
         "name": "Aktive Fehler"
+      }
+    },
+    "text": {
+      "free_charging_tag_id": {
+        "name": "Freies Laden Tag ID"
       }
     },
     "number": {
@@ -213,6 +217,8 @@
         "description": "Erweiterte Einstellungen anpassen.",
         "data": {
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "variant": "Variante",
+          "name": "Name (optional)",
           "rest_enabled": "REST API aktivieren",
           "rest_username": "REST API Benutzername",
           "rest_password": "REST API Passwort"
@@ -225,6 +231,8 @@
     },
     "error": {
       "invalid_interval": "Intervall liegt außerhalb des unterstützten Bereichs.",
+      "rest_password_required": "REST API ist aktiviert, aber es wurde kein Passwort hinterlegt.",
+      "rest_cannot_connect": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen.",
       "rest_connection_failed": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen."
     },
     "abort": {

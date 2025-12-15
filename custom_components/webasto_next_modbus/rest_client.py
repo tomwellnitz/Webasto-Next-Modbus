@@ -35,6 +35,16 @@ class ConnectionError(RestClientError):  # noqa: A001
     """Raised when connection to wallbox fails."""
 
 
+class HttpRequestError(RestClientError):
+    """Raised when the REST API returns an HTTP error status."""
+
+    def __init__(self, status: int, path: str, body: str) -> None:
+        super().__init__(f"Request failed: {status} - {body}")
+        self.status = status
+        self.path = path
+        self.body = body
+
+
 @dataclass(frozen=True, slots=True)
 class RestData:
     """Data retrieved from the REST API."""
@@ -183,7 +193,15 @@ class RestClient:
             raise ValueError(msg)
 
         await self._ensure_token()
-        await self._update_config([{"fieldKey": "led-brightness", "value": brightness}])
+        await self._update_config(
+            [
+                {
+                    "fieldKey": "led-brightness",
+                    "value": brightness,
+                    "configurationFieldUpdateType": "number-configuration-field-update",
+                }
+            ]
+        )
 
     async def set_free_charging(self, enabled: bool) -> None:
         """Enable or disable free charging mode.
@@ -195,7 +213,35 @@ class RestClient:
             RestClientError: If the request fails.
         """
         await self._ensure_token()
-        await self._update_config([{"fieldKey": "free-charging", "value": enabled}])
+        await self._update_config(
+            [
+                {
+                    "fieldKey": "free-charging",
+                    "value": enabled,
+                    "configurationFieldUpdateType": "boolean-configuration-field-update",
+                }
+            ]
+        )
+
+    async def set_free_charging_tag_id(self, tag_id: str) -> None:
+        """Set the tag ID alias for free charging.
+
+        Args:
+            tag_id: The new tag ID alias.
+
+        Raises:
+            RestClientError: If the request fails.
+        """
+        await self._ensure_token()
+        await self._update_config(
+            [
+                {
+                    "fieldKey": "free-charging-alais",
+                    "value": tag_id,
+                    "configurationFieldUpdateType": "simple-string-configuration-field-update",
+                }
+            ]
+        )
 
     async def restart_system(self) -> None:
         """Trigger a system restart.
@@ -284,7 +330,11 @@ class RestClient:
         """Make authenticated GET request."""
         return await self._request("GET", path)
 
-    async def _post(self, path: str, json: Mapping[str, Any] | None = None) -> Any:
+    async def _post(
+        self,
+        path: str,
+        json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
+    ) -> Any:
         """Make authenticated POST request."""
         return await self._request("POST", path, json=json)
 
@@ -334,8 +384,7 @@ class RestClient:
                         raise RestClientError(msg)
                     if resp.status >= 400:
                         text = await resp.text()
-                        msg = f"Request failed: {resp.status} - {text}"
-                        raise RestClientError(msg)
+                        raise HttpRequestError(resp.status, path, text)
 
                     if resp.content_type == "application/json":
                         return await resp.json()
@@ -392,7 +441,7 @@ class RestClient:
 
     async def _update_config(self, updates: list[dict[str, Any]]) -> None:
         """Update configuration fields."""
-        await self._put("/configuration-updates", json=updates)
+        await self._post("/configuration-updates", json=updates)
 
     def _parse_system_fields(self, fields: list[dict[str, Any]], values: dict[str, Any]) -> None:
         """Parse system section fields into values dict."""
@@ -441,25 +490,50 @@ class RestClient:
                 values["free_charging_tag_id"] = value
 
     @staticmethod
-    def _parse_signal_values(value: str | None) -> dict[str, float] | None:
-        """Parse 'L1: 230.5V, L2: 231.0V, L3: 229.8V' string."""
-        if not value:
+    def _parse_signal_values(value: Any) -> dict[str, float] | None:
+        """Parse signal voltages.
+
+        The wallbox exposes signal voltages as a string in some firmwares/locales, e.g.
+        "L1: 230.5V, L2: 231.0V, L3: 229.8V" or with decimal comma "230,5V".
+        Some implementations may also return a mapping already.
+        """
+
+        if value is None:
+            return None
+
+        if isinstance(value, dict):
+            result: dict[str, float] = {}
+            for key in ("l1", "l2", "l3"):
+                raw = value.get(key)
+                if raw is None:
+                    continue
+                try:
+                    result[key] = float(str(raw).replace(",", "."))
+                except ValueError:
+                    continue
+            return result or None
+
+        if not isinstance(value, str):
+            return None
+
+        text = value.strip()
+        if not text:
             return None
 
         import re
 
-        result: dict[str, float] = {}
-        # Match patterns like "L1: 230.5" or "L1:230.5V"
-        pattern = r"L([123])\s*:\s*([\d.]+)"
-        matches = re.findall(pattern, value, re.IGNORECASE)
+        parsed_values: dict[str, float] = {}
+        # Match patterns like "L1: 230.5", "L1:230,5V" or "L1 = 230.5 V"
+        pattern = r"L([123])\s*[:=]\s*([0-9]+(?:[\.,][0-9]+)?)"
+        matches = re.findall(pattern, text, re.IGNORECASE)
 
         for phase, voltage in matches:
             try:
-                result[f"l{phase}"] = float(voltage)
+                parsed_values[f"l{phase}"] = float(voltage.replace(",", "."))
             except ValueError:
                 continue
 
-        return result if result else None
+        return parsed_values or None
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:

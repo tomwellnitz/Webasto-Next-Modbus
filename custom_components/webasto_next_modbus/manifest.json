@@ -19,7 +19,7 @@
     "pymodbus>=3.11.2,<4",
     "aiohttp>=3.9.0"
   ],
-  "version": "1.1.0-beta.3",
+  "version": "1.1.0-beta.4",
   "zeroconf": [
     {
       "type": "_http._tcp.local.",

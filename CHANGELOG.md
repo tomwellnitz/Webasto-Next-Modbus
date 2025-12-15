@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0-beta.4] - 2025-12-15
+
+### Fixed
+
+- **REST API**: Fixed HTTP 405/400 errors when updating configuration (LED brightness, Free Charging). Now uses `POST` with correct `configurationFieldUpdateType`.
+- **Signal Voltage**: Fixed parsing of voltage values containing decimal commas (e.g., "230,5 V").
+- **Translations**: Added missing translations for Config Flow and new entities.
+
+### Changed
+
+- **Free Charging Tag ID**: Changed from read-only sensor to editable text entity.
+
+______________________________________________________________________
+
 ## [1.1.0-beta.3] - 2025-12-15
 
 ### Changed

@@ -1,6 +1,6 @@
 [project]
 name = "webasto-next-modbus"
-version = "1.1.0-beta.3"
+version = "1.1.0-beta.4"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP and REST API"
 authors = [{ name = "Webasto Next maintainers" }]
 readme = "README.md"
@@ -77,5 +77,5 @@ DEP004 = ["homeassistant", "voluptuous"]
 
 [tool.codespell]
 skip = "*.pdf,*.log,*.log.*,*.csv"
-ignore-words-list = "hass,alle,unter,adresse,ist,oder,paket,intervall,stopp,startet,aktive"
+ignore-words-list = "hass,alle,unter,adresse,ist,oder,paket,intervall,stopp,startet,aktive,variante"
 
