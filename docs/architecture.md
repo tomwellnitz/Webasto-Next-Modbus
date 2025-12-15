@@ -11,10 +11,11 @@ This document captures architectural goals, the Modbus register model, and the h
 
 ## Functional requirements
 
-- **Configuration flow** – Guided setup that collects host, port, unit ID, scan interval, and hardware variant while validating connectivity inline.
+- **Configuration flow** – Guided setup that collects host, port, unit ID, scan interval, and hardware variant while validating connectivity inline. Optional REST API credentials.
 - **Modbus communication** – Async TCP client (pymodbus) with request batching, retry/backoff, and deterministic reconnect behaviour.
-- **Entities** – Sensors for live telemetry and metadata, numbers for writable settings, and buttons for manual keep-alive and session control.
-- **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) to complement the entity model.
+- **REST API communication** – Optional async HTTPS client (aiohttp) with JWT authentication, auto token refresh, and graceful degradation.
+- **Entities** – Sensors for live telemetry and metadata, numbers for writable settings, switches for configuration toggles, and buttons for manual keep-alive and session control.
+- **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) for Modbus, plus REST API services (`set_led_brightness`, `set_free_charging`, `restart_wallbox`).
 - **Extensibility** – Centralised register descriptions drive entity creation so new datapoints require minimal boilerplate.
 - **Testing** – Pytest suite with Modbus fixtures covering the config flow, coordinator, entities, services, and device triggers.
 - **Documentation** – User-facing README plus architecture and development guides for maintainers.
@@ -78,21 +79,24 @@ The register ranges are derived from community research and vendor documentation
 - `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
 - `const.py` – Constants, version metadata, register descriptions, and enum mappings.
 - `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
-- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles and normalises raw register values.
-- `config_flow.py` – User and options flows with validation and duplicate protection.
-- Platform modules (`sensor.py`, `number.py`, `button.py`) – Entity classes backed by static descriptions.
+- `rest_client.py` – `WebastoRestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus.
+- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles, normalises raw register values, and optionally fetches REST API data.
+- `config_flow.py` – User and options flows with validation and duplicate protection. Includes optional REST API credential configuration.
+- Platform modules (`sensor.py`, `number.py`, `button.py`, `switch.py`) – Entity classes backed by static descriptions. The switch platform provides REST-only entities like free charging toggle.
 - `services.yaml` – Service schemas surfaced to Home Assistant.
 
 ## Data flow
 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
-1. `async_setup_entry` creates the `ModbusBridge` and `DataUpdateCoordinator`.
+1. `async_setup_entry` creates the `ModbusBridge`, optionally the `WebastoRestClient`, and the `DataUpdateCoordinator`.
 1. After the coordinator completes its first refresh, the `ModbusBridge` starts a background "Life Bit" task.
 1. The Life Bit task writes `1` to register `6000`, then polls every second until the wallbox clears it to `0`, then repeats. This prevents failsafe mode.
 1. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
+1. If REST API is enabled, the coordinator also fetches data from the wallbox web interface (firmware info, LED brightness, diagnostics, etc.).
 1. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
 1. Write operations (`set_current`, `set_failsafe`) call `ModbusBridge.async_write_register`, clamp inputs, and request an immediate refresh.
-1. All operations share a single TCP connection protected by an asyncio lock.
+1. REST API write operations (LED brightness, free charging, restart) call `WebastoRestClient` methods.
+1. All Modbus operations share a single TCP connection protected by an asyncio lock. REST operations use a separate aiohttp session.
 
 ## Error handling
 
@@ -114,5 +118,10 @@ The register ranges are derived from community research and vendor documentation
 
 - Defaults assume TCP port `502` and unit ID `255`; both are user-configurable during onboarding.
 - Firmware revisions prior to `3.1` may omit the keep-alive register; the integration degrades gracefully by hiding the button.
-- Session timestamp registers are kept as integers; template sensors can convert them to datetime values if required.
-- Future enhancements include richer diagnostics, Energy Dashboard metadata, and additional translations.
+
+## Future enhancements
+
+- **Additional translations**: Expand language support beyond English and German (e.g., French, Spanish, Dutch).
+- **Off-Peak Charging**: Leverage the REST API to control off-peak charging schedules and time windows.
+- **Skip Random Delay**: Add button entity to skip the randomized charging delay via REST API.
+- **Network diagnostics**: Surface additional network interface information from the REST API.

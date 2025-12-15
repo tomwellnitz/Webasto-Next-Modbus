@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.1.0-beta.1] - 2025-12-15
+
+### Added
+
+- **REST API Integration**: Optional connection to wallbox REST API for features not available via Modbus.
+  - **LED Brightness Control**: Number entity to set LED brightness (0-100%).
+  - **Firmware Information**: Diagnostic sensors for Comboard and Powerboard SW/HW versions.
+  - **Hardware Statistics**: Diagnostic sensors for plug cycles and error counter.
+  - **Signal Voltages**: Diagnostic sensors for L1, L2, L3 grid voltages.
+  - **Free Charging Control**: Switch entity to enable/disable free charging mode without RFID.
+  - **Free Charging Tag ID**: Sensor showing configured RFID tag alias.
+  - **Active Errors**: Sensor listing all currently active errors.
+  - **Restart Button**: Button entity to trigger wallbox system restart.
+  - **MAC Addresses**: Device info now includes Ethernet and WiFi MAC addresses when REST is enabled.
+- **REST API Services**: Three new services for REST API control:
+  - `set_led_brightness`: Set LED brightness (0-100%).
+  - `set_free_charging`: Enable/disable free charging mode.
+  - `restart_wallbox`: Trigger system restart.
+- **Switch Platform**: New platform for toggle entities (currently used for Free Charging).
+- **Config Flow**: REST API credentials can be configured during initial setup or later via Options Flow.
+- **Options Flow**: Enable/disable REST API and update credentials without removing the integration.
+
+### Changed
+
+- **Device Info**: When REST API is enabled, device info includes firmware version, hardware version, and MAC addresses.
+- **Documentation**: Updated all documentation to English and added comprehensive REST API documentation.
+
+### Technical
+
+- **Dependencies**: Added `aiohttp` for REST API communication.
+- **Architecture**: REST API client uses JWT authentication with automatic token refresh.
+- **Coordinator**: Extended to fetch both Modbus and REST API data in parallel.
+
 ## [1.0.0] - 2025-12-15
 
 ### Added

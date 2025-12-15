@@ -91,3 +91,57 @@ stop_session:
       selector:
         config_entry:
           integration: webasto_next_modbus
+
+set_led_brightness:
+  name: Set LED brightness
+  description: Set the LED brightness of the wallbox (requires REST API to be enabled).
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+      selector:
+        config_entry:
+          integration: webasto_next_modbus
+    brightness:
+      name: Brightness (%)
+      description: LED brightness level from 0 (off) to 100 (full).
+      required: true
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+set_free_charging:
+  name: Set free charging mode
+  description: Enable or disable free charging mode (requires REST API to be enabled).
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+      selector:
+        config_entry:
+          integration: webasto_next_modbus
+    enabled:
+      name: Enabled
+      description: True to enable free charging, false to disable.
+      required: true
+      example: true
+      selector:
+        boolean:
+
+restart_wallbox:
+  name: Restart wallbox
+  description: Restart the wallbox system (requires REST API to be enabled).
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional when only one Webasto Next wallbox is configured.
+      example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
+      selector:
+        config_entry:
+          integration: webasto_next_modbus

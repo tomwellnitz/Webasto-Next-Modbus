@@ -4,10 +4,12 @@ This document provides context and guidelines for AI agents working on this code
 
 ## 🌍 Project Overview
 
-**Webasto Next Modbus** is a custom integration for Home Assistant that communicates with Webasto Next and Ampure Unite wallboxes via Modbus TCP.
+**Webasto Next Modbus** is a custom integration for Home Assistant that communicates with Webasto Next and Ampure Unite wallboxes via Modbus TCP and optionally via the REST API.
 
 - **Domain**: `webasto_next_modbus`
-- **Communication**: Modbus TCP (using `pymodbus`)
+- **Communication**:
+  - **Primary**: Modbus TCP (using `pymodbus`) - real-time charging data
+  - **Optional**: REST API (using `aiohttp`) - configuration & diagnostics
 - **IoT Class**: Local Polling
 - **Config Flow**: UI-based configuration with auto-discovery (Zeroconf).
 
@@ -33,6 +35,7 @@ This document provides context and guidelines for AI agents working on this code
 │   ├── const.py                            # Constants & Register definitions
 │   ├── coordinator.py                      # DataUpdateCoordinator (polling)
 │   ├── hub.py                              # Modbus communication logic
+│   ├── rest_client.py                      # REST API client (optional features)
 │   ├── entity.py                           # Base entity class
 │   └── ...                                 # Platform files (sensor, number, button)
 ├── tests/                                  # Test suite
@@ -40,6 +43,8 @@ This document provides context and guidelines for AI agents working on this code
 ├── scripts/                                # Utility scripts
 │   └── check.sh                            # Main CI check script
 ├── docs/                                   # Documentation
+│   ├── rest-api.md                         # REST API specification
+│   └── rest-api-integration-plan.md        # Integration roadmap
 └── pyproject.toml                          # Project configuration
 ```
 
@@ -100,9 +105,10 @@ This script executes:
 
 - **`custom_components/webasto_next_modbus/const.py`**: Contains the `RegisterDefinition` dataclasses and all register addresses. **Edit this file to add new sensors.**
 - **`custom_components/webasto_next_modbus/hub.py`**: Handles the low-level Modbus TCP connection, reading/writing registers, and the background Life Bit loop.
-- **`custom_components/webasto_next_modbus/coordinator.py`**: Manages the polling interval and data distribution to entities.
+- **`custom_components/webasto_next_modbus/rest_client.py`**: Async REST API client for optional features (LED brightness, firmware info, diagnostics). Uses JWT authentication.
+- **`custom_components/webasto_next_modbus/coordinator.py`**: Manages the polling interval and data distribution to entities. Combines Modbus and REST data.
 - **`custom_components/webasto_next_modbus/__init__.py`**: Component setup/teardown, service registration, connection retries.
-- **`custom_components/webasto_next_modbus/config_flow.py`**: UI configuration and options flow.
+- **`custom_components/webasto_next_modbus/config_flow.py`**: UI configuration and options flow. Handles optional REST API credentials.
 
 ## 🚀 Common Tasks
 
@@ -118,3 +124,71 @@ This script executes:
 1. Edit `pyproject.toml`.
 1. Run `uv sync`.
 1. Run `./scripts/check.sh`.
+
+## 🌐 REST API Integration
+
+The integration supports an **optional** REST API connection for features not available via Modbus.
+
+### Features (REST API only)
+
+| Feature | Entity Type | Description |
+|---------|-------------|-------------|
+| LED Brightness | `number` | Set LED brightness 0-100% |
+| Firmware Versions | `sensor` (diagnostic) | Comboard & Powerboard SW versions |
+| Hardware Versions | `sensor` (diagnostic) | Comboard & Powerboard HW versions |
+| MAC Addresses | device_info | Ethernet & WiFi MAC |
+| IP Address | device_info | Current network IP |
+| Plug Cycles | `sensor` (diagnostic) | Connector usage count |
+| Error Counter | `sensor` (diagnostic) | Total error count |
+| Signal Voltages | `sensor` (diagnostic) | L1/L2/L3 grid voltages |
+| Free Charging | `switch` | Enable/disable free charging mode |
+| Free Charging Tag ID | `sensor` (diagnostic) | Configured RFID tag alias |
+| Active Errors | `sensor` (diagnostic) | List of current errors |
+| Restart System | `button` | Trigger wallbox restart |
+
+### REST API Services
+
+| Service | Description |
+|---------|-------------|
+| `set_led_brightness` | Set LED brightness (0-100%) |
+| `set_free_charging` | Enable/disable free charging mode |
+| `restart_wallbox` | Trigger system restart |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Coordinator                              │
+│  ┌─────────────────────┐    ┌─────────────────────┐         │
+│  │      hub.py         │    │   rest_client.py    │         │
+│  │   (Modbus TCP)      │    │   (REST API)        │         │
+│  │   - Charging data   │    │   - LED brightness  │         │
+│  │   - Energy meters   │    │   - Firmware info   │         │
+│  │   - Current control │    │   - Diagnostics     │         │
+│  └─────────────────────┘    └─────────────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### REST API Authentication
+
+- **Endpoint**: `POST /api/login` with `{username, password}`
+- **Token**: JWT Bearer token in `Authorization` header
+- **Token Refresh**: Auto-refresh before expiry
+- **Docs**: See `docs/rest-api.md` for full API specification
+
+### Enabling REST API
+
+REST API is optional and configured via:
+
+1. **Config Flow**: Initial setup with credentials
+1. **Options Flow**: Enable/disable and update credentials later
+
+### Conditional Device Info
+
+When REST API is enabled, additional attributes appear in device_info:
+
+- `sw_version`: Comboard firmware version
+- `hw_version`: Comboard hardware version
+- MAC addresses (configuration_url uses IP)
+
+These attributes are only available when REST is enabled and connected.

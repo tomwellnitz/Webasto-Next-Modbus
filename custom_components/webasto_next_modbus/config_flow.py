@@ -16,10 +16,14 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     CONF_NAME,
+    CONF_REST_ENABLED,
+    CONF_REST_PASSWORD,
+    CONF_REST_USERNAME,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
     DEFAULT_PORT,
+    DEFAULT_REST_USERNAME,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_UNIT_ID,
     DEFAULT_VARIANT,
@@ -246,14 +250,50 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
             self._config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
         )
         current_name = self._config_entry.data.get(CONF_NAME, "")
+        current_rest_enabled = self._config_entry.options.get(
+            CONF_REST_ENABLED,
+            self._config_entry.data.get(CONF_REST_ENABLED, False),
+        )
+        current_rest_username = self._config_entry.options.get(
+            CONF_REST_USERNAME,
+            self._config_entry.data.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME),
+        )
 
         if user_input is not None:
             interval = int(user_input[CONF_SCAN_INTERVAL])
             variant = user_input[CONF_VARIANT]
             name = str(user_input.get(CONF_NAME, "")).strip()
+            rest_enabled = user_input.get(CONF_REST_ENABLED, False)
+            rest_username = str(user_input.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME)).strip()
+            rest_password = user_input.get(CONF_REST_PASSWORD, "")
+
             if interval < MIN_SCAN_INTERVAL or interval > MAX_SCAN_INTERVAL:
                 errors["base"] = "invalid_interval"
-            else:
+            elif rest_enabled and not rest_password:
+                # Check if password was previously set (we don't show it)
+                existing_password = self._config_entry.options.get(
+                    CONF_REST_PASSWORD,
+                    self._config_entry.data.get(CONF_REST_PASSWORD, ""),
+                )
+                if not existing_password:
+                    errors["base"] = "rest_password_required"
+                else:
+                    rest_password = existing_password
+
+            if not errors:
+                # Validate REST connection if enabled
+                if rest_enabled and rest_password:
+                    try:
+                        await self._validate_rest_connection(
+                            self._config_entry.data[CONF_HOST],
+                            rest_username,
+                            rest_password,
+                        )
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("REST API validation failed: %s", err)
+                        errors["base"] = "rest_cannot_connect"
+
+            if not errors:
                 updated_data = dict(self._config_entry.data)
                 if name:
                     updated_data[CONF_NAME] = name
@@ -266,13 +306,18 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                         data=updated_data,
                         title=title,
                     )
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        CONF_SCAN_INTERVAL: interval,
-                        CONF_VARIANT: variant,
-                    },
-                )
+
+                options_data: dict[str, Any] = {
+                    CONF_SCAN_INTERVAL: interval,
+                    CONF_VARIANT: variant,
+                    CONF_REST_ENABLED: rest_enabled,
+                }
+                if rest_enabled:
+                    options_data[CONF_REST_USERNAME] = rest_username
+                    if rest_password:
+                        options_data[CONF_REST_PASSWORD] = rest_password
+
+                return self.async_create_entry(title="", data=options_data)
 
         data_schema = vol.Schema(
             {
@@ -289,10 +334,31 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                     str,
                     vol.Length(max=100),
                 ),
+                vol.Optional(CONF_REST_ENABLED, default=current_rest_enabled): bool,
+                vol.Optional(
+                    CONF_REST_USERNAME, default=current_rest_username
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(CONF_REST_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
             }
         )
 
         return self.async_show_form(step_id="init", data_schema=data_schema, errors=errors)
+
+    async def _validate_rest_connection(self, host: str, username: str, password: str) -> None:
+        """Validate REST API connection."""
+        from .rest_client import RestClient, RestClientError
+
+        client = RestClient(host, username, password)
+        try:
+            if not await client.test_connection():
+                msg = "REST API connection test failed"
+                raise RestClientError(msg)
+        finally:
+            await client.disconnect()
 
 
 def _build_unique_id(host: str, unit_id: int) -> str:

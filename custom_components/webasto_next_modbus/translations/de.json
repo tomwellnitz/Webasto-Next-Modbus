@@ -143,6 +143,33 @@
       },
       "session_user_id": {
         "name": "Benutzer ID"
+      },
+      "comboard_firmware": {
+        "name": "Comboard Firmware"
+      },
+      "powerboard_firmware": {
+        "name": "Powerboard Firmware"
+      },
+      "plug_cycles": {
+        "name": "Steckzyklen"
+      },
+      "error_count": {
+        "name": "Fehleranzahl"
+      },
+      "signal_voltage_l1": {
+        "name": "Spannung L1"
+      },
+      "signal_voltage_l2": {
+        "name": "Spannung L2"
+      },
+      "signal_voltage_l3": {
+        "name": "Spannung L3"
+      },
+      "free_charging_tag_id": {
+        "name": "Freies Laden Tag ID"
+      },
+      "active_errors": {
+        "name": "Aktive Fehler"
       }
     },
     "number": {
@@ -154,6 +181,9 @@
       },
       "set_current_a": {
         "name": "Ladestrom Limit"
+      },
+      "led_brightness": {
+        "name": "LED Helligkeit"
       }
     },
     "button": {
@@ -165,6 +195,14 @@
       },
       "stop_session": {
         "name": "Ladung stoppen"
+      },
+      "restart_system": {
+        "name": "Wallbox neustarten"
+      }
+    },
+    "switch": {
+      "free_charging": {
+        "name": "Freies Laden"
       }
     }
   },
@@ -174,12 +212,20 @@
         "title": "Webasto Next Optionen",
         "description": "Erweiterte Einstellungen anpassen.",
         "data": {
-          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "rest_enabled": "REST API aktivieren",
+          "rest_username": "REST API Benutzername",
+          "rest_password": "REST API Passwort"
+        },
+        "data_description": {
+          "rest_enabled": "Optionale REST API für LED-Helligkeit, Firmware-Info und Diagnose aktivieren.",
+          "rest_password": "Passwort für die Wallbox-Weboberfläche (Benutzer 'admin')."
         }
       }
     },
     "error": {
-      "invalid_interval": "Intervall liegt außerhalb des unterstützten Bereichs."
+      "invalid_interval": "Intervall liegt außerhalb des unterstützten Bereichs.",
+      "rest_connection_failed": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen."
     },
     "abort": {
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."

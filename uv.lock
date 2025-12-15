@@ -3403,9 +3403,10 @@ wheels = [
 
 [[package]]
 name = "webasto-next-modbus"
-version = "1.0.0"
+version = "1.1.0b1"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "pymodbus" },
 ]
 
@@ -3431,7 +3432,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pymodbus", specifier = ">=3.11.2,<4" }]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "pymodbus", specifier = ">=3.11.2,<4" },
+]
 
 [package.metadata.requires-dev]
 dev = [

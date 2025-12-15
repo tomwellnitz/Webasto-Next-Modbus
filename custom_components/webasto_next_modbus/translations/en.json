@@ -28,12 +28,20 @@
         "title": "Webasto Next options",
         "description": "Adjust advanced settings.",
         "data": {
-          "scan_interval": "Update interval (seconds)"
+          "scan_interval": "Update interval (seconds)",
+          "rest_enabled": "Enable REST API",
+          "rest_username": "REST API Username",
+          "rest_password": "REST API Password"
+        },
+        "data_description": {
+          "rest_enabled": "Enable optional REST API for LED brightness, firmware info, and diagnostics.",
+          "rest_password": "Password for the wallbox web interface (usually 'admin' user)."
         }
       }
     },
     "error": {
-      "invalid_interval": "Interval is outside the supported range."
+      "invalid_interval": "Interval is outside the supported range.",
+      "rest_connection_failed": "Could not connect to REST API. Check credentials and network."
     },
     "abort": {
       "missing_dependency": "Required package 'voluptuous' is missing in this Home Assistant environment."
@@ -159,6 +167,33 @@
       },
       "session_user_id": {
         "name": "User ID"
+      },
+      "comboard_firmware": {
+        "name": "Comboard Firmware"
+      },
+      "powerboard_firmware": {
+        "name": "Powerboard Firmware"
+      },
+      "plug_cycles": {
+        "name": "Plug Cycles"
+      },
+      "error_count": {
+        "name": "Error Count"
+      },
+      "signal_voltage_l1": {
+        "name": "Voltage L1"
+      },
+      "signal_voltage_l2": {
+        "name": "Voltage L2"
+      },
+      "signal_voltage_l3": {
+        "name": "Voltage L3"
+      },
+      "free_charging_tag_id": {
+        "name": "Free Charging Tag ID"
+      },
+      "active_errors": {
+        "name": "Active Errors"
       }
     },
     "number": {
@@ -170,6 +205,9 @@
       },
       "set_current_a": {
         "name": "Charging Current Limit"
+      },
+      "led_brightness": {
+        "name": "LED Brightness"
       }
     },
     "button": {
@@ -180,7 +218,16 @@
         "name": "Start Charging"
       },
       "stop_session": {
-        "name": "Stop Charging"      }
+        "name": "Stop Charging"
+      },
+      "restart_system": {
+        "name": "Restart Wallbox"
+      }
+    },
+    "switch": {
+      "free_charging": {
+        "name": "Free Charging"
+      }
     }
   }
 }

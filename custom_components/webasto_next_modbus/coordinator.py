@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
@@ -12,9 +12,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_REST_ENABLED,
+    CONF_REST_PASSWORD,
+    CONF_REST_USERNAME,
+    DEFAULT_REST_USERNAME,
     DOMAIN,
     FAILURE_NOTIFICATION_THRESHOLD,
     FAILURE_NOTIFICATION_TITLE,
+    REST_SCAN_INTERVAL,
 )
 from .device_trigger import (
     TRIGGER_CHARGING_STARTED,
@@ -24,6 +29,9 @@ from .device_trigger import (
     async_fire_device_trigger,
 )
 from .hub import ModbusBridge, WebastoModbusError
+
+if TYPE_CHECKING:
+    from .rest_client import RestClient, RestData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +57,13 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_error: str | None = None
         self._connection_online = True
         self._notification_id = f"{DOMAIN}_connection_{entry_id}"
+
+        # REST API client (optional)
+        self._rest_client: RestClient | None = None
+        self._rest_data: RestData | None = None
+        self._rest_last_update: datetime | None = None
+        self._rest_update_interval = timedelta(seconds=REST_SCAN_INTERVAL)
+
         super().__init__(
             hass,
             _LOGGER,
@@ -56,6 +71,52 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config_entry=config_entry,
             update_interval=update_interval,
         )
+
+    async def async_setup_rest_client(self) -> None:
+        """Initialize REST client if configured."""
+        if self.config_entry is None:
+            return
+
+        options = self.config_entry.options
+        if not options.get(CONF_REST_ENABLED, False):
+            _LOGGER.debug("REST API not enabled")
+            return
+
+        username = options.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME)
+        password = options.get(CONF_REST_PASSWORD)
+        if not password:
+            _LOGGER.warning("REST API enabled but no password configured")
+            return
+
+        # Import here to avoid circular imports
+        from .rest_client import RestClient
+
+        host = self._bridge.endpoint.split(":")[0]
+        self._rest_client = RestClient(host, username, password)
+
+        try:
+            await self._rest_client.connect()
+            _LOGGER.info("REST API client connected successfully")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Failed to connect REST API client: %s", err)
+            self._rest_client = None
+
+    async def async_shutdown_rest_client(self) -> None:
+        """Disconnect REST client."""
+        if self._rest_client is not None:
+            await self._rest_client.disconnect()
+            self._rest_client = None
+            self._rest_data = None
+
+    @property
+    def rest_enabled(self) -> bool:
+        """Return True if REST client is active."""
+        return self._rest_client is not None
+
+    @property
+    def rest_data(self) -> RestData | None:
+        """Return cached REST data."""
+        return self._rest_data
 
     async def _async_update_data(self) -> dict[str, Any]:
         previous_data: dict[str, Any] | None = self.data if isinstance(self.data, dict) else None
@@ -91,7 +152,31 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     {"timestamp": self.last_success.isoformat()},
                 )
             self._emit_charging_triggers(previous_data, data)
+
+            # Fetch REST data if client is connected and interval elapsed
+            await self._async_update_rest_data()
+
             return data
+
+    async def _async_update_rest_data(self) -> None:
+        """Fetch REST API data if enabled and interval has passed."""
+        if self._rest_client is None:
+            return
+
+        now = datetime.now(UTC)
+        if (
+            self._rest_last_update is not None
+            and now - self._rest_last_update < self._rest_update_interval
+        ):
+            return
+
+        try:
+            self._rest_data = await self._rest_client.get_data()
+            self._rest_last_update = now
+            _LOGGER.debug("REST data updated: %s", self._rest_data)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Failed to fetch REST data: %s", err)
+            # Keep stale data, don't clear it
 
     def _emit_charging_triggers(
         self,

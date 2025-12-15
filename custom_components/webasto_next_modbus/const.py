@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "1.0.0"
+INTEGRATION_VERSION: Final = "1.1.0-beta.1"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
@@ -21,6 +21,13 @@ CONF_UNIT_ID: Final = "unit_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_VARIANT: Final = "variant"
 CONF_NAME: Final = "name"
+
+# REST API Configuration
+CONF_REST_ENABLED: Final = "rest_enabled"
+CONF_REST_USERNAME: Final = "rest_username"
+CONF_REST_PASSWORD: Final = "rest_password"
+DEFAULT_REST_USERNAME: Final = "admin"
+REST_SCAN_INTERVAL: Final = 60  # REST API polling interval in seconds
 
 VARIANT_11_KW: Final = "11kw"
 VARIANT_22_KW: Final = "22kw"
@@ -43,6 +50,18 @@ KEEPALIVE_TRIGGER_VALUE: Final = 1
 SESSION_COMMAND_START_VALUE: Final = 1
 SESSION_COMMAND_STOP_VALUE: Final = 2
 SIGNAL_REGISTER_WRITTEN: Final = "webasto_next_modbus_register_written"
+
+# Service names (Modbus)
+SERVICE_SET_CURRENT: Final = "set_current"
+SERVICE_SET_FAILSAFE: Final = "set_failsafe"
+SERVICE_SEND_KEEPALIVE: Final = "send_keepalive"
+SERVICE_START_SESSION: Final = "start_session"
+SERVICE_STOP_SESSION: Final = "stop_session"
+
+# Service names (REST API)
+SERVICE_SET_LED_BRIGHTNESS: Final = "set_led_brightness"
+SERVICE_SET_FREE_CHARGING: Final = "set_free_charging"
+SERVICE_RESTART_WALLBOX: Final = "restart_wallbox"
 
 REGISTER_TYPE = Literal["input", "holding"]
 REGISTER_DATA_TYPE = Literal["uint16", "uint32", "string"]
@@ -609,13 +628,6 @@ def get_register(key: str) -> RegisterDefinition:
         if register.key == key:
             return register
     raise KeyError(key)
-
-
-SERVICE_SET_CURRENT: Final = "set_current"
-SERVICE_SET_FAILSAFE: Final = "set_failsafe"
-SERVICE_SEND_KEEPALIVE: Final = "send_keepalive"
-SERVICE_START_SESSION: Final = "start_session"
-SERVICE_STOP_SESSION: Final = "stop_session"
 
 
 def build_device_slug(host: str, unit_id: int) -> str:

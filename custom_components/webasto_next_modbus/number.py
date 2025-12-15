@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -14,7 +14,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import RuntimeData
 from .const import CONF_UNIT_ID, DOMAIN, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
-from .entity import WebastoRegisterEntity
+from .coordinator import WebastoDataCoordinator
+from .entity import WebastoRegisterEntity, WebastoRestEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def async_setup_entry(
     unit_id = entry.data[CONF_UNIT_ID]
 
     max_current = runtime.max_current
-    entities = [
+    entities: list[NumberEntity] = [
         WebastoNumber(
             runtime.coordinator,
             runtime.bridge,
@@ -44,6 +45,17 @@ async def async_setup_entry(
         )
         for register in NUMBER_REGISTERS
     ]
+
+    # Add LED brightness if REST API is enabled
+    if runtime.coordinator.rest_enabled:
+        entities.append(
+            WebastoLedBrightness(
+                runtime.coordinator,
+                host,
+                unit_id,
+                runtime.device_name,
+            )
+        )
 
     async_add_entities(entities)
 
@@ -186,3 +198,56 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         self._attr_native_value = int_value
         if self.hass is not None:
             self.async_write_ha_state()
+
+
+class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[misc]
+    """Number entity for LED brightness via REST API."""
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:led-on"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: WebastoDataCoordinator,
+        host: str,
+        unit_id: int,
+        device_name: str,
+    ) -> None:
+        super().__init__(
+            coordinator, host, unit_id, "led_brightness", device_name, coordinator._rest_client
+        )
+        self._pending_value: int | None = None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current LED brightness."""
+        if self._pending_value is not None:
+            return float(self._pending_value)
+        rest_data = self.coordinator.rest_data
+        if rest_data is None:
+            return None
+        return float(rest_data.led_brightness) if rest_data.led_brightness is not None else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set LED brightness via REST API."""
+        if self._rest_client is None:
+            raise HomeAssistantError("REST API not connected")
+
+        int_value = int(round(value))
+        self._pending_value = int_value
+
+        try:
+            await self._rest_client.set_led_brightness(int_value)
+        except Exception as err:
+            self._pending_value = None
+            raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
+
+        # Refresh REST data to get updated value
+        await self.coordinator.async_request_refresh()
+        self._pending_value = None

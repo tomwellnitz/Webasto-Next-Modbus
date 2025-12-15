@@ -1,0 +1,800 @@
+{
+  "base_url": "https://192.168.178.109",
+  "total_probed": 68,
+  "interesting": [
+    {
+      "url": "https://192.168.178.109/",
+      "status_code": 200,
+      "content_type": "text/html",
+      "content_length": 565,
+      "html_title": "Wallbox",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/static/translations/available-languages.json",
+      "status_code": 200,
+      "content_type": "application/json",
+      "content_length": 124,
+      "json": [
+        {
+          "localeID": "en",
+          "languageName": "English"
+        },
+        {
+          "localeID": "de",
+          "languageName": "German"
+        }
+      ]
+    }
+  ],
+  "all_results": [
+    {
+      "url": "https://192.168.178.109/",
+      "status_code": 200,
+      "content_type": "text/html",
+      "content_length": 565,
+      "html_title": "Wallbox",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/api",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/auth",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/backend",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/charging",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/charging/history",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/charging/session",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/charging/status",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/config",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/device",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/device/info",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/diagnostics",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/energy",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/evse",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/evse/config",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/evse/status",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/factory-reset",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/firmware",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/firmware/version",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/hems",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/history",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/info",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/led",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/led/brightness",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/logs",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/meter",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/meter/values",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/modbus",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/modbus/config",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/network",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/network/lan",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/network/status",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/network/wifi",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/ntp",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/ocpp",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/power",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/reboot",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/reset",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/rfid",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/schedule",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/schedules",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/settings",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/statistics",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/stats",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/status",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/system",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/time",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/update",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/user",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/users",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/version",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/wallbox",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/wallbox/info",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/api/wallbox/status",
+      "status_code": 404,
+      "content_type": "application/problem+json",
+      "content_length": 205,
+      "json": {
+        "detail": "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+        "status": 404,
+        "title": "Not Found",
+        "type": "about:blank"
+      }
+    },
+    {
+      "url": "https://192.168.178.109/cgi-bin/api",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/cgi-bin/config",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/cgi-bin/status",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/config.json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/data",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/data.json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/info.json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/jsonrpc",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/rpc",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/static/translations/available-languages.json",
+      "status_code": 200,
+      "content_type": "application/json",
+      "content_length": 124,
+      "json": [
+        {
+          "localeID": "en",
+          "languageName": "English"
+        },
+        {
+          "localeID": "de",
+          "languageName": "German"
+        }
+      ]
+    },
+    {
+      "url": "https://192.168.178.109/status.json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    },
+    {
+      "url": "https://192.168.178.109/system.json",
+      "status_code": 404,
+      "content_type": "text/html",
+      "content_length": 153,
+      "html_title": "404 Not Found",
+      "is_html": true
+    }
+  ]
+}

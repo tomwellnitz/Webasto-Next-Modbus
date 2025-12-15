@@ -17,6 +17,7 @@
 - 🔌 **Guided Onboarding**: Auto-discovery (Zeroconf), live connection validation, and duplicate protection.
 - ⚡ **Rich Entities**: Async coordinator for stable refreshes and immediate state updates.
 - 🛠️ **Service Helpers**: Session start/stop, keep-alive frames, dynamic current, and fail-safe parameters.
+- 🌐 **REST API Integration**: Optional connection to the wallbox REST API for LED control, diagnostics, and more.
 - 🤖 **Automations**: Device triggers and powerful blueprints included.
 - 🛡️ **Reliable**: Comprehensive tests, virtual wallbox simulator, and robust error handling.
 
@@ -68,6 +69,18 @@
    - **Unit ID**: Default `255`.
    - **Variant**: Select your hardware (11kW or 22kW).
 
+#### Optional: REST API Configuration
+
+The REST API provides additional features not available via Modbus (LED control, firmware info, diagnostics).
+
+1. Go to the integration entry → **⋮** → **Configure**.
+1. Enable **REST API Features**.
+1. Enter your wallbox web interface credentials:
+   - **Username**: Default `admin`.
+   - **Password**: Your wallbox password.
+
+> **Note**: REST API credentials are stored securely in Home Assistant's config entries.
+
 ## 📊 Usage
 
 ### Entities
@@ -77,6 +90,17 @@
 | **Sensors** | Charge point state, charging state, EVSE state, cable state, fault code, current/power per phase, total energy, session energy, session times, EV limits, smart vehicle detection. |
 | **Numbers** | Dynamic charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
 | **Buttons** | `Start Charging`, `Stop Charging`, `Send Keepalive`. |
+
+#### REST API Entities (Optional)
+
+When REST API is enabled, additional entities become available:
+
+| Category | Description |
+| :--- | :--- |
+| **Sensors** | Firmware versions (Comboard/Powerboard SW & HW), plug cycles, error counter, signal voltages (L1/L2/L3), active errors, free charging tag ID. |
+| **Numbers** | LED brightness (0–100%). |
+| **Switches** | Free charging toggle. |
+| **Buttons** | Restart wallbox. |
 
 ### Services
 
@@ -89,6 +113,14 @@ Available under the `webasto_next_modbus` domain:
 | `start_session` | Start charging (FastCharge). |
 | `stop_session` | Stop charging (FullCharge). |
 | `send_keepalive` | Manually trigger keep-alive frame. |
+
+#### REST API Services (Optional)
+
+| Service | Description |
+| :--- | :--- |
+| `set_led_brightness` | Set LED brightness (0–100%). |
+| `set_free_charging` | Enable or disable free charging mode. |
+| `restart_wallbox` | Trigger a system restart. |
 
 > **Note**: The integration automatically handles the "Life Bit" keepalive in the background to prevent failsafe mode.
 

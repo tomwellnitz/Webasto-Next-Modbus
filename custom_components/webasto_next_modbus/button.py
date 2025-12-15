@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import RuntimeData
@@ -17,8 +18,9 @@ from .const import (
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
 )
+from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
-from .entity import WebastoRegisterEntity
+from .entity import WebastoRegisterEntity, WebastoRestEntity
 
 
 async def async_setup_entry(
@@ -33,7 +35,7 @@ async def async_setup_entry(
     host = entry.data[CONF_HOST]
     unit_id = entry.data[CONF_UNIT_ID]
 
-    entities = [
+    entities: list[ButtonEntity] = [
         WebastoButton(
             runtime.coordinator,
             runtime.bridge,
@@ -44,6 +46,17 @@ async def async_setup_entry(
         )
         for register in BUTTON_REGISTERS
     ]
+
+    # Add restart button if REST API is enabled
+    if runtime.coordinator.rest_enabled:
+        entities.append(
+            WebastoRestartButton(
+                runtime.coordinator,
+                host,
+                unit_id,
+                runtime.device_name,
+            )
+        )
 
     async_add_entities(entities)
 
@@ -73,3 +86,33 @@ class WebastoButton(WebastoRegisterEntity, ButtonEntity):  # type: ignore[misc]
                 {"source": "button"},
             )
         await self.coordinator.async_request_refresh()
+
+
+class WebastoRestartButton(WebastoRestEntity, ButtonEntity):  # type: ignore[misc]
+    """Button to restart the wallbox via REST API."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = ButtonDeviceClass.RESTART
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:restart"
+
+    def __init__(
+        self,
+        coordinator: WebastoDataCoordinator,
+        host: str,
+        unit_id: int,
+        device_name: str,
+    ) -> None:
+        super().__init__(
+            coordinator, host, unit_id, "restart_system", device_name, coordinator._rest_client
+        )
+
+    async def async_press(self) -> None:
+        """Restart the wallbox via REST API."""
+        if self._rest_client is None:
+            raise HomeAssistantError("REST API not connected")
+
+        try:
+            await self._rest_client.restart_system()
+        except Exception as err:
+            raise HomeAssistantError(f"Failed to restart wallbox: {err}") from err

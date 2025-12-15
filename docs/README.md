@@ -11,6 +11,8 @@ Welcome! This folder collects the human-facing documentation for the Webasto Nex
 
 - **Architecture** – [`architecture.md`](architecture.md) explains the register map, data flow, and design goals.
 - **Development** – [`development.md`](development.md) documents local setup, tooling commands, the virtual wallbox simulator, and the release checklist.
+- **REST API** – [`rest-api.md`](rest-api.md) provides the complete REST API specification for the wallbox web interface.
+- **REST API Integration** – [`rest-api-integration-plan.md`](rest-api-integration-plan.md) describes the implemented REST API features and roadmap.
 
 ## Support & community
 

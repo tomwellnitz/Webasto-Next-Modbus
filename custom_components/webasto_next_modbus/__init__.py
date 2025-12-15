@@ -31,9 +31,12 @@ from .const import (
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
     RETRY_BACKOFF_SECONDS,
+    SERVICE_RESTART_WALLBOX,
     SERVICE_SEND_KEEPALIVE,
     SERVICE_SET_CURRENT,
     SERVICE_SET_FAILSAFE,
+    SERVICE_SET_FREE_CHARGING,
+    SERVICE_SET_LED_BRIGHTNESS,
     SERVICE_START_SESSION,
     SERVICE_STOP_SESSION,
     SESSION_COMMAND_START_VALUE,
@@ -49,7 +52,7 @@ from .hub import ModbusBridge, WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.SWITCH]
 
 
 @dataclass(slots=True)
@@ -136,6 +139,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
+    # Initialize REST client if configured
+    await coordinator.async_setup_rest_client()
+
     # Start the Life Bit loop after coordinator is ready
     await bridge.start_life_bit_loop()
 
@@ -167,6 +173,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     runtime: RuntimeData | None = data.pop(entry.entry_id, None)
     if runtime:
         _LOGGER.debug("Stopping life bit loop and closing connection...")
+        await runtime.coordinator.async_shutdown_rest_client()
         await runtime.bridge.stop_life_bit_loop()
         await runtime.bridge.async_close()
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
@@ -237,6 +244,38 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
     )
 
+    # REST API services
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_LED_BRIGHTNESS,
+        _async_service_set_led_brightness,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): cv.string,
+                vol.Required("brightness"): vol.All(int, vol.Range(min=0, max=100)),
+            }
+        ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_FREE_CHARGING,
+        _async_service_set_free_charging,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): cv.string,
+                vol.Required("enabled"): bool,
+            }
+        ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESTART_WALLBOX,
+        _async_service_restart_wallbox,
+        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
+    )
+
     hass.data[DOMAIN]["_services_registered"] = True
 
 
@@ -251,6 +290,9 @@ def _unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_SEND_KEEPALIVE)
     hass.services.async_remove(DOMAIN, SERVICE_START_SESSION)
     hass.services.async_remove(DOMAIN, SERVICE_STOP_SESSION)
+    hass.services.async_remove(DOMAIN, SERVICE_SET_LED_BRIGHTNESS)
+    hass.services.async_remove(DOMAIN, SERVICE_SET_FREE_CHARGING)
+    hass.services.async_remove(DOMAIN, SERVICE_RESTART_WALLBOX)
 
 
 def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
@@ -382,6 +424,64 @@ async def _async_service_stop_session(call: ServiceCall) -> None:
     except WebastoModbusError as err:
         raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
     await runtime.coordinator.async_request_refresh()
+
+
+async def _async_service_set_led_brightness(call: ServiceCall) -> None:
+    """Handle service to set LED brightness via REST API."""
+    from .rest_client import RestClientError
+
+    runtime = _resolve_runtime(call.hass, call)
+    if not runtime.coordinator.rest_enabled:
+        raise HomeAssistantError("REST API is not enabled for this wallbox")
+
+    brightness = int(call.data["brightness"])
+    rest_client = runtime.coordinator._rest_client
+    if rest_client is None:
+        raise HomeAssistantError("REST client not available")
+
+    try:
+        await rest_client.set_led_brightness(brightness)
+    except RestClientError as err:
+        raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
+    await runtime.coordinator.async_request_refresh()
+
+
+async def _async_service_set_free_charging(call: ServiceCall) -> None:
+    """Handle service to enable/disable free charging via REST API."""
+    from .rest_client import RestClientError
+
+    runtime = _resolve_runtime(call.hass, call)
+    if not runtime.coordinator.rest_enabled:
+        raise HomeAssistantError("REST API is not enabled for this wallbox")
+
+    enabled = bool(call.data["enabled"])
+    rest_client = runtime.coordinator._rest_client
+    if rest_client is None:
+        raise HomeAssistantError("REST client not available")
+
+    try:
+        await rest_client.set_free_charging(enabled)
+    except RestClientError as err:
+        raise HomeAssistantError(f"Failed to set free charging: {err}") from err
+    await runtime.coordinator.async_request_refresh()
+
+
+async def _async_service_restart_wallbox(call: ServiceCall) -> None:
+    """Handle service to restart the wallbox via REST API."""
+    from .rest_client import RestClientError
+
+    runtime = _resolve_runtime(call.hass, call)
+    if not runtime.coordinator.rest_enabled:
+        raise HomeAssistantError("REST API is not enabled for this wallbox")
+
+    rest_client = runtime.coordinator._rest_client
+    if rest_client is None:
+        raise HomeAssistantError("REST client not available")
+
+    try:
+        await rest_client.restart_system()
+    except RestClientError as err:
+        raise HomeAssistantError(f"Failed to restart wallbox: {err}") from err
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
