@@ -11,26 +11,26 @@ Thanks for taking the time to improve Webasto Next! The notes below summarise ho
    cd Webasto-Next-Modbus
    ```
 
-1. **Install dependencies** using `uv`:
+2. **Install dependencies** using `uv`:
 
    ```bash
    uv sync
    source .venv/bin/activate
    ```
 
-1. **Create a feature branch**:
+3. **Create a feature branch**:
 
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-1. **Make your changes** and verify quality:
+4. **Make your changes** and verify quality:
 
    ```bash
    ./scripts/check.sh
    ```
 
-1. **Commit and push**:
+5. **Commit and push**:
 
    ```bash
    git add .
@@ -38,7 +38,7 @@ Thanks for taking the time to improve Webasto Next! The notes below summarise ho
    git push origin feature/your-feature-name
    ```
 
-1. **Open a Pull Request** on GitHub and wait for CI checks to pass.
+6. **Open a Pull Request** on GitHub and wait for CI checks to pass.
 
 More detailed instructions live in [`docs/development.md`](docs/development.md).
 
