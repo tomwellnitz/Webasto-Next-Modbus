@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2] - 2025-12-15
+
+### Changed
+
+- **Zeroconf/Auto-Discovery**: Removed non-functional mDNS configuration - Webasto Next wallboxes do not advertise discoverable services. Manual configuration via IP address is required.
+
+______________________________________________________________________
+
 ## [1.1.1] - 2025-12-15
 
 ### Fixed

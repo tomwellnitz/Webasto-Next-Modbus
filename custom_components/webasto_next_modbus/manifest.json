@@ -19,11 +19,5 @@
     "pymodbus>=3.11.2,<4",
     "aiohttp>=3.9.0"
   ],
-  "version": "1.1.1",
-  "zeroconf": [
-    {
-      "type": "_http._tcp.local.",
-      "name": "next-ws"
-    }
-  ]
+  "version": "1.1.2"
 }
