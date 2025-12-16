@@ -3403,7 +3403,7 @@ wheels = [
 
 [[package]]
 name = "webasto-next-modbus"
-version = "1.1.2"
+version = "1.1.3"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -3447,7 +3447,7 @@ dev = [
     { name = "homeassistant", specifier = ">=2025.1.0b7" },
     { name = "mdformat", specifier = ">=0.7.19" },
     { name = "mypy", specifier = ">=1.8" },
-    { name = "pycares", specifier = "<5.0.0" },
+    { name = "pycares", specifier = "<6.0.0" },
     { name = "pytest", specifier = ">=9.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.24,<2" },
     { name = "pytest-cov", specifier = "==7.0.0" },

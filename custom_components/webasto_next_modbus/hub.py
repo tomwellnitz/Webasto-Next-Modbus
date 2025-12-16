@@ -261,18 +261,63 @@ class ModbusBridge:
     async def async_connect(self) -> None:
         """Initialise the Modbus client connection."""
 
-        if self._client and getattr(self._client, "connected", False):
+        # Check if already connected
+        if self._client is not None and getattr(self._client, "connected", False):
             return
 
-        client = self._client_cls(self._host, port=self._port, timeout=self._timeout)
+        # Close any existing client before creating a new one
+        # This prevents orphaned connections from blocking the port
+        if self._client is not None:
+            _LOGGER.debug("Closing stale client before reconnect to %s", self._host)
+            try:
+                old_client = self._client
+                self._client = None
+                close_result = old_client.close()
+                if inspect.isawaitable(close_result):
+                    await asyncio.wait_for(close_result, timeout=2.0)
+            except Exception as err:
+                _LOGGER.debug("Error closing stale client: %s", err)
+
+        # Create new client - try with reconnect parameters first, fall back if not supported
         try:
-            await client.connect()
+            client = self._client_cls(
+                self._host,
+                port=self._port,
+                timeout=self._timeout,
+                reconnect_delay=1.0,
+                reconnect_delay_max=30.0,
+            )
+        except TypeError:
+            # Fallback for older pymodbus versions or mock clients
+            client = self._client_cls(
+                self._host,
+                port=self._port,
+                timeout=self._timeout,
+            )
+        try:
+            await asyncio.wait_for(client.connect(), timeout=self._timeout)
+        except TimeoutError as err:
+            # Ensure client is closed on timeout
+            try:
+                client.close()
+            except Exception:
+                pass
+            raise WebastoModbusError(f"Connection to {self._host}:{self._port} timed out") from err
         except (OSError, self._modbus_exception) as err:
+            # Ensure client is closed on error
+            try:
+                client.close()
+            except Exception:
+                pass
             raise WebastoModbusError(
                 f"Failed to connect to {self._host}:{self._port}: {err}"
             ) from err
 
         if not client.connected:
+            try:
+                client.close()
+            except Exception:
+                pass
             raise WebastoModbusError(
                 f"Unable to connect to {self._host}:{self._port} (device_id {self._unit_id})"
             )
@@ -387,7 +432,9 @@ class ModbusBridge:
                         register.address,
                         count=register.count,
                     )
-            except modbus_exception as err:  # type: ignore[misc]
+            except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+                # Mark client as disconnected to force reconnect on next attempt
+                self._client = None
                 raise WebastoModbusError(str(err)) from err
 
         if not hasattr(response, "isError") or response.isError():  # type: ignore[attr-defined]
@@ -419,7 +466,9 @@ class ModbusBridge:
                             request.start_address,
                             count=request.count,
                         )
-                except modbus_exception as err:  # type: ignore[misc]
+                except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+                    # Mark client as disconnected to force reconnect on next attempt
+                    self._client = None
                     raise WebastoModbusError(str(err)) from err
 
                 if response.isError():  # type: ignore[attr-defined]
@@ -476,7 +525,9 @@ class ModbusBridge:
                     register.address,
                     value,
                 )
-            except modbus_exception as err:  # type: ignore[misc]
+            except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+                # Mark client as disconnected to force reconnect on next attempt
+                self._client = None
                 raise WebastoModbusError(str(err)) from err
 
         if response.isError():  # type: ignore[attr-defined]

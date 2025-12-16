@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.3] - 2025-12-16
+
+### Fixed
+
+- **Major Reconnection Fix**: Completely reworked Modbus connection handling to fix persistent reconnection issues after network interruptions.
+  - Old client is now properly closed before creating a new connection, preventing orphaned TCP connections.
+  - Added explicit timeout handling for connection attempts.
+  - Connection errors (`OSError`, `ConnectionError`) now properly invalidate the client, forcing a clean reconnect.
+  - Added pymodbus `reconnect_delay` parameters for automatic reconnection support.
+  - Increased retry attempts from 3 to 5 with longer backoff (2s instead of 1s).
+
+______________________________________________________________________
+
 ## [1.1.2] - 2025-12-15
 
 ### Changed

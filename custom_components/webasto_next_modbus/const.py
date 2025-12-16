@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
-INTEGRATION_VERSION: Final = "1.1.2"
+INTEGRATION_VERSION: Final = "1.1.3"
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
 MIN_SCAN_INTERVAL: Final = 2
 MAX_SCAN_INTERVAL: Final = 60
-MAX_RETRY_ATTEMPTS: Final = 3
-RETRY_BACKOFF_SECONDS: Final = 1.0
+MAX_RETRY_ATTEMPTS: Final = 5
+RETRY_BACKOFF_SECONDS: Final = 2.0
 FAILURE_NOTIFICATION_THRESHOLD: Final = 3
 FAILURE_NOTIFICATION_TITLE: Final = "Webasto Next Modbus connection issue"
 
