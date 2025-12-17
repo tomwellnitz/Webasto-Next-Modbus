@@ -38,7 +38,7 @@ jobs:
 
       - name: Zip custom component
         run: |
-          zip -r webasto_next_modbus.zip custom_components/webasto_next_modbus blueprints
+          zip -r webasto_next_modbus.zip custom_components/webasto_next_modbus blueprints -x "*.DS_Store" -x "*__pycache__*"
 
       - name: Extract release notes
         id: extract_release_notes
