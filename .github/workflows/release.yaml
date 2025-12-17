@@ -36,6 +36,11 @@ jobs:
       - name: Build distribution
         run: uv build
 
+      - name: Zip custom component
+        run: |
+          cd custom_components
+          zip -r ../webasto_next_modbus.zip webasto_next_modbus
+
       - name: Extract release notes
         id: extract_release_notes
         run: |
@@ -56,5 +61,5 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*
+          files: webasto_next_modbus.zip
           body_path: RELEASE_NOTES.md
