@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EntityCategory, UnitOfElectricPotential
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
 
 from . import RuntimeData
 from .const import CONF_UNIT_ID, DOMAIN, SENSOR_REGISTERS
@@ -23,12 +24,13 @@ class RestSensorDefinition:
     """Definition for a REST-based sensor."""
 
     key: str
-    value_fn: Callable[[RestData], str | int | float | list[str] | None]
+    value_fn: Callable[[RestData], StateType | list[str] | None]
     icon: str | None = None
     device_class: str | None = None
     state_class: str | None = None
     unit: str | None = None
     entity_category: str | None = "diagnostic"
+    translation_key: str | None = None
 
 
 REST_SENSORS: list[RestSensorDefinition] = [
@@ -80,9 +82,10 @@ REST_SENSORS: list[RestSensorDefinition] = [
     ),
     RestSensorDefinition(
         key="active_errors",
-        value_fn=lambda d: ", ".join(d.active_errors) if d.active_errors else "None",
+        value_fn=lambda d: ", ".join(d.active_errors) if d.active_errors else "ok",
         icon="mdi:alert",
         entity_category=None,
+        translation_key="active_errors",
     ),
 ]
 
@@ -233,15 +236,28 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):  # type: ignore[misc]
                 self._attr_entity_category = EntityCategory(definition.entity_category)
             except ValueError:
                 pass
+        if definition.translation_key:
+            self._attr_translation_key = definition.translation_key
 
-    @property
-    def native_value(self) -> str | int | float | None:
-        """Return the sensor value from REST data."""
+        self._update_value()
+
+    def _handle_coordinator_update(self) -> None:
+        """Update state from coordinator data."""
+        self._update_value()
+        super()._handle_coordinator_update()
+
+    def _update_value(self) -> None:
+        """Update the native value from REST data."""
         rest_data = self.coordinator.rest_data
         if rest_data is None:
-            return None
+            self._attr_native_value = None
+            return
+
         value = self._definition.value_fn(rest_data)
-        # Handle list values (like active_errors)
+
+        # Handle list values (e.g. active_errors)
         if isinstance(value, list):
-            return ", ".join(str(v) for v in value) if value else "None"
-        return value
+            self._attr_native_value = ", ".join(str(v) for v in value) if value else "ok"
+            return
+
+        self._attr_native_value = value

@@ -196,7 +196,10 @@
         "name": "Voltage L3"
       },
       "active_errors": {
-        "name": "Active Errors"
+        "name": "Active Errors",
+        "state": {
+          "ok": "No Error"
+        }
       }
     },
     "text": {

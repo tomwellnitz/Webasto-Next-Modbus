@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.4] - 2025-12-19
+
+### Fixed
+
+- **Active Errors**: Fixed "Aktive Fehler" showing "None" in German translation. It now correctly shows "Keine Fehler" (or "No Error" in English) when no errors are present.
+
 ## [1.1.3] - 2025-12-16
 
 ### Fixed

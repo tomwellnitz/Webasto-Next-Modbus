@@ -168,7 +168,10 @@
         "name": "Spannung L3"
       },
       "active_errors": {
-        "name": "Aktive Fehler"
+        "name": "Aktive Fehler",
+        "state": {
+          "ok": "Keine Fehler"
+        }
       }
     },
     "text": {
