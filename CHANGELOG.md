@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.5] - 2025-12-19
+
+### Fixed
+
+- **HACS Validation**: Fixed a JSON syntax error (trailing comma) in `manifest.json` that caused HACS validation to fail.
+
 ## [1.1.4] - 2025-12-19
 
 ### Fixed

@@ -80,6 +80,9 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._attr_has_entity_name = True
         self._attr_translation_key = register.translation_key or register.key
         self._attr_unique_id = f"{self._unique_prefix}-{register.key}"
+        self._attr_device_info = build_device_info(
+            self._unique_prefix, self._device_name, self.coordinator
+        )
 
         if register.icon:
             self._attr_icon = register.icon
@@ -89,10 +92,12 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
             except ValueError:
                 pass
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info with optional REST data."""
-        return build_device_info(self._unique_prefix, self._device_name, self.coordinator)
+    def _handle_coordinator_update(self) -> None:
+        """Update cached device info and write updated coordinator data."""
+        self._attr_device_info = build_device_info(
+            self._unique_prefix, self._device_name, self.coordinator
+        )
+        super()._handle_coordinator_update()
 
     @property
     def register(self) -> RegisterDefinition:
@@ -143,11 +148,16 @@ class WebastoRestEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._attr_has_entity_name = True
         self._attr_translation_key = entity_key
         self._attr_unique_id = f"{self._unique_prefix}-rest-{entity_key}"
+        self._attr_device_info = build_device_info(
+            self._unique_prefix, self._device_name, self.coordinator
+        )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info with optional REST data."""
-        return build_device_info(self._unique_prefix, self._device_name, self.coordinator)
+    def _handle_coordinator_update(self) -> None:
+        """Update cached device info and write updated coordinator data."""
+        self._attr_device_info = build_device_info(
+            self._unique_prefix, self._device_name, self.coordinator
+        )
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:

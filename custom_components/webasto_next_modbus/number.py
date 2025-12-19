@@ -224,15 +224,19 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
         )
         self._pending_value: int | None = None
 
-    @property
-    def native_value(self) -> float | None:
-        """Return current LED brightness."""
+    def _handle_coordinator_update(self) -> None:
+        """Update the native value from coordinator REST data."""
+
         if self._pending_value is not None:
-            return float(self._pending_value)
-        rest_data = self.coordinator.rest_data
-        if rest_data is None:
-            return None
-        return float(rest_data.led_brightness) if rest_data.led_brightness is not None else None
+            self._attr_native_value = float(self._pending_value)
+        else:
+            rest_data = self.coordinator.rest_data
+            if rest_data is None or rest_data.led_brightness is None:
+                self._attr_native_value = None
+            else:
+                self._attr_native_value = float(rest_data.led_brightness)
+
+        super()._handle_coordinator_update()
 
     async def async_set_native_value(self, value: float) -> None:
         """Set LED brightness via REST API."""
@@ -241,6 +245,9 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
 
         int_value = int(round(value))
         self._pending_value = int_value
+        self._attr_native_value = float(int_value)
+        if self.hass is not None:
+            self.async_write_ha_state()
 
         try:
             await self._rest_client.set_led_brightness(int_value)
@@ -251,3 +258,5 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
         # Refresh REST data to get updated value
         await self.coordinator.async_request_refresh()
         self._pending_value = None
+        if self.hass is not None:
+            self.async_write_ha_state()

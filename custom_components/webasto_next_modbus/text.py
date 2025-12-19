@@ -61,7 +61,7 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: igno
         self._attr_unique_id = f"{host}_{unit_id}_free_charging_tag_id"
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> str | None:  # type: ignore[override]
         """Return the current value."""
         if not self.coordinator.rest_data:
             return None
