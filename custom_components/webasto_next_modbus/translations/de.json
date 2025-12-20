@@ -174,11 +174,6 @@
         }
       }
     },
-    "text": {
-      "free_charging_tag_id": {
-        "name": "Freies Laden Tag ID"
-      }
-    },
     "number": {
       "failsafe_current_a": {
         "name": "Failsafe Strom"

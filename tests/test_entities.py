@@ -36,6 +36,7 @@ def coordinator_fixture():
     class DummyCoordinator:
         def __init__(self) -> None:
             self.data: dict[str, object] = {}
+            self.rest_data = None
             self.async_request_refresh = AsyncMock()
             self.hass = MagicMock()
 

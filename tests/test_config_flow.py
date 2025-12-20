@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (  # type: ignore[import-untyped]
+    MockConfigEntry,
+)
 
 from custom_components.webasto_next_modbus.config_flow import (
     CannotConnect,
