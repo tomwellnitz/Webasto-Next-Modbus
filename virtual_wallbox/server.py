@@ -97,12 +97,10 @@ class VirtualWallboxDeviceContext(ModbusDeviceContext):
         input_block: ModbusSparseDataBlock,
         holding_block: ModbusSparseDataBlock,
     ) -> None:
-        super().__init__(
-            di=ModbusSparseDataBlock({}),
-            co=ModbusSparseDataBlock({}),
-            ir=input_block,
-            hr=holding_block,
-        )
+        # Let pymodbus build default discrete-input / coil blocks. Passing an
+        # empty ModbusSparseDataBlock({}) trips pymodbus 3.13's SimDevice
+        # validator, which expects at least one entry per block.
+        super().__init__(ir=input_block, hr=holding_block)
 
     def getValues(self, func_code, address, count=1):  # type: ignore[override]
         block = self.store[self.decode(func_code)]
