@@ -30,12 +30,7 @@ class VirtualWallboxDataBlock(ModbusSparseDataBlock):
         *,
         zero_mode: bool,
     ) -> None:
-        # pymodbus 3.13's SimDevice validator rejects empty sparse blocks
-        # ("IndexError: list index out of range" on `x_block[0].address`).
-        # We never use the parent's internal storage — get/setValues are
-        # routed to ``self._state`` — but we still need at least one
-        # placeholder entry so the validator can compute an address range.
-        super().__init__({0: 0})
+        super().__init__({})
         self._state = state
         self._register_type = register_type
         self._zero_mode = zero_mode
@@ -102,10 +97,12 @@ class VirtualWallboxDeviceContext(ModbusDeviceContext):
         input_block: ModbusSparseDataBlock,
         holding_block: ModbusSparseDataBlock,
     ) -> None:
-        # Let pymodbus build default discrete-input / coil blocks. Passing an
-        # empty ModbusSparseDataBlock({}) trips pymodbus 3.13's SimDevice
-        # validator, which expects at least one entry per block.
-        super().__init__(ir=input_block, hr=holding_block)
+        super().__init__(
+            di=ModbusSparseDataBlock({}),
+            co=ModbusSparseDataBlock({}),
+            ir=input_block,
+            hr=holding_block,
+        )
 
     def getValues(self, func_code, address, count=1):  # type: ignore[override]
         block = self.store[self.decode(func_code)]
