@@ -37,7 +37,7 @@ jobs:
 
       - name: Check spelling with codespell
         run: |
-          uv run codespell --quiet-level=2
+          uv run codespell --toml pyproject.toml --quiet-level=2
 
       - name: Lint YAML with yamllint
         run: |
