@@ -9,9 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -39,31 +36,8 @@ jobs:
           uv run ruff format --check custom_components/webasto_next_modbus tests
 
       - name: Check spelling with codespell
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set +e
-          output=$(uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf" --quiet-level=2 2>&1)
-          exit_code=$?
-          echo "$output"
-          if [ $exit_code -ne 0 ]; then
-            {
-              echo "## Codespell failure (exit $exit_code) — debug instrumentation"
-              echo
-              echo '```'
-              echo "$output"
-              echo '```'
-            } | tee /tmp/codespell-comment.md
-            if [ -n "$PR_NUMBER" ]; then
-              echo "Posting PR comment to #$PR_NUMBER"
-              gh pr comment "$PR_NUMBER" --body-file /tmp/codespell-comment.md \
-                || echo "::warning::gh pr comment failed"
-            else
-              echo "::warning::PR_NUMBER empty, not posting comment"
-            fi
-          fi
-          exit $exit_code
+          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf,uv.lock" --quiet-level=2
 
       - name: Lint YAML with yamllint
         run: |
