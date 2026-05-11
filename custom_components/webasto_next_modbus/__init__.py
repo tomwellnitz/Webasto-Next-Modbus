@@ -53,6 +53,8 @@ from .hub import ModbusBridge, WebastoModbusError
 _LOGGER = logging.getLogger(__name__)
 
 _INTEGRATION_PATH = Path(__file__).resolve().parent
+_INTEGRATION_PATH_LOGGED = False
+_SERVICES_REGISTERED = False
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -75,13 +77,16 @@ class RuntimeData:
     device_name: str
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+type WebastoConfigEntry = ConfigEntry[RuntimeData]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> bool:
     """Set up Webasto Next Modbus from a config entry."""
 
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if not domain_data.get("_integration_path_logged"):
+    global _INTEGRATION_PATH_LOGGED
+    if not _INTEGRATION_PATH_LOGGED:
         _LOGGER.warning("Webasto Next Modbus integration loaded from %s", _INTEGRATION_PATH)
-        domain_data["_integration_path_logged"] = True
+        _INTEGRATION_PATH_LOGGED = True
 
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
@@ -152,7 +157,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start the Life Bit loop after coordinator is ready
     await bridge.start_life_bit_loop()
 
-    domain_data[entry.entry_id] = RuntimeData(
+    entry.runtime_data = RuntimeData(
         bridge=bridge,
         coordinator=coordinator,
         variant=variant,
@@ -170,30 +175,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading config entry %s", entry.entry_id)
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    data = hass.data.get(DOMAIN, {})
-    runtime: RuntimeData | None = data.pop(entry.entry_id, None)
-    if runtime:
+    if not unload_ok:
+        # If any platform failed to unload its entities, those entities may
+        # still be active and would point at a closed bridge/coordinator if
+        # we tore the runtime down here. Leave the runtime alive so the
+        # entry stays consistent until Home Assistant retries / the user
+        # restarts.
+        _LOGGER.warning(
+            "Config entry %s did not fully unload; keeping runtime alive",
+            entry.entry_id,
+        )
+        return unload_ok
+
+    runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
+    if runtime is not None:
         _LOGGER.debug("Stopping life bit loop and closing connection...")
         await runtime.coordinator.async_shutdown_rest_client()
         await runtime.bridge.stop_life_bit_loop()
         await runtime.bridge.async_close()
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
-    if unload_ok and not data:
+    if not _has_other_loaded_entries(hass, entry):
         _unregister_services(hass)
-        hass.data.pop(DOMAIN, None)
 
     _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
     return unload_ok
 
 
-async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _has_other_loaded_entries(hass: HomeAssistant, current: WebastoConfigEntry) -> bool:
+    """Return True if any other loaded config entry still exists."""
+    return any(
+        entry.entry_id != current.entry_id
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+    )
+
+
+async def _async_reload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> None:
     """Reload entry when options change."""
 
     await hass.config_entries.async_reload(entry.entry_id)
@@ -202,7 +225,8 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 def _register_services(hass: HomeAssistant) -> None:
     """Register integration-wide services (idempotent)."""
 
-    if hass.data.setdefault(DOMAIN, {}).get("_services_registered"):
+    global _SERVICES_REGISTERED
+    if _SERVICES_REGISTERED:
         return
 
     hass.services.async_register(
@@ -283,13 +307,14 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
     )
 
-    hass.data[DOMAIN]["_services_registered"] = True
+    _SERVICES_REGISTERED = True
 
 
 def _unregister_services(hass: HomeAssistant) -> None:
     """Remove integration services when no entries remain."""
 
-    if not hass.services.has_service(DOMAIN, SERVICE_SET_CURRENT):
+    global _SERVICES_REGISTERED
+    if not _SERVICES_REGISTERED:
         return
 
     hass.services.async_remove(DOMAIN, SERVICE_SET_CURRENT)
@@ -300,6 +325,7 @@ def _unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_SET_LED_BRIGHTNESS)
     hass.services.async_remove(DOMAIN, SERVICE_SET_FREE_CHARGING)
     hass.services.async_remove(DOMAIN, SERVICE_RESTART_WALLBOX)
+    _SERVICES_REGISTERED = False
 
 
 def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
@@ -309,20 +335,22 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
     `config_entry_id`. Otherwise the first entry is used implicitly.
     """
 
-    entries = hass.data.get(DOMAIN)
+    entries = [
+        entry
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+        if isinstance(getattr(entry, "runtime_data", None), RuntimeData)
+    ]
     if not entries:
         raise ValueError("Webasto Next Modbus is not configured")
 
-    runtime_data = {key: value for key, value in entries.items() if isinstance(value, RuntimeData)}
-    if not runtime_data:
-        raise ValueError("Runtime data not available")
-
-    if len(runtime_data) == 1:
-        return next(iter(runtime_data.values()))
+    if len(entries) == 1:
+        return entries[0].runtime_data
 
     entry_id = call.data.get("config_entry_id")
-    if entry_id and entry_id in runtime_data:
-        return runtime_data[entry_id]
+    if entry_id:
+        for entry in entries:
+            if entry.entry_id == entry_id:
+                return entry.runtime_data
 
     raise ValueError("Multiple wallboxes configured – set config_entry_id in the service call")
 

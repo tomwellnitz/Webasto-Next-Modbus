@@ -5,15 +5,14 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import RuntimeData
-from .const import CONF_UNIT_ID, DOMAIN, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
+from . import WebastoConfigEntry
+from .const import CONF_UNIT_ID, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 
@@ -22,12 +21,12 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WebastoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Webasto number entities."""
 
-    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
     unit_id = entry.data[CONF_UNIT_ID]

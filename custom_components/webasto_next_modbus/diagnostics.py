@@ -5,11 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from . import RuntimeData
-from .const import DOMAIN
+from . import WebastoConfigEntry
 
 TO_REDACT = {"host"}
 
@@ -20,11 +18,11 @@ def _iso_or_none(value):
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WebastoConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
 
-    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
     coordinator = runtime.coordinator
 
     # Include current register values for debugging

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.7] - 2026-05-11
+
+### Changed
+
+- **Modern config entry handling**: Runtime data is now stored on `entry.runtime_data` (typed `ConfigEntry[RuntimeData]`) instead of `hass.data[DOMAIN][entry.entry_id]`. Platforms (`button`, `sensor`, `number`, `switch`, `text`) and diagnostics read it directly from the entry.
+- **Options flow**: No longer assigns `self.config_entry` explicitly; the base class injects it automatically (Home Assistant 2024.12+). Removes a deprecation warning that would otherwise become an error.
+- **Config flow**: `_abort_if_unique_id_configured(reload_on_update=False)` is now passed explicitly to opt out of the implicit reload-on-update path. Combined with the existing update listener this future-proofs us against the deprecation that turns into an error in Home Assistant 2026.12.
+- **Service resolver**: Looks up loaded entries via `hass.config_entries.async_loaded_entries(DOMAIN)` and reads each entry's `runtime_data`, removing the last direct dependency on `hass.data[DOMAIN]`.
+
+### Internal
+
+- Bumped README maintenance badge to 2026.
+- Documented in `AGENTS.md` that `pymodbus` / `aiohttp` constraints must stay synchronised between `pyproject.toml` and `custom_components/webasto_next_modbus/manifest.json`.
+
 ## [1.1.6] - 2026-05-11
 
 ### Changed

@@ -37,9 +37,26 @@ from custom_components.webasto_next_modbus.hub import ModbusBridge, WebastoModbu
 
 
 def _make_hass(runtime_map: dict[str, RuntimeData] | None) -> HomeAssistant:
-    hass = cast(HomeAssistant, SimpleNamespace(data={}))
+    """Create a minimal HomeAssistant stub exposing loaded entries with runtime_data.
+
+    The integration looks up runtime data via
+    ``hass.config_entries.async_loaded_entries(DOMAIN)`` and reads
+    ``entry.runtime_data`` from each. We fake that surface here so the unit
+    tests can construct a hass-like object without spinning up the real core.
+    """
+
+    entries: list[SimpleNamespace] = []
     if runtime_map is not None:
-        hass.data[DOMAIN] = dict(runtime_map)
+        entries = [
+            SimpleNamespace(entry_id=entry_id, runtime_data=runtime)
+            for entry_id, runtime in runtime_map.items()
+        ]
+
+    def _async_loaded_entries(domain: str) -> list[SimpleNamespace]:
+        return list(entries) if domain == DOMAIN else []
+
+    config_entries = SimpleNamespace(async_loaded_entries=_async_loaded_entries)
+    hass = cast(HomeAssistant, SimpleNamespace(data={}, config_entries=config_entries))
     return hass
 
 

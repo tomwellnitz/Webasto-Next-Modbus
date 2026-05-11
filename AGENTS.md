@@ -94,6 +94,16 @@ This script executes:
 - Entities should inherit from `CoordinatorEntity`.
 - Use `device_info` to group entities under one device.
 - Register definitions are centralized in `const.py`.
+- Per-entry runtime objects live on `entry.runtime_data` (typed `WebastoConfigEntry = ConfigEntry[RuntimeData]`). Do not introduce `hass.data[DOMAIN][entry.entry_id]` style storage.
+- `OptionsFlow` subclasses must not store their own `config_entry`; rely on the base class's `self.config_entry` injection (HA 2024.12+).
+
+### 5. Dependency Pinning
+
+- Runtime dependencies (`pymodbus`, `aiohttp`, …) are declared in **two** places that must stay in sync:
+  - `pyproject.toml` under `[project].dependencies`
+  - `custom_components/webasto_next_modbus/manifest.json` under `requirements`
+- HACS / hassfest validation will fail if these drift apart. Update both in the same commit.
+- `pymodbus` is pinned to `>=3.11.2,<3.12` to match the version Home Assistant core's built-in `modbus` integration pins. Do **not** loosen this bound without first checking that HA core's pin has moved — pymodbus 3.12+ removed `ModbusDeviceContext.store`/`decode` and added a `SimDevice` validator that breaks our virtual wallbox.
 
 ## 🧪 Testing Strategy
 

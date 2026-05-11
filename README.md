@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/tomwellnitz/Webasto-Next-Modbus/ci.yaml?branch=main)](https://github.com/tomwellnitz/Webasto-Next-Modbus/actions/workflows/ci.yaml)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange)](https://hacs.xyz)
 [![License](https://img.shields.io/github/license/tomwellnitz/Webasto-Next-Modbus.svg)](LICENSE)
-[![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)](https://github.com/tomwellnitz/Webasto-Next-Modbus/commits/main)
+[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/tomwellnitz/Webasto-Next-Modbus/commits/main)
 
 > 📚 **Documentation Portal**: Start with [`docs/README.md`](docs/README.md) for architecture notes, development guides, and support resources.
 >

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PORT
@@ -105,18 +105,29 @@ async def test_options_flow_updates_interval() -> None:
         unique_id="192.0.2.3-255",
     )
 
-    options_flow = WebastoOptionsFlow(entry)
+    options_flow = WebastoOptionsFlow()
     hass = MagicMock()
     hass.config_entries = MagicMock()
     hass.config_entries.async_update_entry = MagicMock()
     options_flow.hass = hass
 
-    initial = await options_flow.async_step_init()
-    assert initial.get("type") == FlowResultType.FORM
+    # Home Assistant 2024.12+ exposes `OptionsFlow.config_entry` as a
+    # read-only property whose backing fields (`_config_entry_id`, `handler`)
+    # are also read-only. For a unit-style test we patch the property to
+    # return the MockConfigEntry directly.
+    with patch.object(
+        WebastoOptionsFlow,
+        "config_entry",
+        new_callable=PropertyMock,
+        return_value=entry,
+    ):
+        initial = await options_flow.async_step_init()
+        assert initial.get("type") == FlowResultType.FORM
 
-    updated = await options_flow.async_step_init(
-        {CONF_SCAN_INTERVAL: 10, CONF_VARIANT: VARIANT_22_KW}
-    )
+        updated = await options_flow.async_step_init(
+            {CONF_SCAN_INTERVAL: 10, CONF_VARIANT: VARIANT_22_KW}
+        )
+
     assert updated.get("type") == FlowResultType.CREATE_ENTRY
     assert updated.get("data") == {
         CONF_SCAN_INTERVAL: 10,
