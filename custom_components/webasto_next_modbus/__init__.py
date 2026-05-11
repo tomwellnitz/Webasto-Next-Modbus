@@ -181,6 +181,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
+    if not unload_ok:
+        # If any platform failed to unload its entities, those entities may
+        # still be active and would point at a closed bridge/coordinator if
+        # we tore the runtime down here. Leave the runtime alive so the
+        # entry stays consistent until Home Assistant retries / the user
+        # restarts.
+        _LOGGER.warning(
+            "Config entry %s did not fully unload; keeping runtime alive",
+            entry.entry_id,
+        )
+        return unload_ok
+
     runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
     if runtime is not None:
         _LOGGER.debug("Stopping life bit loop and closing connection...")
@@ -189,7 +201,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
         await runtime.bridge.async_close()
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
-    if unload_ok and not _has_other_loaded_entries(hass, entry):
+    if not _has_other_loaded_entries(hass, entry):
         _unregister_services(hass)
 
     _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
@@ -295,7 +307,6 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
     )
 
-    global _SERVICES_REGISTERED
     _SERVICES_REGISTERED = True
 
 
