@@ -30,6 +30,11 @@ _LOGGER = logging.getLogger(__name__)
 
 MAX_REGISTERS_PER_REQUEST: Final = 110
 
+# Lower bound for the life-bit polling window. Guards against a 0/garbage
+# value in the failsafe-timeout register turning the loop into a tight
+# read/write spin that would hammer the wallbox and starve the data poll.
+LIFE_BIT_MIN_INTERVAL: Final = 10
+
 
 class WebastoModbusError(Exception):
     """Raised when a Modbus communication error occurs."""
@@ -181,7 +186,7 @@ class ModbusBridge:
                 try:
                     val = await self.async_read_register(timeout_reg)
                     if isinstance(val, (int, float)):
-                        poll_timeout = int(val)
+                        poll_timeout = max(int(val), LIFE_BIT_MIN_INTERVAL)
                 except Exception:
                     # Ignore read errors for timeout, use default/last known or just proceed
                     pass
@@ -199,6 +204,10 @@ class ModbusBridge:
                         )
                         break
                     await asyncio.sleep(1)
+
+                # Floor between keep-alive cycles so a fast-clearing life bit
+                # cannot turn this into a tight write loop.
+                await asyncio.sleep(1)
 
             except asyncio.CancelledError:
                 raise

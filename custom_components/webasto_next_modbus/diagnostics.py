@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 
 from . import WebastoConfigEntry
+from .const import CONF_REST_PASSWORD, CONF_REST_USERNAME
 
-TO_REDACT = {"host"}
+TO_REDACT = {CONF_HOST, CONF_REST_PASSWORD, CONF_REST_USERNAME}
 
 
 def _iso_or_none(value):
