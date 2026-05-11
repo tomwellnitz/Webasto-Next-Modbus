@@ -199,7 +199,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             previous_state = int(previous_state_raw)
             current_state = int(current_state_raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return
 
         if previous_state == current_state:

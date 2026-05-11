@@ -557,7 +557,7 @@ class RestClient:
             return None
         try:
             return int(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     @staticmethod

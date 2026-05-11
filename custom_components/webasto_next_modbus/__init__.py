@@ -52,6 +52,8 @@ from .hub import ModbusBridge, WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
+_INTEGRATION_PATH = Path(__file__).resolve().parent
+
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.NUMBER,
@@ -78,8 +80,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("_integration_path_logged"):
-        integration_path = Path(__file__).resolve().parent
-        _LOGGER.warning("Webasto Next Modbus integration loaded from %s", integration_path)
+        _LOGGER.warning("Webasto Next Modbus integration loaded from %s", _INTEGRATION_PATH)
         domain_data["_integration_path_logged"] = True
 
     host = entry.data[CONF_HOST]
