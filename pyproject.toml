@@ -76,6 +76,6 @@ DEP003 = ["custom_components"]
 DEP004 = ["homeassistant", "voluptuous"]
 
 [tool.codespell]
-skip = "*.pdf,*.log,*.log.*,*.csv"
-ignore-words-list = "hass,alle,unter,adresse,ist,oder,paket,intervall,stopp,startet,aktive,variante"
+skip = "./.*,*.pdf,*.log,*.log.*,*.csv,*.json,*.ambr"
+ignore-words-list = "adresse,aktive,alle,alot,ba,datas,dof,dur,farenheit,hass,hist,iam,iff,incomfort,ines,intervall,ist,lights,mut,nd,oder,paket,pres,provid,referance,ser,serie,sould,startet,stopp,te,technik,ue,uint,unter,variante,visability,wan,wanna,withing"
 

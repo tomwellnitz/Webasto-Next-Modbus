@@ -37,7 +37,7 @@ jobs:
 
       - name: Check spelling with codespell
         run: |
-          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf" --quiet-level=2
+          uv run codespell --quiet-level=2
 
       - name: Lint YAML with yamllint
         run: |
