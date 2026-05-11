@@ -25,7 +25,7 @@
 
 ### Requirements
 
-- **Home Assistant**: 2024.6 or newer.
+- **Home Assistant**: 2026.5.0 or newer (requires Python 3.14.2; older HA users should stay on `1.1.5`).
 - **Hardware**: Webasto Next or Ampure Unite wallbox.
 - **Network**: Reachable over Modbus TCP (default port `502`).
 
