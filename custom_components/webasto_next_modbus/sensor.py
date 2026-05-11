@@ -188,14 +188,14 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
                 val_str = f"{val_int:06d}"
                 self._attr_native_value = f"{val_str[:2]}:{val_str[2:4]}:{val_str[4:]}"
                 return
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 # Fallback to raw value if formatting fails
                 pass
 
         if self._options_map:
             try:
                 self._attr_native_value = self._options_map.get(int(value), str(value))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._attr_native_value = value
         else:
             self._attr_native_value = value

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6] - 2026-05-11
+
+### Changed
+
+- **Home Assistant 2026.5 compatibility**: Bumped minimum Python to 3.14.2 (now required by HA core), raised the minimum `aiohttp` to `3.13.5` to match HA core, and updated test dependencies (`homeassistant>=2026.5.1`, `pytest-homeassistant-custom-component==0.13.330`).
+- **CI**: Pinned GitHub Actions matrix to Python 3.14.2 (CI and release workflows).
+
 ## [1.1.5] - 2025-12-19
 
 ### Fixed

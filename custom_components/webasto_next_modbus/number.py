@@ -99,7 +99,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             elif initial is not None:
                 try:
                     self._last_written_value = int(initial)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     self._last_written_value = None
 
         self._variant_max_current = variant_max_current
@@ -152,7 +152,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             if last_number_data and last_number_data.native_value is not None:
                 try:
                     restored_value = float(last_number_data.native_value)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     _LOGGER.debug(
                         "Ignoring invalid restored charging current %s for %s",
                         last_number_data.native_value,
@@ -192,7 +192,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         else:
             try:
                 int_value = int(value)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return
         self._last_written_value = int_value
         self._attr_native_value = int_value

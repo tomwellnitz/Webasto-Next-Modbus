@@ -12,7 +12,7 @@ Bring Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP a
 
 ## Requirements
 
-- Home Assistant 2024.6 or newer.
+- Home Assistant 2026.5.1 or newer (older HA users should stay on `1.1.5`).
 - Wallbox reachable via Modbus TCP (default port `502`).
 
 ## Useful links

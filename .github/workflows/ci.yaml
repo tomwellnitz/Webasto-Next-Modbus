@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.14.2"]
 
     steps:
       - name: Check out repository
@@ -37,7 +37,7 @@ jobs:
 
       - name: Check spelling with codespell
         run: |
-          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf" --quiet-level=2
+          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse --skip="./.*,*.csv,*.json,*.ambr,*.pdf,uv.lock" --quiet-level=2
 
       - name: Lint YAML with yamllint
         run: |

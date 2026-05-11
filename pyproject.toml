@@ -1,13 +1,13 @@
 [project]
 name = "webasto-next-modbus"
-version = "1.1.5"
+version = "1.1.6"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP and REST API"
 authors = [{ name = "Webasto Next maintainers" }]
 readme = "README.md"
-requires-python = ">=3.13.2"
+requires-python = ">=3.14.2"
 dependencies = [
-    "pymodbus>=3.11.2,<4",
-    "aiohttp>=3.9.0",
+    "pymodbus>=3.11.2,<3.12",
+    "aiohttp>=3.13.5",
 ]
 
 [project.scripts]
@@ -17,7 +17,9 @@ webasto-smoke = "virtual_wallbox.smoke:main"
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100
@@ -54,14 +56,14 @@ dev = [
     "colorlog>=6.10.1",
     "coverage>=7.10.6",
     "deptry>=0.24.0",
-    "homeassistant>=2025.1.0b7",
+    "homeassistant>=2026.5.1",
     "mdformat>=0.7.19",
     "mypy>=1.8",
     "pycares<6.0.0",
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
-    "pytest-cov==7.0.0",
-    "pytest-homeassistant-custom-component==0.13.314",
+    "pytest-cov==7.1.0",
+    "pytest-homeassistant-custom-component==0.13.330",
     "ruff>=0.5",
     "voluptuous>=0.15.2",
     "vulture>=2.14",
