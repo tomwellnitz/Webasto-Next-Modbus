@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -60,8 +63,26 @@ jobs:
           uv run mypy custom_components/webasto_next_modbus
 
       - name: Run tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          uv run pytest
+          set +e
+          output=$(uv run pytest --tb=long -ra 2>&1)
+          exit_code=$?
+          echo "$output"
+          if [ $exit_code -ne 0 ] && [ -n "$PR_NUMBER" ]; then
+            {
+              echo "## pytest failure (exit $exit_code) — debug instrumentation"
+              echo
+              echo '```'
+              echo "$output" | tail -c 60000
+              echo '```'
+            } > /tmp/pytest-comment.md
+            gh pr comment "$PR_NUMBER" --body-file /tmp/pytest-comment.md \
+              || echo "::warning::gh pr comment failed"
+          fi
+          exit $exit_code
 
   validate:
     runs-on: ubuntu-latest
