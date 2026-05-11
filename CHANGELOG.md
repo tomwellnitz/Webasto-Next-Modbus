@@ -9,8 +9,14 @@
 - **Config flow**: `_abort_if_unique_id_configured(reload_on_update=False)` is now passed explicitly to opt out of the implicit reload-on-update path. Combined with the existing update listener this future-proofs us against the deprecation that turns into an error in Home Assistant 2026.12.
 - **Service resolver**: Looks up loaded entries via `hass.config_entries.async_loaded_entries(DOMAIN)` and reads each entry's `runtime_data`, removing the last direct dependency on `hass.data[DOMAIN]`.
 
+### Fixed
+
+- **Diagnostics**: The REST API username and password are now redacted from the config-entry diagnostics download (previously only `host` was redacted, so the password stored in entry options was exposed).
+- **Life-bit loop**: The keep-alive polling window is clamped to a sane minimum and a one-second floor was added between keep-alive cycles, so a `0`/garbage value in the failsafe-timeout register can no longer turn the loop into a tight read/write spin that hammers the wallbox and starves the data poll.
+
 ### Internal
 
+- Removed the unused, stale `INTEGRATION_VERSION` constant from `const.py` (the integration version lives in `manifest.json` / `pyproject.toml`).
 - Bumped README maintenance badge to 2026.
 - Documented in `AGENTS.md` that `pymodbus` / `aiohttp` constraints must stay synchronised between `pyproject.toml` and `custom_components/webasto_next_modbus/manifest.json`.
 
