@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import RuntimeData
-from .const import CONF_UNIT_ID, DOMAIN
+from . import WebastoConfigEntry
+from .const import CONF_UNIT_ID
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRestEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WebastoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Webasto switch entities."""
-    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
     unit_id = entry.data[CONF_UNIT_ID]

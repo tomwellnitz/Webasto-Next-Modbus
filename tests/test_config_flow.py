@@ -105,7 +105,11 @@ async def test_options_flow_updates_interval() -> None:
         unique_id="192.0.2.3-255",
     )
 
-    options_flow = WebastoOptionsFlow(entry)
+    options_flow = WebastoOptionsFlow()
+    # Home Assistant normally injects `config_entry` onto the options flow
+    # instance after construction; mimic that here so the flow can access
+    # the entry it's editing.
+    options_flow.config_entry = entry  # type: ignore[assignment]
     hass = MagicMock()
     hass.config_entries = MagicMock()
     hass.config_entries.async_update_entry = MagicMock()

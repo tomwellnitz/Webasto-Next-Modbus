@@ -73,7 +73,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(
                     _build_unique_id(normalized_input[CONF_HOST], normalized_input[CONF_UNIT_ID])
                 )
-                self._abort_if_unique_id_configured()
+                self._abort_if_unique_id_configured(reload_on_update=False)
 
                 name = normalized_input.get(CONF_NAME, "")
 
@@ -180,14 +180,11 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the bridge for an existing entry if available."""
         from . import RuntimeData
 
-        domain_data = self.hass.data.get(DOMAIN)
-        if not domain_data:
-            return None
-
-        for value in domain_data.values():
-            if not isinstance(value, RuntimeData):
+        for entry in self.hass.config_entries.async_loaded_entries(DOMAIN):
+            runtime = getattr(entry, "runtime_data", None)
+            if not isinstance(runtime, RuntimeData):
                 continue
-            bridge = value.bridge
+            bridge = runtime.bridge
             # Check if this bridge matches the host/unit_id we're testing
             if bridge._host == host and bridge._unit_id == unit_id:
                 return bridge
@@ -200,14 +197,17 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
 
-        return WebastoOptionsFlow(config_entry)
+        return WebastoOptionsFlow()
 
 
 class WebastoOptionsFlow(config_entries.OptionsFlow):
-    """Handle Webasto Next options flow."""
+    """Handle Webasto Next options flow.
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._config_entry = config_entry
+    Home Assistant injects ``self.config_entry`` on the instance after
+    construction (since 2024.12); we deliberately do not store our own
+    reference, which avoids the deprecation warning about explicit
+    options-flow ``config_entry`` assignment.
+    """
 
     async def async_step_init(
         self, user_input: Mapping[str, Any] | None = None
@@ -221,23 +221,25 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
             )
             return self.async_abort(reason="missing_dependency")
 
+        config_entry = self.config_entry
+
         errors: dict[str, str] = {}
-        current_interval = self._config_entry.options.get(
+        current_interval = config_entry.options.get(
             CONF_SCAN_INTERVAL,
-            self._config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
-        current_variant = self._config_entry.options.get(
+        current_variant = config_entry.options.get(
             CONF_VARIANT,
-            self._config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
+            config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
         )
-        current_name = self._config_entry.data.get(CONF_NAME, "")
-        current_rest_enabled = self._config_entry.options.get(
+        current_name = config_entry.data.get(CONF_NAME, "")
+        current_rest_enabled = config_entry.options.get(
             CONF_REST_ENABLED,
-            self._config_entry.data.get(CONF_REST_ENABLED, False),
+            config_entry.data.get(CONF_REST_ENABLED, False),
         )
-        current_rest_username = self._config_entry.options.get(
+        current_rest_username = config_entry.options.get(
             CONF_REST_USERNAME,
-            self._config_entry.data.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME),
+            config_entry.data.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME),
         )
 
         if user_input is not None:
@@ -252,9 +254,9 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_interval"
             elif rest_enabled and not rest_password:
                 # Check if password was previously set (we don't show it)
-                existing_password = self._config_entry.options.get(
+                existing_password = config_entry.options.get(
                     CONF_REST_PASSWORD,
-                    self._config_entry.data.get(CONF_REST_PASSWORD, ""),
+                    config_entry.data.get(CONF_REST_PASSWORD, ""),
                 )
                 if not existing_password:
                     errors["base"] = "rest_password_required"
@@ -266,7 +268,7 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 if rest_enabled and rest_password:
                     try:
                         await self._validate_rest_connection(
-                            self._config_entry.data[CONF_HOST],
+                            config_entry.data[CONF_HOST],
                             rest_username,
                             rest_password,
                         )
@@ -275,15 +277,15 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                         errors["base"] = "rest_cannot_connect"
 
             if not errors:
-                updated_data = dict(self._config_entry.data)
+                updated_data = dict(config_entry.data)
                 if name:
                     updated_data[CONF_NAME] = name
                 elif CONF_NAME in updated_data:
                     updated_data.pop(CONF_NAME)
                 title = name or f"{updated_data[CONF_HOST]} (unit {updated_data[CONF_UNIT_ID]})"
-                if updated_data != self._config_entry.data or title != self._config_entry.title:
+                if updated_data != config_entry.data or title != config_entry.title:
                     self.hass.config_entries.async_update_entry(
-                        self._config_entry,
+                        config_entry,
                         data=updated_data,
                         title=title,
                     )

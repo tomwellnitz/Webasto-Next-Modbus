@@ -6,14 +6,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EntityCategory, UnitOfElectricPotential
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
-from . import RuntimeData
-from .const import CONF_UNIT_ID, DOMAIN, SENSOR_REGISTERS
+from . import WebastoConfigEntry
+from .const import CONF_UNIT_ID, SENSOR_REGISTERS
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .rest_client import RestData
@@ -92,12 +91,12 @@ REST_SENSORS: list[RestSensorDefinition] = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WebastoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Webasto sensors from a config entry."""
 
-    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
     unit_id = entry.data[CONF_UNIT_ID]

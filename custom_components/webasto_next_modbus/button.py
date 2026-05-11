@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import RuntimeData
+from . import WebastoConfigEntry
 from .const import (
     BUTTON_REGISTERS,
     CONF_UNIT_ID,
-    DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
@@ -25,12 +23,12 @@ from .entity import WebastoRegisterEntity, WebastoRestEntity
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WebastoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Webasto button entities."""
 
-    runtime: RuntimeData = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
     unit_id = entry.data[CONF_UNIT_ID]
