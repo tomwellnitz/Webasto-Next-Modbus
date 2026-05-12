@@ -145,33 +145,31 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         super()._handle_coordinator_update()
 
     async def async_added_to_hass(self) -> None:
-        """Seed/restore the value and subscribe to dispatcher events."""
+        """Restore the value and subscribe to dispatcher events."""
 
         await super().async_added_to_hass()
-        if self._write_only and not await self._async_seed_from_wallbox():
-            # The wallbox didn't give us the current value (e.g. it doesn't
-            # support reading this register, or it's still booting): fall back
-            # to the last value we set and re-assert it.
+        if self._write_only:
+            # Show the last value we know about immediately so the entity is
+            # not blank, then refine it from the wallbox in the background. The
+            # Modbus read can take several seconds while the box is booting and
+            # must not block platform setup.
             last_number_data = await self.async_get_last_number_data()
             if last_number_data and last_number_data.native_value is not None:
                 try:
-                    restored_value = float(last_number_data.native_value)
+                    self._last_written_value = int(round(float(last_number_data.native_value)))
+                    self._attr_native_value = float(self._last_written_value)
                 except TypeError, ValueError:
                     _LOGGER.debug(
                         "Ignoring invalid restored value %s for %s",
                         last_number_data.native_value,
                         self.entity_id,
                     )
-                else:
-                    try:
-                        await self.async_set_native_value(restored_value)
-                    except HomeAssistantError as err:
-                        _LOGGER.warning(
-                            "Failed to re-apply %s for %s: %s",
-                            restored_value,
-                            self.entity_id,
-                            err,
-                        )
+            if self.hass is not None and self.coordinator.config_entry is not None:
+                self.coordinator.config_entry.async_create_background_task(
+                    self.hass,
+                    self._async_init_write_only_value(last_number_data),
+                    name=f"webasto_next_modbus seed {self.entity_id}",
+                )
         if self.hass is None:
             return
         remove = async_dispatcher_connect(
@@ -181,17 +179,41 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         )
         self.async_on_remove(remove)
 
+    async def _async_init_write_only_value(self, last_number_data) -> None:
+        """Seed the value from the wallbox, or re-assert the restored value."""
+
+        if await self._async_seed_from_wallbox():
+            return
+        # The wallbox didn't give us the current value (e.g. it doesn't support
+        # reading this register, or it's still booting): re-assert the last
+        # value we set so the wallbox and the entity agree again.
+        if not (last_number_data and last_number_data.native_value is not None):
+            return
+        try:
+            restored_value = float(last_number_data.native_value)
+        except TypeError, ValueError:
+            return
+        try:
+            await self.async_set_native_value(restored_value)
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "Failed to re-apply %s for %s: %s",
+                restored_value,
+                self.entity_id,
+                err,
+            )
+
     async def _async_seed_from_wallbox(self) -> bool:
         """Seed the value from the wallbox's current register value.
 
         Write-only registers (e.g. the charging-current limit) aren't polled,
         so the entity would otherwise start blank on a fresh install. Reading
-        the register once at startup fills it in if the wallbox answers
-        promptly. Returns ``True`` if a value was obtained.
+        the register once at startup fills it in if the wallbox answers.
+        Returns ``True`` if a value was obtained.
         """
         try:
             value = await asyncio.wait_for(
-                self._bridge.async_read_register(self._register), timeout=5
+                self._bridge.async_read_register(self._register), timeout=15
             )
         except WebastoModbusError, TimeoutError:
             return False
