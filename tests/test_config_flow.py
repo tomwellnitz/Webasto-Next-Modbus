@@ -17,10 +17,12 @@ from custom_components.webasto_next_modbus.config_flow import (
     WebastoOptionsFlow,
 )
 from custom_components.webasto_next_modbus.const import (
+    CONF_MODEL,
     CONF_REST_ENABLED,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
+    DEFAULT_MODEL,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_UNIT_ID,
@@ -42,6 +44,7 @@ async def test_user_step_success() -> None:
         CONF_PORT: 1502,
         CONF_UNIT_ID: 10,
         CONF_SCAN_INTERVAL: 5,
+        CONF_MODEL: DEFAULT_MODEL,
         CONF_VARIANT: VARIANT_22_KW,
     }
 
@@ -59,7 +62,38 @@ async def test_user_step_success() -> None:
     assert result.get("type") == FlowResultType.CREATE_ENTRY
     assert result.get("title") == "192.0.2.1 (unit 10)"
     assert result.get("data") == user_input
-    assert result.get("options") == {CONF_SCAN_INTERVAL: 5, CONF_VARIANT: VARIANT_22_KW}
+    assert result.get("options") == {
+        CONF_SCAN_INTERVAL: 5,
+        CONF_VARIANT: VARIANT_22_KW,
+        CONF_MODEL: DEFAULT_MODEL,
+    }
+
+
+async def test_user_step_unite_model() -> None:
+    """The model selector is stored and exposed on the created entry."""
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    user_input = {
+        CONF_HOST: "192.0.2.4",
+        CONF_PORT: DEFAULT_PORT,
+        CONF_UNIT_ID: DEFAULT_UNIT_ID,
+        CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+        CONF_MODEL: "unite",
+        CONF_VARIANT: VARIANT_22_KW,
+    }
+
+    with (
+        patch.object(WebastoConfigFlow, "_async_validate_and_connect", AsyncMock()),
+        patch.object(WebastoConfigFlow, "async_set_unique_id", AsyncMock()),
+        patch.object(WebastoConfigFlow, "_abort_if_unique_id_configured"),
+    ):
+        result = await flow.async_step_user(user_input)
+
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("data", {}).get(CONF_MODEL) == "unite"
+    assert result.get("options", {}).get(CONF_MODEL) == "unite"
 
 
 async def test_user_step_cannot_connect() -> None:
@@ -132,6 +166,7 @@ async def test_options_flow_updates_interval() -> None:
     assert updated.get("data") == {
         CONF_SCAN_INTERVAL: 10,
         CONF_VARIANT: VARIANT_22_KW,
+        CONF_MODEL: DEFAULT_MODEL,
         CONF_REST_ENABLED: False,
     }
     hass.config_entries.async_update_entry.assert_called_once()
