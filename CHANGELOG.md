@@ -1,16 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-- `manifest.json` no longer lists `aiohttp` as a requirement: it is part of Home Assistant core, and a `>=` requirement in the manifest can interfere with pip resolving the core pin. It stays in `pyproject.toml` for the test environment.
-
-### Internal
-
-- Removed a redundant `available` override on the Modbus register entity base class (it just returned the coordinator-entity default).
-- Replaced a few private-attribute accesses with public accessors: external code now uses `WebastoDataCoordinator.rest_client` and `ModbusBridge.host` / `ModbusBridge.unit_id`.
-
 ## [1.1.7] - 2026-05-11
 
 ### Changed
@@ -19,6 +8,7 @@
 - **Options flow**: No longer assigns `self.config_entry` explicitly; the base class injects it automatically (Home Assistant 2024.12+). Removes a deprecation warning that would otherwise become an error.
 - **Config flow**: `_abort_if_unique_id_configured(reload_on_update=False)` is now passed explicitly to opt out of the implicit reload-on-update path. Combined with the existing update listener this future-proofs us against the deprecation that turns into an error in Home Assistant 2026.12.
 - **Service resolver**: Looks up loaded entries via `hass.config_entries.async_loaded_entries(DOMAIN)` and reads each entry's `runtime_data`, removing the last direct dependency on `hass.data[DOMAIN]`.
+- `manifest.json` no longer lists `aiohttp` as a requirement: it is part of Home Assistant core, and a `>=` requirement in the manifest can interfere with pip resolving the core pin. It stays in `pyproject.toml` for the test environment.
 
 ### Fixed
 
@@ -28,8 +18,11 @@
 ### Internal
 
 - Removed the unused, stale `INTEGRATION_VERSION` constant from `const.py` (the integration version lives in `manifest.json` / `pyproject.toml`).
+- Removed a redundant `available` override on the Modbus register entity base class (it just returned the coordinator-entity default).
+- Replaced a few private-attribute accesses with public accessors: external code now uses `WebastoDataCoordinator.rest_client` and `ModbusBridge.host` / `ModbusBridge.unit_id`.
 - Bumped README maintenance badge to 2026.
-- Documented in `AGENTS.md` that `pymodbus` / `aiohttp` constraints must stay synchronised between `pyproject.toml` and `custom_components/webasto_next_modbus/manifest.json`.
+- Documented the dependency-pinning conventions in `AGENTS.md` (`manifest.json` lists only packages HA core does not provide; `pymodbus` stays pinned to `<3.12`).
+- Release workflow: pre-release tags (`v*-beta.*`, `v*-rc.*`, …) are now published as GitHub pre-releases so HACS only offers them under "Show beta versions".
 
 ## [1.1.6] - 2026-05-11
 
