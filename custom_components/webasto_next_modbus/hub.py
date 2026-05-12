@@ -35,9 +35,50 @@ MAX_REGISTERS_PER_REQUEST: Final = 110
 # read/write spin that would hammer the wallbox and starve the data poll.
 LIFE_BIT_MIN_INTERVAL: Final = 10
 
+# Exponential backoff bounds (seconds) for the life-bit loop while the
+# wallbox is unreachable (e.g. powered off, or still booting — which can
+# take a couple of minutes on these devices).
+LIFE_BIT_BACKOFF_MIN: Final = 5.0
+LIFE_BIT_BACKOFF_MAX: Final = 300.0
+
 
 class WebastoModbusError(Exception):
     """Raised when a Modbus communication error occurs."""
+
+
+class WebastoModbusDeviceError(WebastoModbusError):
+    """Raised when the wallbox answered but returned a Modbus exception.
+
+    Distinct from transport errors (connection refused, timeout, …): the
+    device understood the request and rejected it, so closing the connection
+    and retrying immediately won't help. Typically seen while the wallbox is
+    still booting, or for a register a given firmware doesn't implement.
+    """
+
+
+_MODBUS_EXCEPTION_NAMES: Final[dict[int, str]] = {
+    1: "Illegal Function",
+    2: "Illegal Data Address",
+    3: "Illegal Data Value",
+    4: "Server Device Failure",
+    5: "Acknowledge",
+    6: "Server Device Busy",
+    8: "Memory Parity Error",
+    10: "Gateway Path Unavailable",
+    11: "Gateway Target Device Failed To Respond",
+}
+
+
+def _describe_modbus_response(response: Any) -> str:
+    """Return a human-readable description of an error response."""
+
+    code = getattr(response, "exception_code", None)
+    if isinstance(code, int):
+        return f"exception code {code} ({_MODBUS_EXCEPTION_NAMES.get(code, 'unknown')})"
+    text = str(response)
+    if text and "object at 0x" not in text:
+        return text
+    return repr(response)
 
 
 @dataclass(slots=True, frozen=True)
@@ -175,34 +216,49 @@ class ModbusBridge:
             _LOGGER.debug("Life bit loop stopped")
 
     async def _life_bit_loop(self) -> None:
-        """Background loop to handle the life bit protocol."""
+        """Maintain the wallbox keep-alive ("life bit") register.
+
+        - While the wallbox is unreachable, back off exponentially and log the
+          failure only once (then at DEBUG) so a slow boot doesn't flood the log.
+        - If the wallbox keeps rejecting the life-bit register itself, give up:
+          some firmwares simply don't implement it, and there's no point
+          hammering the register on every cycle.
+        """
         life_bit_reg = get_register("send_keepalive")
         timeout_reg = get_register("failsafe_timeout_s")
 
+        backoff = LIFE_BIT_BACKOFF_MIN
+        warned = False
+        device_rejections = 0
+
         while True:
-            poll_timeout = 60  # Default
             try:
-                # Refresh timeout value dynamically
+                poll_timeout = 60  # default keep-alive window
                 try:
                     val = await self.async_read_register(timeout_reg)
                     if isinstance(val, (int, float)):
                         poll_timeout = max(int(val), LIFE_BIT_MIN_INTERVAL)
-                except Exception:
-                    # Ignore read errors for timeout, use default/last known or just proceed
-                    pass
+                except WebastoModbusDeviceError:
+                    pass  # firmware quirk reading @2002; use the default window
+                # Transport errors here propagate to the handlers below.
 
-                # Write 1 to Life Bit register
                 await self.async_write_register(life_bit_reg, 1)
 
-                # Poll until cleared to 0
+                # Success: reset error state.
+                if warned:
+                    _LOGGER.info("Life bit loop recovered")
+                    warned = False
+                backoff = LIFE_BIT_BACKOFF_MIN
+                device_rejections = 0
+
                 start_time = time.time()
                 while time.time() - start_time < poll_timeout:
-                    val = await self.async_read_register(life_bit_reg)
-                    if val == 0:
-                        _LOGGER.debug(
-                            "Life bit cleared after %.2f seconds", time.time() - start_time
-                        )
-                        break
+                    try:
+                        if await self.async_read_register(life_bit_reg) == 0:
+                            _LOGGER.debug("Life bit cleared after %.2f s", time.time() - start_time)
+                            break
+                    except WebastoModbusError:
+                        break  # don't spin re-reading; the next cycle handles it
                     await asyncio.sleep(1)
 
                 # Floor between keep-alive cycles so a fast-clearing life bit
@@ -211,9 +267,26 @@ class ModbusBridge:
 
             except asyncio.CancelledError:
                 raise
-            except Exception as err:
-                _LOGGER.warning("Life bit loop error: %s", err)
-                await asyncio.sleep(5)
+            except WebastoModbusDeviceError as err:
+                device_rejections += 1
+                if device_rejections >= 3:
+                    _LOGGER.info(
+                        "Wallbox rejected the life-bit register (@%s) repeatedly (%s); "
+                        "disabling the keep-alive loop until the integration reloads",
+                        life_bit_reg.address,
+                        err,
+                    )
+                    return
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, LIFE_BIT_BACKOFF_MAX)
+            except Exception as err:  # noqa: BLE001 - keep the loop alive
+                if not warned:
+                    _LOGGER.warning("Life bit loop error (will keep retrying): %s", err)
+                    warned = True
+                else:
+                    _LOGGER.debug("Life bit loop still failing: %s", err)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, LIFE_BIT_BACKOFF_MAX)
 
     async def _invoke_with_unit(
         self,
@@ -403,9 +476,16 @@ class ModbusBridge:
             except asyncio.CancelledError:
                 # Re-raise cancellation immediately to allow clean shutdown
                 raise
+            except WebastoModbusDeviceError:
+                # The wallbox answered and rejected the request. Reconnecting
+                # and retrying won't change the answer, and tearing the socket
+                # down here causes pymodbus transaction-id desyncs.
+                raise
             except WebastoModbusError as err:
                 last_err = err
-                _LOGGER.warning(
+                # Per-attempt detail at DEBUG only: the caller (coordinator /
+                # life-bit loop) logs the aggregate failure once.
+                _LOGGER.debug(
                     "Attempt %s/%s to %s failed: %s",
                     attempt,
                     MAX_RETRY_ATTEMPTS,
@@ -447,8 +527,9 @@ class ModbusBridge:
                 raise WebastoModbusError(str(err)) from err
 
         if not hasattr(response, "isError") or response.isError():  # type: ignore[attr-defined]
-            raise WebastoModbusError(
-                f"Modbus error reading {register.key} (address {register.address})"
+            raise WebastoModbusDeviceError(
+                f"reading {register.key} (@{register.address}) failed: "
+                f"{_describe_modbus_response(response)}"
             )
 
         return _decode_register(register, response.registers)  # type: ignore[attr-defined]
@@ -461,6 +542,7 @@ class ModbusBridge:
             await self.async_connect()
             assert self._client is not None
 
+            read_any = False
             for request in self._read_plan:
                 try:
                     if request.register_type == "input":
@@ -481,29 +563,40 @@ class ModbusBridge:
                     raise WebastoModbusError(str(err)) from err
 
                 if response.isError():  # type: ignore[attr-defined]
-                    # Check if all registers in this block are optional
-                    all_optional = all(reg.optional for reg in request.registers)
-                    if all_optional:
+                    detail = _describe_modbus_response(response)
+                    if not read_any:
+                        # The first (core) block came back as an error: the
+                        # wallbox is offline or still booting. Don't bother with
+                        # the remaining blocks (they'll fail too) and let the
+                        # coordinator emit a single "not responding" log line.
+                        raise WebastoModbusDeviceError(
+                            f"wallbox not responding (read @{request.start_address} "
+                            f"returned {detail})"
+                        )
+                    # A later block failed while others worked -> likely a
+                    # register this firmware doesn't implement.
+                    if all(reg.optional for reg in request.registers):
                         _LOGGER.info(
                             "Removing optional register block @%s from read plan "
-                            "(not supported by this wallbox)",
+                            "(not supported by this wallbox: %s)",
                             request.start_address,
+                            detail,
                         )
-                        # Remove this block from future reads
                         self._read_plan = tuple(
                             r for r in self._read_plan if r.start_address != request.start_address
                         )
                     else:
                         _LOGGER.warning(
-                            "Modbus error reading block @%s (%s): %r",
+                            "Modbus error reading block @%s (%s): %s",
                             request.start_address,
                             request.count,
-                            response,
+                            detail,
                         )
                     for definition in request.registers:
                         data[definition.key] = None
                     continue
 
+                read_any = True
                 registers = response.registers  # type: ignore[attr-defined]
                 for definition in request.registers:
                     offset = definition.address - request.start_address
@@ -540,8 +633,9 @@ class ModbusBridge:
                 raise WebastoModbusError(str(err)) from err
 
         if response.isError():  # type: ignore[attr-defined]
-            raise WebastoModbusError(
-                f"Writing register {register.key} failed: {response!r}"  # type: ignore[str-format]
+            raise WebastoModbusDeviceError(
+                f"writing {register.key} (@{register.address}) failed: "
+                f"{_describe_modbus_response(response)}"
             )
 
     @property

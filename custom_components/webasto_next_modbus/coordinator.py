@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -99,6 +100,8 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("REST API client connected successfully")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Failed to connect REST API client: %s", err)
+            with contextlib.suppress(Exception):
+                await self._rest_client.disconnect()
             self._rest_client = None
 
     async def async_shutdown_rest_client(self) -> None:

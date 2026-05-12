@@ -13,7 +13,9 @@
 ### Fixed
 
 - **Diagnostics**: The REST API username and password are now redacted from the config-entry diagnostics download (previously only `host` was redacted, so the password stored in entry options was exposed).
-- **Life-bit loop**: The keep-alive polling window is clamped to a sane minimum and a one-second floor was added between keep-alive cycles, so a `0`/garbage value in the failsafe-timeout register can no longer turn the loop into a tight read/write spin that hammers the wallbox and starves the data poll.
+- **Graceful handling of an offline / booting wallbox**: a Modbus *exception response* (the wallbox answered and rejected the request — common while it boots, or for a register a given firmware doesn't implement) is now distinguished from a transport error. Device exceptions no longer trigger a reconnect-and-retry storm (which caused pymodbus transaction-id desyncs and connection-refused floods), the bulk read bails out after the first failing block with a single "wallbox not responding" message instead of one warning per block, and error logs now include the actual Modbus exception code (e.g. "Illegal Data Address") instead of an opaque object reference.
+- **Life-bit loop**: now backs off exponentially while the wallbox is unreachable (logging the failure once, then at debug level) and gives up entirely if the wallbox repeatedly rejects the life-bit register — some firmwares don't implement it. The keep-alive window is still clamped to a sane minimum with a one-second floor between cycles.
+- **REST client**: the aiohttp session is closed when `connect()` fails (no more "Unclosed client session"), and the TLS context is built without `load_default_certs()` so it no longer trips Home Assistant's blocking-call detector.
 
 ### Internal
 
