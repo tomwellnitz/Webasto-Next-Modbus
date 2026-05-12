@@ -150,7 +150,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         config_entry=entry,
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        # Don't leave the Modbus socket open on a failed setup: these wallboxes
+        # typically accept only one Modbus TCP connection, so a stale socket
+        # makes the automatic retry fail with "connection refused".
+        await bridge.async_close()
+        raise
 
     # Initialize REST client if configured
     await coordinator.async_setup_rest_client()
@@ -479,7 +486,7 @@ async def _async_service_set_led_brightness(call: ServiceCall) -> None:
         await rest_client.set_led_brightness(brightness)
     except RestClientError as err:
         raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
-    await runtime.coordinator.async_request_refresh()
+    await runtime.coordinator.async_refresh_rest_data()
 
 
 async def _async_service_set_free_charging(call: ServiceCall) -> None:
@@ -499,7 +506,7 @@ async def _async_service_set_free_charging(call: ServiceCall) -> None:
         await rest_client.set_free_charging(enabled)
     except RestClientError as err:
         raise HomeAssistantError(f"Failed to set free charging: {err}") from err
-    await runtime.coordinator.async_request_refresh()
+    await runtime.coordinator.async_refresh_rest_data()
 
 
 async def _async_service_restart_wallbox(call: ServiceCall) -> None:
