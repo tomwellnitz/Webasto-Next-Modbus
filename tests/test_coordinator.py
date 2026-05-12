@@ -244,6 +244,7 @@ async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
     """A 401 on the REST login surfaces a repair issue and disables REST (no retry)."""
 
     bridge = AsyncMock(spec=ModbusBridge)
+    bridge.endpoint = "192.0.2.1:502 (device_id 255)"
     entry = MockConfigEntry(
         domain="webasto_next_modbus",
         entry_id="1234",
@@ -256,10 +257,12 @@ async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock(side_effect=AuthenticationError("bad creds"))
+        mock_rc.return_value.disconnect = AsyncMock()
         await coordinator.async_setup_rest_client()
 
     assert coordinator._rest_client is None
     assert coordinator._rest_setup_retry_at is None
+    mock_rc.return_value.disconnect.assert_awaited_once()
     mock_ir.async_create_issue.assert_called_once()
 
 
@@ -267,6 +270,7 @@ async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
     """A successful REST connect clears the auth repair issue."""
 
     bridge = AsyncMock(spec=ModbusBridge)
+    bridge.endpoint = "192.0.2.1:502 (device_id 255)"
     entry = MockConfigEntry(
         domain="webasto_next_modbus",
         entry_id="1234",
@@ -279,6 +283,7 @@ async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock()
+        mock_rc.return_value.disconnect = AsyncMock()
         await coordinator.async_setup_rest_client()
 
     assert coordinator._rest_client is mock_rc.return_value
