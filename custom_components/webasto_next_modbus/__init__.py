@@ -57,6 +57,7 @@ _INTEGRATION_PATH_LOGGED = False
 _SERVICES_REGISTERED = False
 
 PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
     Platform.SENSOR,
     Platform.NUMBER,
     Platform.BUTTON,

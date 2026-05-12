@@ -25,6 +25,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Verbunden"
+      }
+    },
     "sensor": {
       "charge_point_state": {
         "name": "Ladepunkt Status",

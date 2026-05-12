@@ -26,7 +26,8 @@ CONF_REST_ENABLED: Final = "rest_enabled"
 CONF_REST_USERNAME: Final = "rest_username"
 CONF_REST_PASSWORD: Final = "rest_password"
 DEFAULT_REST_USERNAME: Final = "admin"
-REST_SCAN_INTERVAL: Final = 60  # REST API polling interval in seconds
+REST_SCAN_INTERVAL: Final = 60  # REST API polling interval (seconds)
+REST_SETUP_RETRY_INTERVAL: Final = 300  # retry a failed REST connect this often (seconds)
 
 VARIANT_11_KW: Final = "11kw"
 VARIANT_22_KW: Final = "22kw"

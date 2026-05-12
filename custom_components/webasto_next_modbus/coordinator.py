@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,7 @@ from .const import (
     FAILURE_NOTIFICATION_THRESHOLD,
     FAILURE_NOTIFICATION_TITLE,
     REST_SCAN_INTERVAL,
+    REST_SETUP_RETRY_INTERVAL,
 )
 from .device_trigger import (
     TRIGGER_CHARGING_STARTED,
@@ -63,6 +65,11 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._rest_data: RestData | None = None
         self._rest_last_update: datetime | None = None
         self._rest_update_interval = timedelta(seconds=REST_SCAN_INTERVAL)
+        # When the initial REST connect fails (e.g. the wallbox was still
+        # booting), retry it from the data poll once this time has passed.
+        self._rest_setup_retry_at: datetime | None = None
+        self._rest_setup_retry_interval = timedelta(seconds=REST_SETUP_RETRY_INTERVAL)
+        self._rest_fetch_warned = False
 
         super().__init__(
             hass,
@@ -97,9 +104,14 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             await self._rest_client.connect()
             _LOGGER.info("REST API client connected successfully")
+            self._rest_setup_retry_at = None
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Failed to connect REST API client: %s", err)
+            with contextlib.suppress(Exception):
+                await self._rest_client.disconnect()
             self._rest_client = None
+            # The wallbox may just be booting; retry later from the data poll.
+            self._rest_setup_retry_at = datetime.now(UTC) + self._rest_setup_retry_interval
 
     async def async_shutdown_rest_client(self) -> None:
         """Disconnect REST client."""
@@ -158,6 +170,15 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             self._emit_charging_triggers(previous_data, data)
 
+            # The Modbus side is up, so the wallbox is reachable: if a previous
+            # REST setup failed, retry it now (throttled).
+            if (
+                self._rest_client is None
+                and self._rest_setup_retry_at is not None
+                and datetime.now(UTC) >= self._rest_setup_retry_at
+            ):
+                await self.async_setup_rest_client()
+
             # Fetch REST data if client is connected and interval elapsed
             await self._async_update_rest_data()
 
@@ -179,9 +200,16 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._rest_data = await self._rest_client.get_data()
             self._rest_last_update = now
             _LOGGER.debug("REST data updated: %s", self._rest_data)
+            if self._rest_fetch_warned:
+                _LOGGER.info("REST data fetch recovered")
+                self._rest_fetch_warned = False
         except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Failed to fetch REST data: %s", err)
-            # Keep stale data, don't clear it
+            # Keep stale data, don't clear it. Log once, then at debug.
+            if not self._rest_fetch_warned:
+                _LOGGER.warning("Failed to fetch REST data (will keep retrying): %s", err)
+                self._rest_fetch_warned = True
+            else:
+                _LOGGER.debug("Still failing to fetch REST data: %s", err)
 
     def _emit_charging_triggers(
         self,

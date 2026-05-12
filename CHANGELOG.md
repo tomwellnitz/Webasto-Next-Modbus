@@ -2,6 +2,10 @@
 
 ## [1.1.7] - 2026-05-11
 
+### Added
+
+- A diagnostic **"Connected"** binary sensor (`device_class: connectivity`) that reports whether the integration is currently reaching the wallbox. Unlike the regular entities (which go `unavailable` when the wallbox is offline) it stays available and reads `off`, so it can be used directly in automations and dashboards.
+
 ### Changed
 
 - **Modern config entry handling**: Runtime data is now stored on `entry.runtime_data` (typed `ConfigEntry[RuntimeData]`) instead of `hass.data[DOMAIN][entry.entry_id]`. Platforms (`button`, `sensor`, `number`, `switch`, `text`) and diagnostics read it directly from the entry.
@@ -13,7 +17,9 @@
 ### Fixed
 
 - **Diagnostics**: The REST API username and password are now redacted from the config-entry diagnostics download (previously only `host` was redacted, so the password stored in entry options was exposed).
-- **Life-bit loop**: The keep-alive polling window is clamped to a sane minimum and a one-second floor was added between keep-alive cycles, so a `0`/garbage value in the failsafe-timeout register can no longer turn the loop into a tight read/write spin that hammers the wallbox and starves the data poll.
+- **Graceful handling of an offline / booting wallbox**: a Modbus *exception response* (the wallbox answered and rejected the request — common while it boots, or for a register a given firmware doesn't implement) is now distinguished from a transport error. Device exceptions no longer trigger a reconnect-and-retry storm (which caused pymodbus transaction-id desyncs and connection-refused floods), the bulk read bails out after the first failing block with a single "wallbox not responding" message instead of one warning per block, and error logs now include the actual Modbus exception code (e.g. "Illegal Data Address") instead of an opaque object reference.
+- **Life-bit loop**: now backs off exponentially (up to 5 minutes) while the wallbox is unreachable — whether it's powered off (connection refused) or still booting (register writes rejected) — logging the failure once and then at debug level, and recovering automatically once the wallbox is up. The keep-alive window is still clamped to a sane minimum with a one-second floor between cycles.
+- **REST client**: the aiohttp session is closed when `connect()` fails (no more "Unclosed client session"), and the TLS context is built without `load_default_certs()` so it no longer trips Home Assistant's blocking-call detector. If the initial REST connect fails because the wallbox is still booting, it is now retried automatically (about every 5 minutes) once the Modbus side reconnects, instead of staying disabled until the integration reloads. Repeated "failed to fetch REST data" messages are logged once and then at debug level.
 
 ### Internal
 

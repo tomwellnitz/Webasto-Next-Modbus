@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import ssl
 from dataclasses import dataclass
@@ -127,12 +128,26 @@ class RestClient:
     async def connect(self) -> None:
         """Establish connection and authenticate.
 
+        On failure the session is closed again so callers can simply discard
+        the client without leaking an open aiohttp session.
+
         Raises:
             AuthenticationError: If login fails.
             ConnectionError: If connection to wallbox fails.
         """
         await self._ensure_session()
-        await self._login()
+        login_ok = False
+        try:
+            await self._login()
+            login_ok = True
+        finally:
+            if not login_ok:
+                # Covers exceptions *and* task cancellation (HA shutdown).
+                # Shield the close so it still runs to completion even if a
+                # cancellation interrupts us here, instead of leaving an open
+                # aiohttp session behind.
+                with contextlib.suppress(Exception):
+                    await asyncio.shield(self.disconnect())
 
     async def disconnect(self) -> None:
         """Close the session."""
@@ -272,20 +287,23 @@ class RestClient:
     # -------------------------------------------------------------------------
 
     async def _ensure_session(self) -> None:
-        """Create aiohttp session if not exists."""
-        if self._session is None or self._session.closed:
-            # Create SSL context that doesn't verify certificates
-            # (wallbox uses self-signed cert)
-            self._ssl_context = ssl.create_default_context()
-            self._ssl_context.check_hostname = False
-            self._ssl_context.verify_mode = ssl.CERT_NONE
+        """Create the aiohttp session if it doesn't exist yet."""
+        if self._session is not None and not self._session.closed:
+            return
 
-            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
-            timeout = aiohttp.ClientTimeout(total=self._timeout)
-            self._session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=timeout,
-            )
+        if self._ssl_context is None:
+            # A bare TLS-client context, not ssl.create_default_context():
+            # the latter calls load_default_certs(), which does blocking file
+            # I/O and trips Home Assistant's blocking-call detector. The wallbox
+            # uses a self-signed certificate, so verification is disabled anyway.
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            self._ssl_context = ctx
+
+        connector = aiohttp.TCPConnector(ssl=self._ssl_context)
+        timeout = aiohttp.ClientTimeout(total=self._timeout)
+        self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
     async def _ensure_token(self) -> None:
         """Ensure we have a valid token, refresh if needed."""

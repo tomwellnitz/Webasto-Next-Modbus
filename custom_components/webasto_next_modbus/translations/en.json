@@ -54,6 +54,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      }
+    },
     "sensor": {
       "charge_point_state": {
         "name": "Charge Point State",
