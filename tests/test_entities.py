@@ -38,7 +38,7 @@ def coordinator_fixture():
         def __init__(self) -> None:
             self.background_tasks: list[asyncio.Future] = []
 
-        def async_create_background_task(self, _hass, target, _name):
+        def async_create_background_task(self, _hass, target, name=None, eager_start=True):
             task = asyncio.ensure_future(target)
             self.background_tasks.append(task)
             return task
