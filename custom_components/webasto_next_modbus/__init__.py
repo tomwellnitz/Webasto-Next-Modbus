@@ -470,7 +470,7 @@ async def _async_service_set_led_brightness(call: ServiceCall) -> None:
         raise HomeAssistantError("REST API is not enabled for this wallbox")
 
     brightness = int(call.data["brightness"])
-    rest_client = runtime.coordinator._rest_client
+    rest_client = runtime.coordinator.rest_client
     if rest_client is None:
         raise HomeAssistantError("REST client not available")
 
@@ -490,7 +490,7 @@ async def _async_service_set_free_charging(call: ServiceCall) -> None:
         raise HomeAssistantError("REST API is not enabled for this wallbox")
 
     enabled = bool(call.data["enabled"])
-    rest_client = runtime.coordinator._rest_client
+    rest_client = runtime.coordinator.rest_client
     if rest_client is None:
         raise HomeAssistantError("REST client not available")
 
@@ -509,7 +509,7 @@ async def _async_service_restart_wallbox(call: ServiceCall) -> None:
     if not runtime.coordinator.rest_enabled:
         raise HomeAssistantError("REST API is not enabled for this wallbox")
 
-    rest_client = runtime.coordinator._rest_client
+    rest_client = runtime.coordinator.rest_client
     if rest_client is None:
         raise HomeAssistantError("REST client not available")
 

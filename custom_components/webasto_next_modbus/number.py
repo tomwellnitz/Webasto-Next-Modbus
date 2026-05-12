@@ -219,7 +219,7 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
         device_name: str,
     ) -> None:
         super().__init__(
-            coordinator, host, unit_id, "led_brightness", device_name, coordinator._rest_client
+            coordinator, host, unit_id, "led_brightness", device_name, coordinator.rest_client
         )
         self._pending_value: int | None = None
 
