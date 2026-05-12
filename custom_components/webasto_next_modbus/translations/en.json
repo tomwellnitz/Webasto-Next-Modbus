@@ -245,5 +245,11 @@
         "name": "Free Charging"
       }
     }
+  },
+  "issues": {
+    "rest_auth_failed": {
+      "title": "Webasto Next: REST API authentication failed",
+      "description": "The REST API username or password is no longer accepted by the wallbox. Update them in the integration options (Settings → Devices & Services → Webasto Next → Configure). The Modbus side keeps working in the meantime."
+    }
   }
 }

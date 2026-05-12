@@ -326,8 +326,11 @@ class RestClient:
                     msg = "Invalid username or password"
                     raise AuthenticationError(msg)
                 if resp.status != 200:
+                    # Not a credentials problem (e.g. the wallbox web server is
+                    # still coming up) — treat it as a connection error so the
+                    # caller retries instead of flagging the credentials.
                     msg = f"Login failed with status {resp.status}"
-                    raise AuthenticationError(msg)
+                    raise ConnectionError(msg)
 
                 data = await resp.json()
                 self._token = data.get("access_token")
