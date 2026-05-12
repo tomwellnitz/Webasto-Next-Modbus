@@ -246,5 +246,11 @@
     "abort": {
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
+  },
+  "issues": {
+    "rest_auth_failed": {
+      "title": "Webasto Next: REST-API-Anmeldung fehlgeschlagen",
+      "description": "Der REST-API-Benutzername oder das Passwort werden von der Wallbox nicht mehr akzeptiert. Bitte in den Integrations-Optionen aktualisieren (Einstellungen → Geräte & Dienste → Webasto Next → Konfigurieren). Die Modbus-Seite läuft in der Zwischenzeit weiter."
+    }
   }
 }

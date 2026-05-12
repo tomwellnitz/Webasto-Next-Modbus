@@ -14,6 +14,7 @@
 - **Service resolver**: Looks up loaded entries via `hass.config_entries.async_loaded_entries(DOMAIN)` and reads each entry's `runtime_data`, removing the last direct dependency on `hass.data[DOMAIN]`.
 - `manifest.json` no longer lists `aiohttp` as a requirement: it is part of Home Assistant core, and a `>=` requirement in the manifest can interfere with pip resolving the core pin. It stays in `pyproject.toml` for the test environment.
 - The **charging current limit** number is seeded from the wallbox's current register value when it's added (rather than starting blank on a fresh install); if the wallbox doesn't answer that read it falls back to the previously stored value as before.
+- When the wallbox rejects the configured REST API credentials (HTTP 401), the integration now raises a **repair issue** ("REST API authentication failed") instead of only logging a warning, so it's visible and you know to update the password. The Modbus side keeps working regardless. A non-401 REST login failure (e.g. the wallbox web server still booting) is treated as a transient connection error and retried, not flagged as a credentials problem.
 
 ### Fixed
 
