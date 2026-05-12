@@ -2,6 +2,10 @@
 
 ## [1.1.7] - 2026-05-11
 
+### Added
+
+- A diagnostic **"Connected"** binary sensor (`device_class: connectivity`) that reports whether the integration is currently reaching the wallbox. Unlike the regular entities (which go `unavailable` when the wallbox is offline) it stays available and reads `off`, so it can be used directly in automations and dashboards.
+
 ### Changed
 
 - **Modern config entry handling**: Runtime data is now stored on `entry.runtime_data` (typed `ConfigEntry[RuntimeData]`) instead of `hass.data[DOMAIN][entry.entry_id]`. Platforms (`button`, `sensor`, `number`, `switch`, `text`) and diagnostics read it directly from the entry.
