@@ -13,6 +13,7 @@
 - **Config flow**: `_abort_if_unique_id_configured(reload_on_update=False)` is now passed explicitly to opt out of the implicit reload-on-update path. Combined with the existing update listener this future-proofs us against the deprecation that turns into an error in Home Assistant 2026.12.
 - **Service resolver**: Looks up loaded entries via `hass.config_entries.async_loaded_entries(DOMAIN)` and reads each entry's `runtime_data`, removing the last direct dependency on `hass.data[DOMAIN]`.
 - `manifest.json` no longer lists `aiohttp` as a requirement: it is part of Home Assistant core, and a `>=` requirement in the manifest can interfere with pip resolving the core pin. It stays in `pyproject.toml` for the test environment.
+- The **charging current limit** number is seeded from the wallbox's current register value when it's added (rather than starting blank on a fresh install); if the wallbox doesn't answer that read it falls back to the previously stored value as before.
 
 ### Fixed
 
