@@ -388,3 +388,48 @@ async def test_write_only_number_restores_last_value(coordinator_fixture) -> Non
     number.async_write_ha_state.assert_called()
     assert number.native_value == 18
     assert number._last_written_value == 18
+
+
+async def test_write_only_number_seeds_from_wallbox(coordinator_fixture) -> None:
+    """A write-only number reads its current value from the wallbox on add."""
+
+    coordinator, bridge = coordinator_fixture
+    register = get_register("set_current_a")
+    bridge.async_read_register = AsyncMock(return_value=16)
+
+    number = WebastoNumber(coordinator, bridge, "192.0.2.30", 9, register, DEVICE_NAME, 32)
+    number.hass = MagicMock()
+    number.async_write_ha_state = MagicMock()
+    number.async_get_last_number_data = AsyncMock(return_value=MagicMock(native_value=24))
+
+    with patch(
+        "custom_components.webasto_next_modbus.number.async_dispatcher_connect",
+        return_value=lambda: None,
+    ):
+        await number.async_added_to_hass()
+
+    assert number.native_value == 16
+    assert number._last_written_value == 16
+    # The restore / re-apply fallback path was not used.
+    bridge.async_write_register.assert_not_awaited()
+    number.async_get_last_number_data.assert_not_awaited()
+
+
+async def test_connectivity_binary_sensor(coordinator_fixture) -> None:
+    """The connectivity sensor stays available and tracks last_update_success."""
+
+    from custom_components.webasto_next_modbus.binary_sensor import WebastoConnectivitySensor
+
+    coordinator, _bridge = coordinator_fixture
+    coordinator.last_update_success = True
+
+    sensor = WebastoConnectivitySensor(coordinator, "192.0.2.40", 3, DEVICE_NAME)
+
+    assert sensor.unique_id == "192.0.2.40-3-connected"
+    assert sensor.translation_key == "connected"
+    assert sensor.available is True
+    assert sensor.is_on is True
+
+    coordinator.last_update_success = False
+    assert sensor.available is True
+    assert sensor.is_on is False

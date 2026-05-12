@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.webasto_next_modbus.const import CONF_REST_ENABLED, CONF_REST_PASSWORD
 from custom_components.webasto_next_modbus.coordinator import WebastoDataCoordinator
 from custom_components.webasto_next_modbus.device_trigger import (
     TRIGGER_CHARGING_STARTED,
@@ -18,6 +19,7 @@ from custom_components.webasto_next_modbus.device_trigger import (
     TRIGGER_CONNECTION_RESTORED,
 )
 from custom_components.webasto_next_modbus.hub import ModbusBridge, WebastoModbusError
+from custom_components.webasto_next_modbus.rest_client import AuthenticationError
 
 pytestmark = pytest.mark.asyncio
 
@@ -198,3 +200,91 @@ async def test_coordinator_emits_connection_triggers() -> None:
     )
     assert restored_call.args[1] == "192.0.2.1-255"
     assert "timestamp" in restored_call.args[3]
+
+
+async def test_coordinator_retries_rest_setup_when_due() -> None:
+    """A previously failed REST setup is retried from the data poll once the interval passes."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.async_read_data = AsyncMock(return_value={})
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+
+    coordinator = _build_coordinator(bridge, entry)
+    coordinator.async_setup_rest_client = AsyncMock()
+    coordinator._rest_setup_retry_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    with patch(
+        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_dismiss"
+    ):
+        await coordinator._async_update_data()
+
+    coordinator.async_setup_rest_client.assert_awaited_once()
+
+
+async def test_coordinator_does_not_retry_rest_setup_before_due() -> None:
+    """The REST setup retry is throttled by `_rest_setup_retry_at`."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.async_read_data = AsyncMock(return_value={})
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+
+    coordinator = _build_coordinator(bridge, entry)
+    coordinator.async_setup_rest_client = AsyncMock()
+    coordinator._rest_setup_retry_at = datetime.now(UTC) + timedelta(minutes=10)
+
+    with patch(
+        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_dismiss"
+    ):
+        await coordinator._async_update_data()
+
+    coordinator.async_setup_rest_client.assert_not_awaited()
+
+
+async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
+    """A 401 on the REST login surfaces a repair issue and disables REST (no retry)."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.endpoint = "192.0.2.1:502 (device_id 255)"
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        entry_id="1234",
+        options={CONF_REST_ENABLED: True, CONF_REST_PASSWORD: "secret"},
+    )
+    coordinator = _build_coordinator(bridge, entry)
+
+    with (
+        patch("custom_components.webasto_next_modbus.coordinator.ir") as mock_ir,
+        patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
+    ):
+        mock_rc.return_value.connect = AsyncMock(side_effect=AuthenticationError("bad creds"))
+        mock_rc.return_value.disconnect = AsyncMock()
+        await coordinator.async_setup_rest_client()
+
+    assert coordinator._rest_client is None
+    assert coordinator._rest_setup_retry_at is None
+    mock_rc.return_value.disconnect.assert_awaited_once()
+    mock_ir.async_create_issue.assert_called_once()
+
+
+async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
+    """A successful REST connect clears the auth repair issue."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.endpoint = "192.0.2.1:502 (device_id 255)"
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        entry_id="1234",
+        options={CONF_REST_ENABLED: True, CONF_REST_PASSWORD: "secret"},
+    )
+    coordinator = _build_coordinator(bridge, entry)
+
+    with (
+        patch("custom_components.webasto_next_modbus.coordinator.ir") as mock_ir,
+        patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
+    ):
+        mock_rc.return_value.connect = AsyncMock()
+        mock_rc.return_value.disconnect = AsyncMock()
+        await coordinator.async_setup_rest_client()
+
+    assert coordinator._rest_client is mock_rc.return_value
+    mock_ir.async_delete_issue.assert_called_once()
