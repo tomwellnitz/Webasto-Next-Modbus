@@ -58,7 +58,7 @@ jobs:
           fi
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: webasto_next_modbus.zip
           body_path: RELEASE_NOTES.md
