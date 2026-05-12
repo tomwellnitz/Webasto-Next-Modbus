@@ -455,3 +455,89 @@ async def test_connectivity_binary_sensor(coordinator_fixture) -> None:
     coordinator.last_update_success = False
     assert sensor.available is True
     assert sensor.is_on is False
+
+
+async def test_led_brightness_does_not_revert_to_stale_value(coordinator_fixture) -> None:
+    """Setting LED brightness forces a REST refresh and isn't bounced back by stale cache."""
+
+    from custom_components.webasto_next_modbus.number import WebastoLedBrightness
+
+    coordinator, _bridge = coordinator_fixture
+    coordinator.rest_enabled = True
+    coordinator.rest_data = MagicMock(
+        led_brightness=19,
+        comboard_sw_version=None,
+        comboard_hw_version=None,
+        ip_address=None,
+        mac_address_ethernet=None,
+        mac_address_wifi=None,
+    )
+    coordinator.rest_client = MagicMock()
+    coordinator.rest_client.set_led_brightness = AsyncMock()
+
+    led = WebastoLedBrightness(coordinator, "192.0.2.50", 3, DEVICE_NAME)
+    led.hass = MagicMock()
+    led.async_write_ha_state = MagicMock()
+
+    async def _refresh() -> None:
+        # The wallbox now reports the value we just set.
+        coordinator.rest_data = MagicMock(
+            led_brightness=5,
+            comboard_sw_version=None,
+            comboard_hw_version=None,
+            ip_address=None,
+            mac_address_ethernet=None,
+            mac_address_wifi=None,
+        )
+        led._handle_coordinator_update()
+
+    coordinator.async_refresh_rest_data = _refresh
+
+    await led.async_set_native_value(5)
+
+    coordinator.rest_client.set_led_brightness.assert_awaited_once_with(5)
+    assert led.native_value == 5
+    assert led._pending_value is None
+    # A later coordinator poll with the (still-correct) value must not revert it.
+    led._handle_coordinator_update()
+    assert led.native_value == 5
+
+
+async def test_free_charging_switch_does_not_revert_to_stale_value(coordinator_fixture) -> None:
+    """Toggling free charging forces a REST refresh and isn't bounced back by stale cache."""
+
+    from custom_components.webasto_next_modbus.switch import WebastoFreeChargingSwitch
+
+    def _rest_data(enabled):
+        return MagicMock(
+            free_charging_enabled=enabled,
+            comboard_sw_version=None,
+            comboard_hw_version=None,
+            ip_address=None,
+            mac_address_ethernet=None,
+            mac_address_wifi=None,
+        )
+
+    coordinator, _bridge = coordinator_fixture
+    coordinator.rest_enabled = True
+    coordinator.rest_data = _rest_data(False)
+    coordinator.rest_client = MagicMock()
+    coordinator.rest_client.set_free_charging = AsyncMock()
+
+    switch = WebastoFreeChargingSwitch(coordinator, "192.0.2.51", 3, DEVICE_NAME)
+    switch.hass = MagicMock()
+    switch.async_write_ha_state = MagicMock()
+
+    async def _refresh() -> None:
+        coordinator.rest_data = _rest_data(True)
+        switch._handle_coordinator_update()
+
+    coordinator.async_refresh_rest_data = _refresh
+
+    await switch.async_turn_on()
+
+    coordinator.rest_client.set_free_charging.assert_awaited_once_with(True)
+    assert switch.is_on is True
+    assert switch._pending_state is None
+    switch._handle_coordinator_update()
+    assert switch.is_on is True

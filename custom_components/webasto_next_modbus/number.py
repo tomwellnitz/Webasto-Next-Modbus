@@ -280,14 +280,20 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
     def _handle_coordinator_update(self) -> None:
         """Update the native value from coordinator REST data."""
 
+        rest_data = self.coordinator.rest_data
+        current = (
+            None if rest_data is None or rest_data.led_brightness is None
+            else int(rest_data.led_brightness)
+        )
+        # Drop the optimistic value once the wallbox confirms it via REST,
+        # so a stale cached value can't bounce the slider back.
+        if self._pending_value is not None and current == self._pending_value:
+            self._pending_value = None
+
         if self._pending_value is not None:
             self._attr_native_value = float(self._pending_value)
         else:
-            rest_data = self.coordinator.rest_data
-            if rest_data is None or rest_data.led_brightness is None:
-                self._attr_native_value = None
-            else:
-                self._attr_native_value = float(rest_data.led_brightness)
+            self._attr_native_value = None if current is None else float(current)
 
         super()._handle_coordinator_update()
 
@@ -306,10 +312,10 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
             await self._rest_client.set_led_brightness(int_value)
         except Exception as err:
             self._pending_value = None
+            if self.hass is not None:
+                self._handle_coordinator_update()
             raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
 
-        # Refresh REST data to get updated value
-        await self.coordinator.async_request_refresh()
-        self._pending_value = None
-        if self.hass is not None:
-            self.async_write_ha_state()
+        # Re-fetch the REST data now (regular polling is throttled) so the UI
+        # shows the value the wallbox actually has.
+        await self.coordinator.async_refresh_rest_data()

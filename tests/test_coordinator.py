@@ -240,6 +240,26 @@ async def test_coordinator_does_not_retry_rest_setup_before_due() -> None:
     coordinator.async_setup_rest_client.assert_not_awaited()
 
 
+async def test_coordinator_force_refreshes_rest_data() -> None:
+    """`async_refresh_rest_data` bypasses the polling throttle and notifies listeners."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+    coordinator = _build_coordinator(bridge, entry)
+
+    sentinel = object()
+    rest_client = MagicMock()
+    rest_client.get_data = AsyncMock(return_value=sentinel)
+    coordinator._rest_client = rest_client
+    # A regular poll would skip the fetch because the interval hasn't elapsed.
+    coordinator._rest_last_update = datetime.now(UTC)
+
+    await coordinator.async_refresh_rest_data()
+
+    rest_client.get_data.assert_awaited_once()
+    assert coordinator.rest_data is sentinel
+
+
 async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
     """A 401 on the REST login surfaces a repair issue and disables REST (no retry)."""
 

@@ -215,14 +215,28 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             return data
 
-    async def _async_update_rest_data(self) -> None:
-        """Fetch REST API data if enabled and interval has passed."""
+    async def async_refresh_rest_data(self) -> None:
+        """Force an immediate REST data re-fetch (e.g. after a REST write).
+
+        Regular REST polling is throttled to ``REST_SCAN_INTERVAL``; after we
+        change something via REST we want the new value reflected right away
+        instead of bouncing back to the stale cached value on the next Modbus
+        poll.
+        """
+        if self._rest_client is None:
+            return
+        await self._async_update_rest_data(force=True)
+        self.async_update_listeners()
+
+    async def _async_update_rest_data(self, force: bool = False) -> None:
+        """Fetch REST API data if enabled and the interval has passed."""
         if self._rest_client is None:
             return
 
         now = datetime.now(UTC)
         if (
-            self._rest_last_update is not None
+            not force
+            and self._rest_last_update is not None
             and now - self._rest_last_update < self._rest_update_interval
         ):
             return
