@@ -663,7 +663,10 @@ CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 _UNITE_SENSOR_SKIP: Final = frozenset({"session_user_id", "smart_vehicle_detected"})
 _UNITE_SENSOR_OVERRIDES: Final[dict[str, dict[str, object]]] = {
     "charge_point_state": {"options": UNITE_CHARGE_POINT_STATE_MAP},
-    "fault_code": {"options": None},
+    # The Unite has no documented fault-code enum, so it surfaces the raw
+    # numeric code. Drop the "enum" device class so Home Assistant does not
+    # validate the value against a (missing) options list.
+    "fault_code": {"options": None, "device_class": None},
     "energy_total_kwh": {"scale": 0.1},
     "charged_energy_wh": {"data_type": "uint32", "count": 2},
 }
