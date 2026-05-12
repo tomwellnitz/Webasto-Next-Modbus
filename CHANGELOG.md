@@ -29,6 +29,7 @@
 
 - Removed the unused, stale `INTEGRATION_VERSION` constant from `const.py` (the integration version lives in `manifest.json` / `pyproject.toml`).
 - Removed a redundant `available` override on the Modbus register entity base class (it just returned the coordinator-entity default).
+- The **Free charging tag ID** text entity now uses the same `unique_id` scheme as the other REST entities (`<slug>-rest-free_charging_tag_id`); the old `host_unit_key` id is migrated automatically in the entity registry, so history and customisations are preserved.
 - Replaced a few private-attribute accesses with public accessors: external code now uses `WebastoDataCoordinator.rest_client` and `ModbusBridge.host` / `ModbusBridge.unit_id`.
 - Bumped README maintenance badge to 2026.
 - Documented the dependency-pinning conventions in `AGENTS.md` (`manifest.json` lists only packages HA core does not provide; `pymodbus` stays pinned to `<3.12`).
