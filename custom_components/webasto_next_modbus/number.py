@@ -282,7 +282,8 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[mis
 
         rest_data = self.coordinator.rest_data
         current = (
-            None if rest_data is None or rest_data.led_brightness is None
+            None
+            if rest_data is None or rest_data.led_brightness is None
             else int(rest_data.led_brightness)
         )
         # Drop the optimistic value once the wallbox confirms it via REST,
