@@ -58,7 +58,7 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):  # type: ignor
     ) -> None:
         """Initialize the Free Charging switch."""
         super().__init__(
-            coordinator, host, unit_id, "free_charging", device_name, coordinator._rest_client
+            coordinator, host, unit_id, "free_charging", device_name, coordinator.rest_client
         )
         self._pending_state: bool | None = None
         self._attr_is_on: bool | None = None

@@ -99,10 +99,8 @@ This script executes:
 
 ### 5. Dependency Pinning
 
-- Runtime dependencies (`pymodbus`, `aiohttp`, …) are declared in **two** places that must stay in sync:
-  - `pyproject.toml` under `[project].dependencies`
-  - `custom_components/webasto_next_modbus/manifest.json` under `requirements`
-- HACS / hassfest validation will fail if these drift apart. Update both in the same commit.
+- `manifest.json` `requirements` lists **only** packages that Home Assistant core does not already provide — currently just `pymodbus`. `aiohttp` is part of HA core, so it must **not** be listed in the manifest (a `>=` requirement there can interfere with pip resolving HA core's own pin). It still belongs in `pyproject.toml` `[project].dependencies` because the test/dev environment imports it directly (`rest_client.py`).
+- Where a package appears in **both** `pyproject.toml` and `manifest.json` (i.e. `pymodbus`), the version specifiers must stay in sync — HACS / hassfest validation flags drift. Update both in the same commit.
 - `pymodbus` is pinned to `>=3.11.2,<3.12` to match the version Home Assistant core's built-in `modbus` integration pins. Do **not** loosen this bound without first checking that HA core's pin has moved — pymodbus 3.12+ removed `ModbusDeviceContext.store`/`decode` and added a `SimDevice` validator that breaks our virtual wallbox.
 
 ## 🧪 Testing Strategy

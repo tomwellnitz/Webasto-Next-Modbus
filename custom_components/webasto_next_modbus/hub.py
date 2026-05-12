@@ -545,6 +545,18 @@ class ModbusBridge:
             )
 
     @property
+    def host(self) -> str:
+        """Return the configured Modbus host."""
+
+        return self._host
+
+    @property
+    def unit_id(self) -> int:
+        """Return the configured Modbus unit / device id."""
+
+        return self._unit_id
+
+    @property
     def endpoint(self) -> str:
         """Return the Modbus endpoint for logging/diagnostics."""
 

@@ -102,7 +102,7 @@ class WebastoRestartButton(WebastoRestEntity, ButtonEntity):  # type: ignore[mis
         device_name: str,
     ) -> None:
         super().__init__(
-            coordinator, host, unit_id, "restart_system", device_name, coordinator._rest_client
+            coordinator, host, unit_id, "restart_system", device_name, coordinator.rest_client
         )
 
     async def async_press(self) -> None:

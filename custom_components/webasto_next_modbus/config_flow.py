@@ -186,7 +186,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 continue
             bridge = runtime.bridge
             # Check if this bridge matches the host/unit_id we're testing
-            if bridge._host == host and bridge._unit_id == unit_id:
+            if bridge.host == host and bridge.unit_id == unit_id:
                 return bridge
         return None
 

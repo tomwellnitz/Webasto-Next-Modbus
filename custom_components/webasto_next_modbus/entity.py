@@ -118,12 +118,6 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
 
         return self.coordinator.data.get(self._register.key)
 
-    @property
-    def available(self) -> bool | None:  # type: ignore[override]
-        """Return availability aligned with Entity expectations."""
-
-        return super().available
-
 
 class WebastoRestEntity(CoordinatorEntity[WebastoDataCoordinator]):
     """Base entity for REST API data."""
