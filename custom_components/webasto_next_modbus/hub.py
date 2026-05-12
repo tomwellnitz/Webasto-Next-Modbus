@@ -218,18 +218,18 @@ class ModbusBridge:
     async def _life_bit_loop(self) -> None:
         """Maintain the wallbox keep-alive ("life bit") register.
 
-        - While the wallbox is unreachable, back off exponentially and log the
-          failure only once (then at DEBUG) so a slow boot doesn't flood the log.
-        - If the wallbox keeps rejecting the life-bit register itself, give up:
-          some firmwares simply don't implement it, and there's no point
-          hammering the register on every cycle.
+        There is no "wallbox ready" status register: while the wallbox is still
+        booting (which can take a couple of minutes) reads and writes simply come
+        back as Modbus exceptions, and a powered-off wallbox refuses the
+        connection outright. Either way the loop just backs off exponentially
+        and keeps trying — and logs the failure only once (then at DEBUG) so a
+        slow boot doesn't flood the log — until an operation finally succeeds.
         """
         life_bit_reg = get_register("send_keepalive")
         timeout_reg = get_register("failsafe_timeout_s")
 
         backoff = LIFE_BIT_BACKOFF_MIN
         warned = False
-        device_rejections = 0
 
         while True:
             try:
@@ -239,17 +239,16 @@ class ModbusBridge:
                     if isinstance(val, (int, float)):
                         poll_timeout = max(int(val), LIFE_BIT_MIN_INTERVAL)
                 except WebastoModbusDeviceError:
-                    pass  # firmware quirk reading @2002; use the default window
-                # Transport errors here propagate to the handlers below.
+                    pass  # quirk reading @2002; use the default window, still try the write
+                # Transport errors here propagate to the handler below.
 
                 await self.async_write_register(life_bit_reg, 1)
 
-                # Success: reset error state.
+                # Success: the wallbox is up. Reset the error state.
                 if warned:
                     _LOGGER.info("Life bit loop recovered")
                     warned = False
                 backoff = LIFE_BIT_BACKOFF_MIN
-                device_rejections = 0
 
                 start_time = time.time()
                 while time.time() - start_time < poll_timeout:
@@ -267,19 +266,9 @@ class ModbusBridge:
 
             except asyncio.CancelledError:
                 raise
-            except WebastoModbusDeviceError as err:
-                device_rejections += 1
-                if device_rejections >= 3:
-                    _LOGGER.info(
-                        "Wallbox rejected the life-bit register (@%s) repeatedly (%s); "
-                        "disabling the keep-alive loop until the integration reloads",
-                        life_bit_reg.address,
-                        err,
-                    )
-                    return
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, LIFE_BIT_BACKOFF_MAX)
             except Exception as err:  # noqa: BLE001 - keep the loop alive
+                # Device exception (still booting / wallbox in a bad state) or
+                # transport error (powered off): back off and retry, quietly.
                 if not warned:
                     _LOGGER.warning("Life bit loop error (will keep retrying): %s", err)
                     warned = True
