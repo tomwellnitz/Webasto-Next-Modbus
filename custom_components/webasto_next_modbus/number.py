@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
@@ -185,16 +186,22 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
 
         Write-only registers (e.g. the charging-current limit) aren't polled,
         so the entity would otherwise start blank on a fresh install. Reading
-        the register once at startup fills it in if the wallbox answers.
-        Returns ``True`` if a value was obtained.
+        the register once at startup fills it in if the wallbox answers
+        promptly. Returns ``True`` if a value was obtained.
         """
         try:
-            value = await self._bridge.async_read_register(self._register)
-        except WebastoModbusError:
+            value = await asyncio.wait_for(
+                self._bridge.async_read_register(self._register), timeout=5
+            )
+        except WebastoModbusError, TimeoutError:
             return False
         if not isinstance(value, (int, float)):
             return False
-        int_value = int(value)
+        int_value = int(round(value))
+        if self._attr_native_min_value is not None:
+            int_value = max(int_value, int(self._attr_native_min_value))
+        if self._attr_native_max_value is not None:
+            int_value = min(int_value, int(self._attr_native_max_value))
         self._last_written_value = int_value
         self._attr_native_value = float(int_value)
         if self.hass is not None:
