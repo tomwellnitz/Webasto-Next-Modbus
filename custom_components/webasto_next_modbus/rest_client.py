@@ -142,10 +142,12 @@ class RestClient:
             login_ok = True
         finally:
             if not login_ok:
-                # Covers exceptions *and* task cancellation (HA shutdown):
-                # don't leave an open aiohttp session behind.
+                # Covers exceptions *and* task cancellation (HA shutdown).
+                # Shield the close so it still runs to completion even if a
+                # cancellation interrupts us here, instead of leaving an open
+                # aiohttp session behind.
                 with contextlib.suppress(Exception):
-                    await self.disconnect()
+                    await asyncio.shield(self.disconnect())
 
     async def disconnect(self) -> None:
         """Close the session."""
