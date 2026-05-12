@@ -251,18 +251,24 @@ class ModbusBridge:
                 backoff = LIFE_BIT_BACKOFF_MIN
 
                 start_time = time.time()
+                read_failed = False
                 while time.time() - start_time < poll_timeout:
                     try:
                         if await self.async_read_register(life_bit_reg) == 0:
                             _LOGGER.debug("Life bit cleared after %.2f s", time.time() - start_time)
                             break
                     except WebastoModbusError:
-                        break  # don't spin re-reading; the next cycle handles it
+                        # Reading the life-bit register failed (rare: writes work
+                        # but reads don't). Stop polling it; the longer cooldown
+                        # below keeps this from becoming a tight write loop.
+                        read_failed = True
+                        break
                     await asyncio.sleep(1)
 
                 # Floor between keep-alive cycles so a fast-clearing life bit
-                # cannot turn this into a tight write loop.
-                await asyncio.sleep(1)
+                # (or a register we can't read back) can't turn this into a
+                # tight write loop.
+                await asyncio.sleep(LIFE_BIT_MIN_INTERVAL if read_failed else 1)
 
             except asyncio.CancelledError:
                 raise

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import ssl
 from dataclasses import dataclass
@@ -135,11 +136,16 @@ class RestClient:
             ConnectionError: If connection to wallbox fails.
         """
         await self._ensure_session()
+        login_ok = False
         try:
             await self._login()
-        except Exception:
-            await self.disconnect()
-            raise
+            login_ok = True
+        finally:
+            if not login_ok:
+                # Covers exceptions *and* task cancellation (HA shutdown):
+                # don't leave an open aiohttp session behind.
+                with contextlib.suppress(Exception):
+                    await self.disconnect()
 
     async def disconnect(self) -> None:
         """Close the session."""
