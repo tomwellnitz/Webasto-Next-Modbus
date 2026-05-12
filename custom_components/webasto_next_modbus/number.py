@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
@@ -15,6 +16,7 @@ from . import WebastoConfigEntry
 from .const import CONF_UNIT_ID, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
+from .hub import WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,17 +145,20 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         super()._handle_coordinator_update()
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to dispatcher events once entity is added to Home Assistant."""
+        """Seed/restore the value and subscribe to dispatcher events."""
 
         await super().async_added_to_hass()
-        if self._write_only:
+        if self._write_only and not await self._async_seed_from_wallbox():
+            # The wallbox didn't give us the current value (e.g. it doesn't
+            # support reading this register, or it's still booting): fall back
+            # to the last value we set and re-assert it.
             last_number_data = await self.async_get_last_number_data()
             if last_number_data and last_number_data.native_value is not None:
                 try:
                     restored_value = float(last_number_data.native_value)
                 except TypeError, ValueError:
                     _LOGGER.debug(
-                        "Ignoring invalid restored charging current %s for %s",
+                        "Ignoring invalid restored value %s for %s",
                         last_number_data.native_value,
                         self.entity_id,
                     )
@@ -162,7 +167,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
                         await self.async_set_native_value(restored_value)
                     except HomeAssistantError as err:
                         _LOGGER.warning(
-                            "Failed to re-apply charging current %s for %s: %s",
+                            "Failed to re-apply %s for %s: %s",
                             restored_value,
                             self.entity_id,
                             err,
@@ -175,6 +180,33 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             self._handle_register_written,
         )
         self.async_on_remove(remove)
+
+    async def _async_seed_from_wallbox(self) -> bool:
+        """Seed the value from the wallbox's current register value.
+
+        Write-only registers (e.g. the charging-current limit) aren't polled,
+        so the entity would otherwise start blank on a fresh install. Reading
+        the register once at startup fills it in if the wallbox answers
+        promptly. Returns ``True`` if a value was obtained.
+        """
+        try:
+            value = await asyncio.wait_for(
+                self._bridge.async_read_register(self._register), timeout=5
+            )
+        except WebastoModbusError, TimeoutError:
+            return False
+        if not isinstance(value, (int, float)):
+            return False
+        int_value = int(round(value))
+        if self._attr_native_min_value is not None:
+            int_value = max(int_value, int(self._attr_native_min_value))
+        if self._attr_native_max_value is not None:
+            int_value = min(int_value, int(self._attr_native_max_value))
+        self._last_written_value = int_value
+        self._attr_native_value = float(int_value)
+        if self.hass is not None:
+            self.async_write_ha_state()
+        return True
 
     def _handle_register_written(
         self,
