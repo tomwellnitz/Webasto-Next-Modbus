@@ -4,9 +4,29 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # Only direct dependencies declared in pyproject.toml; there is no lock
+    # file, so transitive bumps would just be noise.
     allow:
-      - dependency-type: "all"
+      - dependency-type: "direct"
+    ignore:
+      # pymodbus is pinned to match Home Assistant core's `modbus` integration
+      # (pymodbus==3.11.2 as of HA 2026.5); see AGENTS.md. Only patch bumps
+      # within the 3.11.x line are acceptable until HA core moves.
+      - dependency-name: "pymodbus"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
