@@ -10,6 +10,7 @@
           "port": "Port",
           "unit_id": "Unit ID",
           "scan_interval": "Update interval (seconds)",
+          "model": "Wallbox model",
           "variant": "Variant",
           "name": "Name (optional)"
         }
@@ -31,6 +32,7 @@
         "description": "Adjust advanced settings.",
         "data": {
           "scan_interval": "Update interval (seconds)",
+          "model": "Wallbox model",
           "variant": "Variant",
           "name": "Name (optional)",
           "rest_enabled": "Enable REST API",
@@ -67,8 +69,13 @@
           "preparing": "Preparing",
           "charging": "Charging",
           "suspended": "Suspended",
+          "suspended_evse": "Suspended (EVSE)",
+          "suspended_ev": "Suspended (vehicle)",
+          "finishing": "Finishing",
           "error": "Error",
-          "reserved": "Reserved"
+          "reserved": "Reserved",
+          "unavailable": "Unavailable",
+          "faulted": "Faulted"
         }
       },
       "charging_state": {
@@ -148,6 +155,25 @@
       },
       "energy_total_kwh": {
         "name": "Energy Total"
+      },
+      "voltage_l1": {
+        "name": "Voltage L1"
+      },
+      "voltage_l2": {
+        "name": "Voltage L2"
+      },
+      "voltage_l3": {
+        "name": "Voltage L3"
+      },
+      "chargepoint_power_w": {
+        "name": "Chargepoint Power"
+      },
+      "number_of_phases": {
+        "name": "Number of Phases",
+        "state": {
+          "single_phase": "Single-phase",
+          "three_phase": "Three-phase"
+        }
       },
       "session_max_current_a": {
         "name": "Max Current"

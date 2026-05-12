@@ -15,7 +15,7 @@ from .const import (
     REGISTER_TYPE,
     RETRY_BACKOFF_SECONDS,
     RegisterDefinition,
-    all_registers,
+    get_readable_registers,
     get_register,
 )
 
@@ -179,6 +179,7 @@ class ModbusBridge:
         port: int,
         unit_id: int,
         read_timeout: float = 5.0,
+        registers: tuple[RegisterDefinition, ...] | None = None,
     ) -> None:
         client_cls, exception_cls = _ensure_pymodbus()
 
@@ -190,9 +191,10 @@ class ModbusBridge:
         self._modbus_exception = exception_cls
         self._client: Any | None = None
         self._lock = asyncio.Lock()
-        self._read_plan: tuple[ReadRequest, ...] = _build_read_plan(
-            all_registers(include_write_only=False)
+        self._readable_registers: tuple[RegisterDefinition, ...] = (
+            tuple(registers) if registers is not None else get_readable_registers()
         )
+        self._read_plan: tuple[ReadRequest, ...] = _build_read_plan(self._readable_registers)
         self._life_bit_task: asyncio.Task[None] | None = None
 
     async def start_life_bit_loop(self) -> None:
@@ -429,11 +431,9 @@ class ModbusBridge:
     async def async_test_connection(self) -> None:
         """Perform a lightweight read to validate the connection."""
 
-        registers = all_registers(include_write_only=False)
-        if not registers:
+        if not self._readable_registers:
             return
-        test_register = registers[0]
-        await self.async_read_register(test_register)
+        await self.async_read_register(self._readable_registers[0])
 
     async def async_read_register(self, register: RegisterDefinition) -> int | float | str | None:
         """Read a single register definition and return the decoded value."""

@@ -32,7 +32,7 @@ def build_device_info(
     device_info = DeviceInfo(
         identifiers={(DOMAIN, unique_prefix)},
         manufacturer=MANUFACTURER,
-        model=MODEL,
+        model=getattr(coordinator, "device_model_name", None) or MODEL,
         name=device_name,
     )
 

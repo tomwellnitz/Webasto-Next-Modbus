@@ -21,6 +21,7 @@ from .const import (
     DOMAIN,
     FAILURE_NOTIFICATION_THRESHOLD,
     FAILURE_NOTIFICATION_TITLE,
+    MODEL,
     REST_SCAN_INTERVAL,
     REST_SETUP_RETRY_INTERVAL,
 )
@@ -53,9 +54,11 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_interval: timedelta,
         device_slug: str,
         config_entry: ConfigEntry | None = None,
+        device_model_name: str = MODEL,
     ) -> None:
         self._bridge = bridge
         self._device_slug = device_slug
+        self.device_model_name = device_model_name
         self.entry_id = entry_id
         self.consecutive_failures = 0
         self.last_success: datetime | None = None

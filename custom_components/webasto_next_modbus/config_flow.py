@@ -14,6 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_MODEL,
     CONF_NAME,
     CONF_REST_ENABLED,
     CONF_REST_PASSWORD,
@@ -21,6 +22,7 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
+    DEFAULT_MODEL,
     DEFAULT_PORT,
     DEFAULT_REST_USERNAME,
     DEFAULT_SCAN_INTERVAL,
@@ -29,7 +31,9 @@ from .const import (
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    MODEL_LABELS,
     VARIANT_LABELS,
+    get_readable_registers,
 )
 from .hub import ModbusBridge, WebastoModbusError
 
@@ -83,6 +87,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_UNIT_ID: normalized_input[CONF_UNIT_ID],
                     CONF_SCAN_INTERVAL: normalized_input[CONF_SCAN_INTERVAL],
                     CONF_VARIANT: normalized_input[CONF_VARIANT],
+                    CONF_MODEL: normalized_input[CONF_MODEL],
                 }
                 if name:
                     data[CONF_NAME] = name
@@ -97,6 +102,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options={
                         CONF_SCAN_INTERVAL: normalized_input[CONF_SCAN_INTERVAL],
                         CONF_VARIANT: normalized_input[CONF_VARIANT],
+                        CONF_MODEL: normalized_input[CONF_MODEL],
                     },
                 )
 
@@ -138,6 +144,10 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 vol.Required(
+                    CONF_MODEL,
+                    default=defaults.get(CONF_MODEL, DEFAULT_MODEL),
+                ): vol.In(MODEL_LABELS),
+                vol.Required(
                     CONF_VARIANT,
                     default=defaults.get(CONF_VARIANT, DEFAULT_VARIANT),
                 ): vol.In(VARIANT_LABELS),
@@ -166,7 +176,12 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise CannotConnect from err
 
         # No existing bridge, create a temporary one for validation
-        bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
+        bridge = ModbusBridge(
+            host=host,
+            port=port,
+            unit_id=unit_id,
+            registers=get_readable_registers(data.get(CONF_MODEL, DEFAULT_MODEL)),
+        )
 
         try:
             await bridge.async_connect()
@@ -232,6 +247,10 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
             CONF_VARIANT,
             config_entry.data.get(CONF_VARIANT, DEFAULT_VARIANT),
         )
+        current_model = config_entry.options.get(
+            CONF_MODEL,
+            config_entry.data.get(CONF_MODEL, DEFAULT_MODEL),
+        )
         current_name = config_entry.data.get(CONF_NAME, "")
         current_rest_enabled = config_entry.options.get(
             CONF_REST_ENABLED,
@@ -245,6 +264,7 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             interval = int(user_input[CONF_SCAN_INTERVAL])
             variant = user_input[CONF_VARIANT]
+            model = user_input.get(CONF_MODEL, current_model)
             name = str(user_input.get(CONF_NAME, "")).strip()
             rest_enabled = user_input.get(CONF_REST_ENABLED, False)
             rest_username = str(user_input.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME)).strip()
@@ -293,6 +313,7 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 options_data: dict[str, Any] = {
                     CONF_SCAN_INTERVAL: interval,
                     CONF_VARIANT: variant,
+                    CONF_MODEL: model,
                     CONF_REST_ENABLED: rest_enabled,
                 }
                 if rest_enabled:
@@ -312,6 +333,7 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
+                vol.Required(CONF_MODEL, default=current_model): vol.In(MODEL_LABELS),
                 vol.Required(CONF_VARIANT, default=current_variant): vol.In(VARIANT_LABELS),
                 vol.Optional(CONF_NAME, default=current_name): vol.All(
                     str,
@@ -362,6 +384,7 @@ def _normalize_config_entry(data: Mapping[str, Any]) -> dict[str, Any]:
         CONF_PORT: int(data[CONF_PORT]),
         CONF_UNIT_ID: int(data[CONF_UNIT_ID]),
         CONF_SCAN_INTERVAL: int(data[CONF_SCAN_INTERVAL]),
+        CONF_MODEL: data.get(CONF_MODEL, DEFAULT_MODEL),
         CONF_VARIANT: data.get(CONF_VARIANT, DEFAULT_VARIANT),
         CONF_NAME: str(data.get(CONF_NAME, "")).strip(),
     }

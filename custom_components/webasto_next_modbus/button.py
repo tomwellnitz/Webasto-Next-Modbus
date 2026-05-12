@@ -10,11 +10,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
-    BUTTON_REGISTERS,
     CONF_UNIT_ID,
     KEEPALIVE_TRIGGER_VALUE,
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
+    get_button_registers,
 )
 from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
@@ -42,7 +42,7 @@ async def async_setup_entry(
             register,
             runtime.device_name,
         )
-        for register in BUTTON_REGISTERS
+        for register in get_button_registers(runtime.model)
     ]
 
     # Add restart button if REST API is enabled

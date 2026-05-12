@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Webasto / Ampure Unite support**: the config and options flows now have a *model* selector ("Webasto Next" / "Webasto / Ampure Unite"). Existing installs default to "Webasto Next" so nothing changes for current users. Selecting "Unite" switches to a corrected register map: the telemetry block (~100-1513) is read as input registers instead of holding registers, `energy_total_kwh` (1036) is scaled for the Unite's 0.1 kWh units, `charged_energy_wh` (1502) is read as a uint32, `charge_point_state` (1000) uses the Unite's 9-state enum, the Next-only registers (session user id 1600, smart-vehicle-detected 1620, start/stop-session command 5006) are dropped, and the Unite-only registers are added: per-phase voltage (1014/1016/1018), chargepoint power (400) and number of phases (404). Fixes the long-standing "all sensor values read 0 on a Unite" reports.
+
 ## [1.1.7] - 2026-05-12
 
 ### Added
