@@ -6,12 +6,15 @@ from homeassistant.components.text import TextEntity
 from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID
+from .const import CONF_UNIT_ID, DOMAIN, build_device_slug
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRestEntity
+
+_TAG_ID_KEY = "free_charging_tag_id"
 
 
 async def async_setup_entry(
@@ -29,6 +32,7 @@ async def async_setup_entry(
 
     # Add Free Charging Tag ID text entity if REST API is enabled
     if runtime.coordinator.rest_enabled:
+        _migrate_tag_id_unique_id(hass, host, unit_id)
         entities.append(
             WebastoFreeChargingTagIdText(
                 runtime.coordinator,
@@ -41,12 +45,25 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
+def _migrate_tag_id_unique_id(hass: HomeAssistant, host: str, unit_id: int) -> None:
+    """Migrate the pre-1.1.7 tag-id unique_id to the shared REST-entity scheme."""
+
+    new_uid = f"{build_device_slug(host, unit_id)}-rest-{_TAG_ID_KEY}"
+    old_uid = f"{host}_{unit_id}_{_TAG_ID_KEY}"
+    if old_uid == new_uid:
+        return
+    registry = er.async_get(hass)
+    old_entity_id = registry.async_get_entity_id("text", DOMAIN, old_uid)
+    if old_entity_id and registry.async_get_entity_id("text", DOMAIN, new_uid) is None:
+        registry.async_update_entity(old_entity_id, new_unique_id=new_uid)
+
+
 class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: ignore[misc]
     """Text entity for Free Charging Tag ID via REST API."""
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_translation_key = "free_charging_tag_id"
+    _attr_translation_key = _TAG_ID_KEY
 
     def __init__(
         self,
@@ -56,8 +73,7 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: igno
         device_name: str,
     ) -> None:
         """Initialize the text entity."""
-        super().__init__(coordinator, host, unit_id, "free_charging_tag_id", device_name)
-        self._attr_unique_id = f"{host}_{unit_id}_free_charging_tag_id"
+        super().__init__(coordinator, host, unit_id, _TAG_ID_KEY, device_name)
 
     @property
     def native_value(self) -> str | None:  # type: ignore[override]
@@ -69,10 +85,12 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: igno
     async def async_set_value(self, value: str) -> None:
         """Set the text value."""
         if not self.coordinator.rest_client:
-            return
+            raise HomeAssistantError("REST API not connected")
 
         try:
             await self.coordinator.rest_client.set_free_charging_tag_id(value)
-            await self.coordinator.async_request_refresh()
         except Exception as err:
             raise HomeAssistantError(f"Failed to set free charging tag ID: {err}") from err
+        # Regular REST polling is throttled; re-fetch now so the entity reflects
+        # what the wallbox actually stored instead of the stale cached value.
+        await self.coordinator.async_refresh_rest_data()

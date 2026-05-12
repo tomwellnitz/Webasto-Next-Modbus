@@ -65,11 +65,16 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):  # type: ignor
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        rest_data = self.coordinator.rest_data
+        current = None if rest_data is None else rest_data.free_charging_enabled
+        # Drop the optimistic value once the wallbox confirms it via REST.
+        if self._pending_state is not None and current == self._pending_state:
+            self._pending_state = None
+
         if self._pending_state is not None:
             self._attr_is_on = self._pending_state
         else:
-            rest_data = self.coordinator.rest_data
-            self._attr_is_on = None if rest_data is None else rest_data.free_charging_enabled
+            self._attr_is_on = current
         super()._handle_coordinator_update()
 
     async def async_turn_on(self, **kwargs: object) -> None:
@@ -93,9 +98,9 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):  # type: ignor
             await self._rest_client.set_free_charging(enabled)
         except Exception as err:
             self._pending_state = None
-            await self.coordinator.async_request_refresh()
+            self._handle_coordinator_update()
             raise HomeAssistantError(f"Failed to set free charging: {err}") from err
 
-        # Refresh REST data to get updated value
-        await self.coordinator.async_request_refresh()
-        self._pending_state = None
+        # Re-fetch the REST data now (regular polling is throttled) so the UI
+        # shows the state the wallbox actually has.
+        await self.coordinator.async_refresh_rest_data()
