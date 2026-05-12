@@ -113,16 +113,19 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
                 current_max = float(variant_max_current)
             self._attr_native_max_value = float(min(current_max, variant_max_current))
 
+    def _clamp_to_bounds(self, value: int) -> int:
+        """Clamp an integer value to the entity's native min/max."""
+
+        if self._attr_native_min_value is not None:
+            value = max(value, int(self._attr_native_min_value))
+        if self._attr_native_max_value is not None:
+            value = min(value, int(self._attr_native_max_value))
+        return value
+
     async def async_set_native_value(self, value: float) -> None:
         """Write a value to the Modbus register."""
 
-        int_value = int(round(value))
-
-        if self._attr_native_min_value is not None:
-            int_value = max(int_value, int(self._attr_native_min_value))
-        if self._attr_native_max_value is not None:
-            int_value = min(int_value, int(self._attr_native_max_value))
-
+        int_value = self._clamp_to_bounds(int(round(value)))
         await self._async_write_register(int_value)
         self._last_written_value = int_value
         self._attr_native_value = int_value
@@ -156,8 +159,11 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             last_number_data = await self.async_get_last_number_data()
             if last_number_data and last_number_data.native_value is not None:
                 try:
-                    self._last_written_value = int(round(float(last_number_data.native_value)))
-                    self._attr_native_value = float(self._last_written_value)
+                    restored = self._clamp_to_bounds(
+                        int(round(float(last_number_data.native_value)))
+                    )
+                    self._last_written_value = restored
+                    self._attr_native_value = float(restored)
                 except TypeError, ValueError:
                     _LOGGER.debug(
                         "Ignoring invalid restored value %s for %s",
@@ -219,11 +225,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             return False
         if not isinstance(value, (int, float)):
             return False
-        int_value = int(round(value))
-        if self._attr_native_min_value is not None:
-            int_value = max(int_value, int(self._attr_native_min_value))
-        if self._attr_native_max_value is not None:
-            int_value = min(int_value, int(self._attr_native_max_value))
+        int_value = self._clamp_to_bounds(int(round(value)))
         self._last_written_value = int_value
         self._attr_native_value = float(int_value)
         if self.hass is not None:

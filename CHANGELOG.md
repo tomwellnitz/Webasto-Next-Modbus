@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.7] - 2026-05-11
+## [1.1.7] - 2026-05-12
 
 ### Added
 
@@ -33,6 +33,7 @@
 - Replaced a few private-attribute accesses with public accessors: external code now uses `WebastoDataCoordinator.rest_client` and `ModbusBridge.host` / `ModbusBridge.unit_id`.
 - Bumped README maintenance badge to 2026.
 - Documented the dependency-pinning conventions in `AGENTS.md` (`manifest.json` lists only packages HA core does not provide; `pymodbus` stays pinned to `<3.12`).
+- CI: third-party GitHub Actions are pinned to commit SHAs (with `# vX.Y.Z` comments so Dependabot still tracks them), and `dependabot.yml` was tightened (direct deps only, `pymodbus` major/minor held, grouped updates).
 - Release workflow: pre-release tags (`v*-beta.*`, `v*-rc.*`, …) are now published as GitHub pre-releases so HACS only offers them under "Show beta versions".
 
 ## [1.1.6] - 2026-05-11
