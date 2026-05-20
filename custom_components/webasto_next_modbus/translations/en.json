@@ -269,6 +269,9 @@
     "switch": {
       "free_charging": {
         "name": "Free Charging"
+      },
+      "phase_switch": {
+        "name": "Three-phase charging"
       }
     }
   },

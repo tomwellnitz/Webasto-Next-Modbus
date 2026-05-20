@@ -541,3 +541,37 @@ async def test_free_charging_switch_does_not_revert_to_stale_value(coordinator_f
     assert switch._pending_state is None
     switch._handle_coordinator_update()
     assert switch.is_on is True
+
+
+async def test_phase_switch_writes_and_reads_back(coordinator_fixture) -> None:
+    """The Unite phase switch writes register 405 and reflects number_of_phases."""
+
+    from custom_components.webasto_next_modbus.const import UNITE_PHASE_SWITCH_REGISTER
+    from custom_components.webasto_next_modbus.switch import WebastoPhaseSwitch
+
+    coordinator, bridge = coordinator_fixture
+    coordinator.data = {"number_of_phases": 0}
+
+    switch = WebastoPhaseSwitch(
+        coordinator, bridge, "192.0.2.60", 255, UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
+    )
+    switch.hass = MagicMock()
+    switch.async_write_ha_state = MagicMock()
+
+    assert switch.is_on is False  # single-phase
+
+    await switch.async_turn_on()
+    bridge.async_write_register.assert_awaited_with(UNITE_PHASE_SWITCH_REGISTER, 1)
+    coordinator.async_request_refresh.assert_awaited()
+    assert switch.is_on is True
+
+    # The wallbox confirms three-phase -> the optimistic value is dropped.
+    coordinator.data = {"number_of_phases": 1}
+    switch._handle_coordinator_update()
+    assert switch.is_on is True
+    assert switch._pending_state is None
+
+    # A later real read back to single-phase is reflected.
+    coordinator.data = {"number_of_phases": 0}
+    switch._handle_coordinator_update()
+    assert switch.is_on is False

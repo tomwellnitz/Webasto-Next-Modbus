@@ -96,7 +96,7 @@ class RegisterDefinition:
     count: int
     register_type: REGISTER_TYPE
     data_type: REGISTER_DATA_TYPE
-    entity: Literal["sensor", "number", "button", "diagnostic"]
+    entity: Literal["sensor", "number", "button", "switch", "diagnostic"]
     scale: float = 1.0
     unit: str | None = None
     device_class: str | None = None
@@ -777,6 +777,31 @@ UNITE_BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = tuple(
 
 UNITE_CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = ()
 
+# Phase switching (1 <-> 3 phase) via holding register 405. Undocumented in the
+# v1.00 Modbus spec but confirmed working on Unite FW 3.187 (community reports
+# in issue #37). Write value 1 = three-phase, 0 = single-phase; the active phase
+# count is read back from `number_of_phases` (404). Marked optional so it is
+# harmless on firmwares that don't implement it.
+UNITE_PHASE_SWITCH_REGISTER: Final = RegisterDefinition(
+    key="phase_switch",
+    name="Phase Switch",
+    address=405,
+    count=1,
+    register_type="holding",
+    data_type="uint16",
+    entity="switch",
+    entity_category="config",
+    icon="mdi:transmission-tower",
+    writable=True,
+    write_only=True,
+    optional=True,
+    translation_key="phase_switch",
+)
+
+# Next has no register-backed switch; the Unite gets the phase switch.
+SWITCH_REGISTERS: Final[tuple[RegisterDefinition, ...]] = ()
+UNITE_SWITCH_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (UNITE_PHASE_SWITCH_REGISTER,)
+
 
 _SENSOR_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
     MODEL_NEXT: SENSOR_REGISTERS,
@@ -793,6 +818,10 @@ _BUTTON_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
 _CONTROL_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
     MODEL_NEXT: CONTROL_REGISTERS,
     MODEL_UNITE: UNITE_CONTROL_REGISTERS,
+}
+_SWITCH_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: SWITCH_REGISTERS,
+    MODEL_UNITE: UNITE_SWITCH_REGISTERS,
 }
 
 
@@ -826,6 +855,12 @@ def get_button_registers(model: str | None = None) -> tuple[RegisterDefinition, 
     return _BUTTON_REGISTERS_BY_MODEL[normalize_model(model)]
 
 
+def get_switch_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the Modbus switch register definitions for the given model."""
+
+    return _SWITCH_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
 def get_readable_registers(
     model: str | None = None, include_write_only: bool = False
 ) -> tuple[RegisterDefinition, ...]:
@@ -854,6 +889,7 @@ def get_register(key: str) -> RegisterDefinition:
         *_NUMBER_REGISTERS_BY_MODEL.values(),
         *_BUTTON_REGISTERS_BY_MODEL.values(),
         *_CONTROL_REGISTERS_BY_MODEL.values(),
+        *_SWITCH_REGISTERS_BY_MODEL.values(),
     ):
         if id(collection) in seen:
             continue
