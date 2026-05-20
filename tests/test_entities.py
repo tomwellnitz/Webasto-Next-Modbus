@@ -575,3 +575,16 @@ async def test_phase_switch_writes_and_reads_back(coordinator_fixture) -> None:
     coordinator.data = {"number_of_phases": 0}
     switch._handle_coordinator_update()
     assert switch.is_on is False
+
+
+async def test_phase_switch_only_on_unite_model() -> None:
+    """The phase switch exists for the Unite model and not for the Next."""
+
+    from custom_components.webasto_next_modbus.const import (
+        MODEL_NEXT,
+        MODEL_UNITE,
+        get_switch_registers,
+    )
+
+    assert get_switch_registers(MODEL_NEXT) == ()
+    assert any(register.key == "phase_switch" for register in get_switch_registers(MODEL_UNITE))
