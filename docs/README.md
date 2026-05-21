@@ -5,7 +5,7 @@ Welcome! This folder collects the human-facing documentation for the Webasto Nex
 ## Getting started
 
 - **User guide** – The top-level [`README.md`](../README.md) covers installation (HACS and manual), configuration, entity overviews, and troubleshooting tips.
-- **Quick install notes** – The [Quick start](../README.md#quick-start) section shows the fastest path from checkout to a running integration.
+- **Install** – The [Installation](../README.md#installation) section shows the fastest path from checkout to a running integration.
 
 ## Deep dives
 

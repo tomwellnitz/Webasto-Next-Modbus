@@ -65,9 +65,9 @@ If you want to run a specific check individually, you can use the `uv run <tool>
 
 1. **Update Version**:
 
-   - Bump version in `custom_components/webasto_next_modbus/manifest.json`.
-   - Bump version in `custom_components/webasto_next_modbus/const.py` (`INTEGRATION_VERSION`).
-   - Update `CHANGELOG.md`.
+   - Bump `version` in `custom_components/webasto_next_modbus/manifest.json`.
+   - Bump `version` in `pyproject.toml` (keep it in sync with the manifest).
+   - Move the `## [Unreleased]` section in `CHANGELOG.md` to the new `## [X.Y.Z] - YYYY-MM-DD` (the release notes are generated from this section).
 
 1. **Verify**:
 
@@ -79,9 +79,9 @@ If you want to run a specific check individually, you can use the `uv run <tool>
 
 1. **Tag & Release**:
 
-   - Create a signed tag: `git tag -s vX.Y.Z -m "Release vX.Y.Z"`
-   - Push: `git push origin vX.Y.Z`
-   - Create a GitHub Release (auto-generates notes).
+   - Create the tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push it: `git push origin vX.Y.Z`.
+   - The **Release** workflow runs on the tag: it lints, tests, builds the `webasto_next_modbus.zip`, extracts the matching `CHANGELOG.md` section, and publishes the GitHub Release automatically.
+   - For a pre-release, use a tag with a suffix (e.g. `vX.Y.Z-beta.1`); the workflow marks it as a GitHub pre-release (HACS offers it only under "Show beta versions") and pulls notes from the `[Unreleased]` section.
 
 1. **Branding**:
 
