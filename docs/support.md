@@ -1,8 +1,6 @@
-# 🆘 Support & Troubleshooting
+# Support & Troubleshooting
 
-Need help? We've got you covered.
-
-## 🔍 Before Opening a Ticket
+## Before Opening a Ticket
 
 1. **Check the Basics**: Ensure your wallbox is powered on and reachable via network.
 
@@ -22,7 +20,7 @@ Need help? We've got you covered.
        custom_components.webasto_next_modbus: debug
    ```
 
-## 💬 Where to Ask
+## Where to Ask
 
 | Topic | Channel |
 | :--- | :--- |
@@ -30,11 +28,11 @@ Need help? We've got you covered.
 | **"It's broken!"** | [GitHub Issues](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues) (Please attach diagnostics!) |
 | **"I have an idea!"** | [Feature Requests](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues) |
 
-## ⚠️ Known Limitations
+## Known Limitations
 
 - **Dynamic IP**: The integration expects a static IP. Please configure a DHCP reservation for your wallbox.
 - **Old Firmware**: Firmware < 3.1 might not support all features (like Keepalive).
 
-## 🔒 Security
+## Security
 
 Found a vulnerability? Please report it via **GitHub Security Advisories** or open a private issue if available. Do not post public exploits.

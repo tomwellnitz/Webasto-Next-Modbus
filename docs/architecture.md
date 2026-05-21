@@ -77,12 +77,12 @@ The register ranges are derived from community research and vendor documentation
 ## Software components
 
 - `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
-- `const.py` – Constants, version metadata, register descriptions, and enum mappings.
+- `const.py` – Constants, register descriptions, and enum mappings. The integration version lives in `manifest.json` / `pyproject.toml`, not here.
 - `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
 - `rest_client.py` – `WebastoRestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus.
 - `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles, normalises raw register values, and optionally fetches REST API data.
 - `config_flow.py` – User and options flows with validation and duplicate protection. Includes optional REST API credential configuration.
-- Platform modules (`sensor.py`, `number.py`, `button.py`, `switch.py`) – Entity classes backed by static descriptions. The switch platform provides REST-only entities like free charging toggle.
+- Platform modules (`sensor.py`, `number.py`, `button.py`, `switch.py`, `binary_sensor.py`, `text.py`) – Entity classes backed by static descriptions. `binary_sensor.py` exposes the always-available **Connected** connectivity sensor; the `switch`/`text` platforms provide REST-backed entities (free-charging toggle and tag ID).
 - `services.yaml` – Service schemas surfaced to Home Assistant.
 
 ## Data flow
@@ -100,7 +100,7 @@ The register ranges are derived from community research and vendor documentation
 
 ## Error handling
 
-- **Connection Retries**: During setup, the integration attempts to connect 3 times with a delay, notifying the user if it fails.
+- **Connection Retries**: During setup, the integration attempts to connect up to 5 times with a delay, notifying the user if it fails.
 - **Communication errors**: Raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
 - **Individual register errors**: Logged and surfaced as `None` without blocking the entire payload.
 - **Write helpers**: Clamp values to safe ranges and surface validation errors back to the UI.
