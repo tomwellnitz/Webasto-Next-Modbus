@@ -656,8 +656,9 @@ CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 #   * the Next-only registers (session user id 1600, smart-vehicle-detected
 #     1620, start/stop-session command 5006) do not exist on the Unite
 #   * extra registers exist on the Unite: per-phase voltage (1014/1016/1018),
-#     chargepoint power (400), number of phases (404). These are marked
-#     `optional=True` because they have not been verified on all firmwares.
+#     chargepoint power (400), active phase mode (405, the phase-switch
+#     register read back). These are marked `optional=True` because they have
+#     not been verified on all firmwares.
 # --------------------------------------------------------------------------- #
 
 _UNITE_SENSOR_SKIP: Final = frozenset({"session_user_id", "smart_vehicle_detected"})
@@ -746,9 +747,13 @@ def _build_unite_sensor_registers() -> tuple[RegisterDefinition, ...]:
             RegisterDefinition(
                 key="number_of_phases",
                 name="Number of Phases",
-                address=404,
+                # The active phase mode is the phase-switch holding register
+                # (405): 0 = single-phase, 1 = three-phase. Register 404 (input)
+                # reports the installed phase count, which stays at 3 on a
+                # three-phase install and so doesn't track the active mode.
+                address=405,
                 count=1,
-                register_type="input",
+                register_type="holding",
                 data_type="uint16",
                 entity="sensor",
                 device_class="enum",

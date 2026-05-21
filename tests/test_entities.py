@@ -588,3 +588,13 @@ async def test_phase_switch_only_on_unite_model() -> None:
 
     assert get_switch_registers(MODEL_NEXT) == ()
     assert any(register.key == "phase_switch" for register in get_switch_registers(MODEL_UNITE))
+
+
+async def test_unite_number_of_phases_tracks_phase_switch_register() -> None:
+    """The Unite phase-mode sensor reads the phase-switch register (405), not 404."""
+
+    from custom_components.webasto_next_modbus.const import MODEL_UNITE, get_sensor_registers
+
+    register = next(r for r in get_sensor_registers(MODEL_UNITE) if r.key == "number_of_phases")
+    assert register.address == 405
+    assert register.register_type == "holding"
