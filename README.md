@@ -1,6 +1,6 @@
 # Webasto Next for Home Assistant
 
-> Bring Webasto Next / Ampure Unite wallboxes into Home Assistant via Modbus TCP and REST API.
+Monitor and control Webasto Next wallboxes in Home Assistant over Modbus TCP, with an optional REST API connection for extras such as LED control and firmware diagnostics.
 
 [![Release](https://img.shields.io/github/v/release/tomwellnitz/Webasto-Next-Modbus?display_name=release)](https://github.com/tomwellnitz/Webasto-Next-Modbus/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/tomwellnitz/Webasto-Next-Modbus/ci.yaml?branch=main)](https://github.com/tomwellnitz/Webasto-Next-Modbus/actions/workflows/ci.yaml)
@@ -8,174 +8,143 @@
 [![License](https://img.shields.io/github/license/tomwellnitz/Webasto-Next-Modbus.svg)](LICENSE)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/tomwellnitz/Webasto-Next-Modbus/commits/main)
 
-> 📚 **Documentation Portal**: Start with [`docs/README.md`](docs/README.md) for architecture notes, development guides, and support resources.
->
-> ⚠️ **Disclaimer**: This project is a community-maintained integration that is not affiliated with, endorsed, or supported by Webasto, Ampure, or the Home Assistant project.
+> This is a community-maintained integration. It is not affiliated with, endorsed by, or supported by Webasto, Ampure, or the Home Assistant project.
 
-## ✨ Features
+## Supported hardware
 
-- 🔌 **Guided Onboarding**: Auto-discovery (Zeroconf), live connection validation, and duplicate protection.
-- ⚡ **Rich Entities**: Async coordinator for stable refreshes and immediate state updates.
-- 🛠️ **Service Helpers**: Session start/stop, keep-alive frames, dynamic current, and fail-safe parameters.
-- 🌐 **REST API Integration**: Optional connection to the wallbox REST API for LED control, diagnostics, and more.
-- 🤖 **Automations**: Device triggers and powerful blueprints included.
-- 🛡️ **Reliable**: Comprehensive tests, virtual wallbox simulator, and robust error handling.
+- **Webasto Next** — fully supported.
+- **Ampure / Webasto Unite** — supported from v1.2.0 (currently in beta; see [#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)). The Unite uses a different register layout, selectable as a model option during setup.
 
-## 🚀 Quick Start
+The wallbox must be reachable over Modbus TCP (default port `502`). The REST API features additionally need the wallbox web-interface credentials.
 
-### Requirements
+## Features
 
-- **Home Assistant**: 2026.5.1 or newer (requires Python 3.14.2; older HA users should stay on `1.1.5`).
-- **Hardware**: Webasto Next or Ampure Unite wallbox.
-- **Network**: Reachable over Modbus TCP (default port `502`).
+- Local polling over Modbus TCP through an async update coordinator.
+- Sensors for charge point and charging state, currents, power, energy, session data, fault codes and EV limits.
+- Controls: dynamic charging current, fail-safe current and timeout, and start/stop/keep-alive buttons.
+- A **Connected** binary sensor that reports reachability even while the wallbox is offline (useful in automations).
+- Services for current limit, fail-safe, charging sessions and keep-alive frames.
+- Optional REST API integration: LED brightness, free-charging toggle and tag ID, firmware/diagnostics sensors and a restart button.
+- Device triggers (charging started/stopped, connection lost/restored, keep-alive sent) and ready-to-use blueprints.
+- Automatic "Life Bit" keep-alive handling and resilient reconnect with back-off, so a power-cycled or still-booting wallbox recovers on its own.
+- Tested against a virtual wallbox simulator.
 
-### Installation
+## Requirements
 
-<details open>
-<summary><b>Option 1: HACS (Recommended)</b></summary>
+- **Home Assistant** 2026.5.1 or newer (requires Python 3.14.2). On older Home Assistant, stay on release `1.1.5`.
+- A Webasto Next wallbox reachable over Modbus TCP.
 
-1. Open HACS in Home Assistant.
-1. Go to **Integrations** → **⋮** → **Custom repositories**.
-1. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` as type **Integration**.
-1. Install **Webasto Next** and restart Home Assistant.
+## Installation
 
-</details>
+### HACS (recommended)
 
-<details>
-<summary><b>Option 2: Manual Installation</b></summary>
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomwellnitz&repository=Webasto-Next-Modbus&category=integration)
 
-1. Create `custom_components/webasto_next_modbus` in your config directory.
-1. Copy the contents of `custom_components/webasto_next_modbus/` from this repo.
-1. Restart Home Assistant.
+Or add it manually:
 
-</details>
+1. In HACS, open the three-dot menu and choose **Custom repositories**.
+2. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` with category **Integration**.
+3. Install **Webasto Next** and restart Home Assistant.
 
-### Configuration
+To test upcoming changes, enable **Show beta versions** on the integration in HACS.
 
-#### Option 1: Auto-Discovery (Recommended)
+### Manual
 
-1. Ensure your wallbox is on the same network as Home Assistant.
-1. Go to **Settings** → **Devices & Services**.
-1. Look for the **Discovered** section.
-1. Click **Configure** on the Webasto Next entry.
+1. Copy `custom_components/webasto_next_modbus/` from this repository into your Home Assistant `config/custom_components/` directory.
+2. Restart Home Assistant.
 
-#### Option 2: Manual Setup
+## Configuration
 
-1. Go to **Settings** → **Devices & Services** → **Add Integration**.
-1. Search for **Webasto Next**.
-1. Enter your wallbox details:
-   - **Host**: IP address or hostname (e.g., `192.168.1.50` or `webasto.local`).
-   - **Port**: Default `502`.
-   - **Unit ID**: Default `255`.
-   - **Variant**: Select your hardware (11kW or 22kW).
+1. Go to **Settings → Devices & Services → Add Integration** and search for **Webasto Next**.
+2. Enter your wallbox details:
+   - **Host** — IP address or hostname (e.g. `192.168.1.50`).
+   - **Port** — default `502`.
+   - **Unit ID** — default `255`.
+   - **Variant** — your hardware power rating (11 kW or 22 kW).
 
-#### Optional: REST API Configuration
+> The wallboxes do not advertise themselves on the network, so they are added manually by IP address; there is no auto-discovery.
 
-The REST API provides additional features not available via Modbus (LED control, firmware info, diagnostics).
+### Optional: REST API
 
-1. Go to the integration entry → **⋮** → **Configure**.
-1. Enable **REST API Features**.
-1. Enter your wallbox web interface credentials:
-   - **Username**: Default `admin`.
-   - **Password**: Your wallbox password.
+The REST API exposes features that are not available over Modbus (LED control, free charging, firmware info, diagnostics, restart).
 
-> **Note**: REST API credentials are stored securely in Home Assistant's config entries.
+1. Open the integration entry → three-dot menu → **Configure**.
+2. Enable **REST API features** and enter the wallbox web-interface credentials (username default `admin`).
 
-## 📊 Usage
+Credentials are stored in the Home Assistant config entry and redacted from downloaded diagnostics. If the wallbox later rejects them, a repair issue is raised so you can update the password; the Modbus side keeps working regardless.
 
-### Entities
+## Entities
 
-| Category | Description |
+### Modbus (always available)
+
+| Platform | Entities |
 | :--- | :--- |
-| **Sensors** | Charge point state, charging state, EVSE state, cable state, fault code, current/power per phase, total energy, session energy, session times, EV limits, smart vehicle detection. |
-| **Numbers** | Dynamic charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
-| **Buttons** | `Start Charging`, `Stop Charging`, `Send Keepalive`. |
+| Sensors | Charge point state, charging state, EVSE state, cable state, fault code, per-phase current and power, total energy, session energy and times, EV current limits, smart-vehicle detection. |
+| Numbers | Charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
+| Buttons | Start charging, Stop charging, Send keep-alive. |
+| Binary sensors | Connected (`device_class: connectivity`). |
 
-#### REST API Entities (Optional)
+### REST API (when enabled)
 
-When REST API is enabled, additional entities become available:
-
-| Category | Description |
+| Platform | Entities |
 | :--- | :--- |
-| **Sensors** | Firmware versions (Comboard/Powerboard SW & HW), plug cycles, error counter, signal voltages (L1/L2/L3), active errors, free charging tag ID. |
-| **Numbers** | LED brightness (0–100%). |
-| **Switches** | Free charging toggle. |
-| **Buttons** | Restart wallbox. |
+| Sensors | Comboard/Powerboard firmware (SW & HW), plug cycles, error counter, signal voltages L1/L2/L3, active errors. |
+| Numbers | LED brightness (0–100 %). |
+| Switches | Free charging. |
+| Text | Free charging tag ID. |
+| Buttons | Restart wallbox. |
 
-### Services
+## Services
 
-Available under the `webasto_next_modbus` domain:
+All services live under the `webasto_next_modbus` domain.
 
 | Service | Description |
 | :--- | :--- |
-| `set_current` | Set dynamic charging current (0–32 A). |
-| `set_failsafe` | Configure fail-safe current (6–32 A) and optional timeout (6–120 s). |
-| `start_session` | Start charging (FastCharge). |
-| `stop_session` | Stop charging (FullCharge). |
-| `send_keepalive` | Manually trigger keep-alive frame. |
+| `set_current` | Set the dynamic charging current (0–32 A). |
+| `set_failsafe` | Set the fail-safe current (6–32 A) and optional timeout (6–120 s). |
+| `start_session` | Start a charging session. |
+| `stop_session` | Stop the active charging session. |
+| `send_keepalive` | Send a keep-alive frame manually. |
 
-#### REST API Services (Optional)
+REST API services (when enabled):
 
 | Service | Description |
 | :--- | :--- |
-| `set_led_brightness` | Set LED brightness (0–100%). |
-| `set_free_charging` | Enable or disable free charging mode. |
-| `restart_wallbox` | Trigger a system restart. |
+| `set_led_brightness` | Set the LED brightness (0–100 %). |
+| `set_free_charging` | Enable or disable free charging. |
+| `restart_wallbox` | Restart the wallbox. |
 
-> **Note**: The integration automatically handles the "Life Bit" keepalive in the background to prevent failsafe mode.
+> The "Life Bit" keep-alive is handled automatically in the background to keep the wallbox out of fail-safe mode; `send_keepalive` is only needed for manual control.
 
-## 🤖 Automations & Blueprints
+## Automations and blueprints
 
-This integration includes blueprints to jump-start your smart charging. Import them via **Settings** → **Automations** → **Blueprints**.
+Ready-to-import blueprints live under **Settings → Automations & Scenes → Blueprints**:
 
-### ⚡ FastCharge / FullCharge Control
+- **FastCharge / FullCharge control** — start or stop charging from `input_boolean` toggles.
+- **Charge target (kWh)** — charge a set amount of energy, then stop.
+- **Charge until full** — stop automatically once charging power drops below a threshold.
+- **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption.
 
-Start or stop charging sessions using simple toggle switches.
+Device triggers for charging start/stop and connection state are available for your own automations.
 
-- **Required Helpers**:
-  - `input_boolean` (e.g., `input_boolean.fastcharge`): Toggle to start charging.
-  - `input_boolean` (e.g., `input_boolean.fullcharge`): Toggle to stop charging.
+## Troubleshooting
 
-### 🎯 Charge Target (kWh)
+- **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. These wallboxes accept only one Modbus TCP connection at a time, so make sure no other client (e.g. EVCC) holds it.
+- **Values stuck or stale** — check the logs; transient errors are retried automatically, and a booting wallbox recovers on its own within a few minutes.
+- **Diagnostics** — integration entry → three-dot menu → **Download diagnostics** (secrets are redacted).
 
-Charges a specific amount of energy (e.g., 10 kWh) and then stops.
+See [`docs/support.md`](docs/support.md) for more.
 
-- **Required Helpers**:
-  - `input_number` (e.g., `input_number.target_energy`): Set target amount (Unit: `kWh`).
-  - `input_boolean` (e.g., `input_boolean.charge_target_active`): Master switch for this logic.
+## Development
 
-### 🔋 Charge Until Full (Auto-Stop)
+```bash
+uv sync            # install dependencies
+uv run pytest      # run the test suite
+uv run ruff check . # lint
+```
 
-Detects when the battery is full (power drops below threshold) and stops.
+A virtual wallbox simulator lets you develop without hardware. See [`docs/development.md`](docs/development.md) and [`docs/architecture.md`](docs/architecture.md).
 
-- **Requires**: Wallbox power sensor (provided by integration).
+## License and credits
 
-### ☀️ Solar Surplus Optimizer
-
-Adjusts charging current based on grid export to maximize self-consumption.
-
-- **Requires**: Grid power sensor (negative value = export).
-
-## 🛠️ Troubleshooting
-
-- **Connection Failed**: Check IP, Port (e.g. 502), and Unit ID (255). Verify network reachability.
-- **Stale Data**: Check logs. The integration retries transient errors automatically.
-- **Diagnostics**: Go to the integration entry → **⋮** → **Download diagnostics**.
-
-For detailed support, see [`docs/support.md`](docs/support.md).
-
-## 👨‍💻 Development
-
-Want to contribute? Great!
-
-1. **Setup**: Install `uv` and run `uv sync`.
-1. **Test**: Run `uv run pytest`.
-1. **Lint**: Run `uv run ruff check .`.
-1. **Simulate**: Use `virtual-wallbox` to test without hardware.
-
-See [`docs/development.md`](docs/development.md) for the full guide.
-
-## 📄 License & Credits
-
-- **License**: MIT. See [`LICENSE`](LICENSE).
-- **Credits**: Special thanks to **[@cdrfun](https://github.com/cdrfun)** for inspiration on the advanced blueprints.
+Released under the [MIT License](LICENSE). Thanks to [@cdrfun](https://github.com/cdrfun) for the advanced-blueprint inspiration, and to the contributors on [#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37) for the Unite register readouts.
