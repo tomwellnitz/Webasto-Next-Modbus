@@ -866,6 +866,12 @@ def get_switch_registers(model: str | None = None) -> tuple[RegisterDefinition, 
     return _SWITCH_REGISTERS_BY_MODEL[normalize_model(model)]
 
 
+def get_control_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the write-only control register definitions for the given model."""
+
+    return _CONTROL_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
 def get_readable_registers(
     model: str | None = None, include_write_only: bool = False
 ) -> tuple[RegisterDefinition, ...]:

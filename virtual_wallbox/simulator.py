@@ -8,13 +8,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from custom_components.webasto_next_modbus.const import (
-    BUTTON_REGISTERS,
-    CONTROL_REGISTERS,
-    NUMBER_REGISTERS,
-    SENSOR_REGISTERS,
+    MODEL_NEXT,
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
     RegisterDefinition,
+    get_button_registers,
+    get_control_registers,
+    get_number_registers,
+    get_sensor_registers,
+    get_switch_registers,
+    normalize_model,
 )
 
 
@@ -44,6 +47,7 @@ class Scenario:
     """High level scenario description for the virtual wallbox."""
 
     unit_id: int = 255
+    model: str = MODEL_NEXT
     values: Mapping[str, Any] = field(default_factory=dict)
     write_actions: Mapping[str, Mapping[int, Mapping[str, Any]]] = field(default_factory=dict)
 
@@ -52,6 +56,7 @@ class Scenario:
 
         return VirtualWallboxState(
             unit_id=self.unit_id,
+            model=self.model,
             initial_values=self.values,
             write_actions=self.write_actions,
         )
@@ -64,17 +69,27 @@ class VirtualWallboxState:
         self,
         *,
         unit_id: int = 255,
+        model: str = MODEL_NEXT,
         initial_values: Mapping[str, Any] | None = None,
         write_actions: Mapping[str, Mapping[int, Mapping[str, Any]]] | None = None,
     ) -> None:
         self.unit_id = unit_id
+        self.model = normalize_model(model)
+        # The Webasto Next answers its telemetry on both input and holding
+        # registers, so the Next simulator mirrors written values into the
+        # opposite store. The Unite only serves telemetry as input registers,
+        # so the Unite simulator keeps each register in its declared store —
+        # reproducing the real device (and the "all sensors read 0" bug if the
+        # integration reads them as holding).
+        self._mirror = self.model == MODEL_NEXT
         self._definitions_by_key: dict[str, RegisterDefinition] = {
             definition.key: definition
             for definition in (
-                *SENSOR_REGISTERS,
-                *NUMBER_REGISTERS,
-                *BUTTON_REGISTERS,
-                *CONTROL_REGISTERS,
+                *get_sensor_registers(self.model),
+                *get_number_registers(self.model),
+                *get_button_registers(self.model),
+                *get_switch_registers(self.model),
+                *get_control_registers(self.model),
             )
         }
         self._definitions_by_address: dict[tuple[str, int], RegisterDefinition] = {
@@ -160,6 +175,9 @@ class VirtualWallboxState:
             target[addr] = raw
             # Mirror value into the opposite register store so clients that
             # read via the other Modbus function code observe the update.
+            # Disabled for the Unite, which serves each register on one FC only.
+            if not self._mirror:
+                continue
             other = (
                 self._input_registers
                 if definition.register_type != "input"
