@@ -4,6 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    # Wait a few days after a release before opening a PR. Avoids churn from
+    # same-week double-bumps (e.g. a release that gets a hotfix the next day)
+    # and gives upstream time to yank a bad version. Security updates ignore
+    # the cooldown and still arrive immediately.
+    cooldown:
+      default-days: 7
     # Only direct dependencies declared in pyproject.toml; there is no lock
     # file, so transitive bumps would just be noise.
     allow:
@@ -37,6 +43,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
