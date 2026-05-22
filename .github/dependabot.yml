@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: pip
     directory: "/"
     schedule:
-      interval: weekly
+      interval: monthly
     # Only direct dependencies declared in pyproject.toml; there is no lock
     # file, so transitive bumps would just be noise.
     allow:
@@ -16,6 +16,18 @@ updates:
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+      # pytest-homeassistant-custom-component mirrors HA core releases 1:1 —
+      # a new patch version ships with every HA patch (0.13.330 = HA 2026.5.1,
+      # 0.13.331 = 2026.5.2, …). Patch bumps carry no new test-helper logic,
+      # so only minor/major bumps (which signal an HA API change) warrant a PR.
+      - dependency-name: "pytest-homeassistant-custom-component"
+        update-types:
+          - "version-update:semver-patch"
+      # homeassistant (dev dep) patch releases are HA maintenance releases;
+      # minor/major bumps signal API changes worth tracking in pyproject.toml.
+      - dependency-name: "homeassistant"
+        update-types:
+          - "version-update:semver-patch"
     groups:
       python-dependencies:
         patterns:
