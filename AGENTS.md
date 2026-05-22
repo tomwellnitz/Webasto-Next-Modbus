@@ -103,6 +103,14 @@ This script executes:
 - Where a package appears in **both** `pyproject.toml` and `manifest.json` (i.e. `pymodbus`), the version specifiers must stay in sync — HACS / hassfest validation flags drift. Update both in the same commit.
 - `pymodbus` is pinned to `>=3.11.2,<3.12` to match the version Home Assistant core's built-in `modbus` integration pins. Do **not** loosen this bound without first checking that HA core's pin has moved — pymodbus 3.12+ removed `ModbusDeviceContext.store`/`decode` and added a `SimDevice` validator that breaks our virtual wallbox.
 
+### 6. Dependabot & auto-merge
+
+- `dependabot.yml` keeps PRs low-noise: direct deps only, grouped per ecosystem, a 7-day `cooldown`, `pymodbus` major/minor and `homeassistant` / `pytest-homeassistant-custom-component` patch bumps ignored (they just track HA point releases).
+- `.github/workflows/dependabot-auto-merge.yml` enables GitHub auto-merge for **patch + minor** Dependabot PRs; **major** bumps are left for manual review. For grouped PRs the highest semver bump in the group decides.
+- **Two repository settings are required for auto-merge to be safe**, otherwise GitHub would merge without waiting for CI:
+  1. Settings → General → **Allow auto-merge** (enabled).
+  1. Settings → Branches → branch protection on `main` with **required status checks** (`build`, `validate`, CodeQL `Analyze`). Do **not** require pull-request approvals — Dependabot cannot approve its own PR, which would deadlock auto-merge on a solo-maintainer repo.
+
 ## 🧪 Testing Strategy
 
 - **Unit Tests**: Cover all config flows, sensor parsing, and coordinator logic.
