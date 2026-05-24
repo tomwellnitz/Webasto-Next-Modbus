@@ -38,6 +38,7 @@ async def async_get_config_entry_diagnostics(
             "options": async_redact_data(dict(entry.options), TO_REDACT),
         },
         "runtime": {
+            "model": runtime.model,
             "variant": runtime.variant,
             "max_current": runtime.max_current,
             "last_success": _iso_or_none(getattr(coordinator, "last_success", None)),

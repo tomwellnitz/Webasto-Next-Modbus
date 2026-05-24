@@ -1,6 +1,6 @@
-# Webasto Next for Home Assistant
+# Webasto Next / Unite for Home Assistant
 
-Monitor and control Webasto Next wallboxes in Home Assistant over Modbus TCP, with an optional REST API connection for extras such as LED control and firmware diagnostics.
+Monitor and control Webasto Next and Ampure / Webasto Unite wallboxes in Home Assistant over Modbus TCP, with an optional REST API connection for extras such as LED control and firmware diagnostics.
 
 [![Release](https://img.shields.io/github/v/release/tomwellnitz/Webasto-Next-Modbus?display_name=release)](https://github.com/tomwellnitz/Webasto-Next-Modbus/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/tomwellnitz/Webasto-Next-Modbus/ci.yaml?branch=main)](https://github.com/tomwellnitz/Webasto-Next-Modbus/actions/workflows/ci.yaml)
@@ -13,7 +13,7 @@ Monitor and control Webasto Next wallboxes in Home Assistant over Modbus TCP, wi
 ## Supported hardware
 
 - **Webasto Next** — fully supported in the current release.
-- **Ampure / Webasto Unite** — **not yet in the stable release.** The Unite uses a different register layout; support is being added under a model selector and is currently in **beta testing** ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)). To try it, enable **Show beta versions** in HACS and install the latest `v1.2.0-beta` pre-release.
+- **Ampure / Webasto Unite** — fully supported since v1.2.0. The Unite uses a different register layout (telemetry on input registers, a few rescaled/widened registers, plus a three-phase switch); pick **Webasto / Ampure Unite** in the model selector during setup. Confirmed on firmware 3.156 and 3.187 ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)).
 
 The wallbox must be reachable over Modbus TCP (default port `502`). The REST API features additionally need the wallbox web-interface credentials.
 

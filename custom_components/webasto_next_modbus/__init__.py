@@ -18,10 +18,12 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
+    CONF_MODEL,
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
+    DEFAULT_MODEL,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VARIANT,
     DEVICE_NAME,
@@ -30,6 +32,7 @@ from .const import (
     MAX_RETRY_ATTEMPTS,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    MODEL_NEXT,
     RETRY_BACKOFF_SECONDS,
     SERVICE_RESTART_WALLBOX,
     SERVICE_SEND_KEEPALIVE,
@@ -44,7 +47,10 @@ from .const import (
     SIGNAL_REGISTER_WRITTEN,
     build_device_slug,
     get_max_current_for_variant,
+    get_model_display_name,
+    get_readable_registers,
     get_register,
+    normalize_model,
 )
 from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
@@ -76,6 +82,7 @@ class RuntimeData:
     max_current: int
     device_slug: str
     device_name: str
+    model: str = MODEL_NEXT
 
 
 type WebastoConfigEntry = ConfigEntry[RuntimeData]
@@ -98,6 +105,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     )
 
     variant = entry.options.get(CONF_VARIANT, entry.data.get(CONF_VARIANT, DEFAULT_VARIANT))
+    model = normalize_model(
+        entry.options.get(CONF_MODEL, entry.data.get(CONF_MODEL, DEFAULT_MODEL))
+    )
     max_current = get_max_current_for_variant(variant)
     device_slug = build_device_slug(host, unit_id)
     configured_name = entry.data.get(CONF_NAME)
@@ -106,6 +116,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     updated_data = dict(entry.data)
     if CONF_VARIANT not in updated_data:
         updated_data[CONF_VARIANT] = variant
+    if CONF_MODEL not in updated_data:
+        updated_data[CONF_MODEL] = model
     if configured_name != updated_data.get(CONF_NAME):
         # Keep stored name in sync with data payload; remove empty values.
         if configured_name:
@@ -115,7 +127,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     if updated_data != entry.data:
         hass.config_entries.async_update_entry(entry, data=updated_data)
 
-    bridge = ModbusBridge(host=host, port=port, unit_id=unit_id)
+    bridge = ModbusBridge(
+        host=host,
+        port=port,
+        unit_id=unit_id,
+        registers=get_readable_registers(model),
+    )
 
     notification_id = f"{DOMAIN}_setup_{entry.entry_id}"
 
@@ -148,6 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         update_interval,
         device_slug,
         config_entry=entry,
+        device_model_name=get_model_display_name(model),
     )
 
     try:
@@ -172,6 +190,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         max_current=max_current,
         device_slug=device_slug,
         device_name=device_name,
+        model=model,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -363,6 +382,15 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
     raise ValueError("Multiple wallboxes configured – set config_entry_id in the service call")
 
 
+def _require_session_command_support(runtime: RuntimeData) -> None:
+    """Raise if the configured model has no start/stop-session command register."""
+
+    if runtime.model != MODEL_NEXT:
+        raise HomeAssistantError(
+            "Starting and stopping a charging session is only supported on the Webasto Next"
+        )
+
+
 async def _async_service_set_current(call: ServiceCall) -> None:
     """Handle service to set the dynamic charging current."""
 
@@ -449,6 +477,7 @@ async def _async_service_start_session(call: ServiceCall) -> None:
     """Handle service to start a charging session explicitly."""
 
     runtime = _resolve_runtime(call.hass, call)
+    _require_session_command_support(runtime)
     register = get_register("session_command")
     try:
         await runtime.bridge.async_write_register(register, SESSION_COMMAND_START_VALUE)
@@ -461,6 +490,7 @@ async def _async_service_stop_session(call: ServiceCall) -> None:
     """Handle service to stop the active charging session."""
 
     runtime = _resolve_runtime(call.hass, call)
+    _require_session_command_support(runtime)
     register = get_register("session_command")
     try:
         await runtime.bridge.async_write_register(register, SESSION_COMMAND_STOP_VALUE)

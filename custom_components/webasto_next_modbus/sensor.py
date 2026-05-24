@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, SENSOR_REGISTERS
+from .const import CONF_UNIT_ID, get_sensor_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .rest_client import RestData
@@ -110,7 +110,7 @@ async def async_setup_entry(
             definition,
             runtime.device_name,
         )
-        for definition in SENSOR_REGISTERS
+        for definition in get_sensor_registers(runtime.model)
     ]
 
     # Add REST sensors if REST API is enabled

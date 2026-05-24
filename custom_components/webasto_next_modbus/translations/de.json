@@ -1,5 +1,5 @@
 {
-  "title": "Webasto Next",
+  "title": "Webasto Next / Unite",
   "config": {
     "step": {
       "user": {
@@ -10,6 +10,7 @@
           "port": "Port",
           "unit_id": "Unit-ID",
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "model": "Wallbox-Modell",
           "variant": "Variante",
           "name": "Name (optional)"
         }
@@ -38,8 +39,13 @@
           "preparing": "Vorbereitung",
           "charging": "Lädt",
           "suspended": "Pausiert",
+          "suspended_evse": "Pausiert (EVSE)",
+          "suspended_ev": "Pausiert (Fahrzeug)",
+          "finishing": "Wird beendet",
           "error": "Fehler",
-          "reserved": "Reserviert"
+          "reserved": "Reserviert",
+          "unavailable": "Nicht verfügbar",
+          "faulted": "Störung"
         }
       },
       "charging_state": {
@@ -120,6 +126,25 @@
       },
       "energy_total_kwh": {
         "name": "Energie Gesamt"
+      },
+      "voltage_l1": {
+        "name": "Spannung L1"
+      },
+      "voltage_l2": {
+        "name": "Spannung L2"
+      },
+      "voltage_l3": {
+        "name": "Spannung L3"
+      },
+      "chargepoint_power_w": {
+        "name": "Ladepunkt Leistung"
+      },
+      "number_of_phases": {
+        "name": "Anzahl Phasen",
+        "state": {
+          "single_phase": "Einphasig",
+          "three_phase": "Dreiphasig"
+        }
       },
       "session_max_current_a": {
         "name": "Maximaler Strom"
@@ -215,6 +240,9 @@
     "switch": {
       "free_charging": {
         "name": "Freies Laden"
+      },
+      "phase_switch": {
+        "name": "Dreiphasiges Laden"
       }
     }
   },
@@ -225,6 +253,7 @@
         "description": "Erweiterte Einstellungen anpassen.",
         "data": {
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "model": "Wallbox-Modell",
           "variant": "Variante",
           "name": "Name (optional)",
           "rest_enabled": "REST API aktivieren",

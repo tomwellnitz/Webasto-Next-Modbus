@@ -13,7 +13,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, NUMBER_REGISTERS, SIGNAL_REGISTER_WRITTEN
+from .const import CONF_UNIT_ID, SIGNAL_REGISTER_WRITTEN, get_number_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import WebastoModbusError
@@ -44,7 +44,7 @@ async def async_setup_entry(
             runtime.device_name,
             max_current,
         )
-        for register in NUMBER_REGISTERS
+        for register in get_number_registers(runtime.model)
     ]
 
     # Add LED brightness if REST API is enabled

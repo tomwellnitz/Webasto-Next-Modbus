@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0] - 2026-05-24
+
+### Added
+
+- **Webasto / Ampure Unite support**: the config and options flows now have a *model* selector ("Webasto Next" / "Webasto / Ampure Unite"). Existing installs default to "Webasto Next" so nothing changes for current users. Selecting "Unite" switches to a corrected register map: the telemetry block (~100-1513) is read as input registers instead of holding registers, `energy_total_kwh` (1036) is scaled for the Unite's 0.1 kWh units, `charged_energy_wh` (1502) is read as a uint32, `charge_point_state` (1000) uses the Unite's 9-state enum, the Next-only registers (session user id 1600, smart-vehicle-detected 1620, start/stop-session command 5006) are dropped, and the Unite-only registers are added: per-phase voltage (1014/1016/1018), chargepoint power (400) and the active phase mode (405). Fixes the long-standing "all sensor values read 0 on a Unite" reports.
+- **Unite phase switching**: a "Three-phase charging" switch (Unite only) toggles the wallbox between single- and three-phase via holding register 405 (`on` = three-phase). The register is undocumented and firmware-dependent (confirmed on FW 3.187, issue #37), so the entity is assumed-state. The "Number of Phases" sensor and the switch readback both reflect the active mode from register 405 (register 404 reports the installed phase count, which stays at 3 on a three-phase install).
+
+### Changed
+
+- The integration is now named **"Webasto Next / Unite"** to reflect that it supports both wallbox models. This is a display-name change only: the integration `domain` (`webasto_next_modbus`), all entity IDs and existing configurations are unchanged.
+
+### Internal
+
+- The virtual wallbox simulator is now model-aware: a Unite simulator serves its telemetry only on input registers (no holding mirror), so the test suite reproduces the real Next-vs-Unite behaviour and guards the Unite register map against regressions.
+
 ## [1.1.7] - 2026-05-12
 
 ### Added

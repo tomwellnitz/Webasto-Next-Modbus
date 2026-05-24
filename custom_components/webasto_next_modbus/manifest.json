@@ -1,6 +1,6 @@
 {
   "domain": "webasto_next_modbus",
-  "name": "Webasto Next",
+  "name": "Webasto Next / Unite",
   "codeowners": [
     "@tomwellnitz"
   ],
@@ -18,5 +18,5 @@
   "requirements": [
     "pymodbus>=3.11.2,<3.12"
   ],
-  "version": "1.1.7"
+  "version": "1.2.0"
 }

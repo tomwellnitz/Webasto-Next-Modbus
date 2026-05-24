@@ -100,6 +100,64 @@ async def test_custom_scenario_values_are_exposed(
     assert payload["charging_state"] == 1
 
 
+@pytest.mark.asyncio
+async def test_unite_serves_telemetry_only_as_input_registers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A virtual Unite exposes telemetry on input registers, not holding."""
+
+    from custom_components.webasto_next_modbus import hub as hub_module
+    from custom_components.webasto_next_modbus.const import (
+        MODEL_NEXT,
+        MODEL_UNITE,
+        UNITE_PHASE_SWITCH_REGISTER,
+        get_readable_registers,
+    )
+
+    scenario = Scenario(
+        model=MODEL_UNITE,
+        values={
+            "charge_point_state": 2,
+            "voltage_l1": 232,
+            "energy_total_kwh": 39.9,
+            "number_of_phases": 1,
+        },
+    )
+    host = "198.51.100.70"
+    port = 15099
+
+    monkeypatch.setattr(
+        hub_module,
+        "_ensure_pymodbus",
+        lambda: (FakeAsyncModbusTcpClient, FakeModbusException),
+    )
+
+    with register_virtual_wallbox(host=host, port=port, scenario=scenario) as state:
+        unite_bridge = ModbusBridge(
+            host, port, state.unit_id, registers=get_readable_registers(MODEL_UNITE)
+        )
+        unite_data = await unite_bridge.async_read_data()
+
+        # The Unite reads its telemetry as input registers and decodes correctly.
+        assert unite_data["charge_point_state"] == 2
+        assert unite_data["voltage_l1"] == 232
+        assert unite_data["energy_total_kwh"] == pytest.approx(39.9)
+
+        # Reading the same wallbox with the Next (holding) map yields nothing,
+        # which is exactly the "all sensors read 0 on a Unite" failure.
+        next_bridge = ModbusBridge(
+            host, port, state.unit_id, registers=get_readable_registers(MODEL_NEXT)
+        )
+        next_data = await next_bridge.async_read_data()
+        assert next_data["charge_point_state"] == 0
+
+        # The phase switch (holding 405) round-trips into number_of_phases.
+        await unite_bridge.async_write_register(UNITE_PHASE_SWITCH_REGISTER, 0)
+        assert (await unite_bridge.async_read_data())["number_of_phases"] == 0
+        await unite_bridge.async_write_register(UNITE_PHASE_SWITCH_REGISTER, 1)
+        assert (await unite_bridge.async_read_data())["number_of_phases"] == 1
+
+
 def test_data_block_resolves_one_based_addresses() -> None:
     """Data block should map 0-based addresses produced by Modbus contexts."""
 

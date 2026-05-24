@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 DOMAIN: Final = "webasto_next_modbus"
@@ -45,6 +45,25 @@ VARIANT_MAX_CURRENT: Final = {
 
 MANUFACTURER: Final = "Webasto"
 MODEL: Final = "Next"
+
+# Hardware model axis, separate from the power VARIANT above. The Webasto Next
+# and the Webasto / Ampure Unite share most register addresses, but the Unite
+# exposes its telemetry block (~100-1513) as input registers instead of holding
+# registers, with a handful of data-type / scale / enum differences. See the
+# get_*_registers() helpers further down.
+CONF_MODEL: Final = "model"
+MODEL_NEXT: Final = "next"
+MODEL_UNITE: Final = "unite"
+DEFAULT_MODEL: Final = MODEL_NEXT
+MODEL_LABELS: Final = {
+    MODEL_NEXT: "Webasto Next",
+    MODEL_UNITE: "Webasto / Ampure Unite",
+}
+MODEL_DISPLAY_NAMES: Final = {
+    MODEL_NEXT: "Next",
+    MODEL_UNITE: "Unite",
+}
+
 DEVICE_NAME: Final = "Webasto Next Wallbox"
 KEEPALIVE_TRIGGER_VALUE: Final = 1
 SESSION_COMMAND_START_VALUE: Final = 1
@@ -77,7 +96,7 @@ class RegisterDefinition:
     count: int
     register_type: REGISTER_TYPE
     data_type: REGISTER_DATA_TYPE
-    entity: Literal["sensor", "number", "button", "diagnostic"]
+    entity: Literal["sensor", "number", "button", "switch", "diagnostic"]
     scale: float = 1.0
     unit: str | None = None
     device_class: str | None = None
@@ -103,6 +122,20 @@ CHARGE_POINT_STATE_MAP: Final = {
     4: "suspended",
     7: "error",
     8: "reserved",
+}
+
+# The Webasto / Ampure Unite reports a different (and wider) charge-point-state
+# enum than the Next at register 1000.
+UNITE_CHARGE_POINT_STATE_MAP: Final = {
+    0: "available",
+    1: "preparing",
+    2: "charging",
+    3: "suspended_evse",
+    4: "suspended_ev",
+    5: "finishing",
+    6: "reserved",
+    7: "unavailable",
+    8: "faulted",
 }
 
 CHARGING_STATE_MAP: Final = {
@@ -610,23 +643,271 @@ CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
 )
 
 
-def all_registers(include_write_only: bool = False) -> tuple[RegisterDefinition, ...]:
-    """Return all register definitions, optionally including write-only ones."""
+# --------------------------------------------------------------------------- #
+# Webasto / Ampure Unite register set
+#
+# Built from the Next definitions above with the differences from the official
+# Webasto UNITE Modbus spec (and confirmed against community Modbus packages):
+#   * the whole 100-1513 telemetry block is read as *input* registers
+#   * `energy_total_kwh` (1036) is reported in units of 0.1 kWh, not Wh
+#   * `charged_energy_wh` (1502) is a uint32, not a 16-bit value
+#   * `charge_point_state` (1000) uses a different, 9-state enum
+#   * `fault_code` (1006) has no documented enum on the Unite (raw code only)
+#   * the Next-only registers (session user id 1600, smart-vehicle-detected
+#     1620, start/stop-session command 5006) do not exist on the Unite
+#   * extra registers exist on the Unite: per-phase voltage (1014/1016/1018),
+#     chargepoint power (400), active phase mode (405, the phase-switch
+#     register read back). These are marked `optional=True` because they have
+#     not been verified on all firmwares.
+# --------------------------------------------------------------------------- #
 
+_UNITE_SENSOR_SKIP: Final = frozenset({"session_user_id", "smart_vehicle_detected"})
+_UNITE_SENSOR_OVERRIDES: Final[dict[str, dict[str, object]]] = {
+    "charge_point_state": {"options": UNITE_CHARGE_POINT_STATE_MAP},
+    # The Unite has no documented fault-code enum, so it surfaces the raw
+    # numeric code. Drop the "enum" device class so Home Assistant does not
+    # validate the value against a (missing) options list.
+    "fault_code": {"options": None, "device_class": None},
+    "energy_total_kwh": {"scale": 0.1},
+    "charged_energy_wh": {"data_type": "uint32", "count": 2},
+}
+
+
+def _build_unite_sensor_registers() -> tuple[RegisterDefinition, ...]:
     regs: list[RegisterDefinition] = []
-    regs.extend(SENSOR_REGISTERS)
-    for register in NUMBER_REGISTERS:
+    for register in SENSOR_REGISTERS:
+        if register.key in _UNITE_SENSOR_SKIP:
+            continue
+        changes: dict[str, object] = {"register_type": "input"}
+        changes.update(_UNITE_SENSOR_OVERRIDES.get(register.key, {}))
+        regs.append(replace(register, **changes))  # type: ignore[arg-type]
+    regs.extend(
+        (
+            RegisterDefinition(
+                key="voltage_l1",
+                name="Voltage L1",
+                address=1014,
+                count=1,
+                register_type="input",
+                data_type="uint16",
+                entity="sensor",
+                unit="V",
+                device_class="voltage",
+                state_class="measurement",
+                icon="mdi:sine-wave",
+                optional=True,
+                translation_key="voltage_l1",
+            ),
+            RegisterDefinition(
+                key="voltage_l2",
+                name="Voltage L2",
+                address=1016,
+                count=1,
+                register_type="input",
+                data_type="uint16",
+                entity="sensor",
+                unit="V",
+                device_class="voltage",
+                state_class="measurement",
+                icon="mdi:sine-wave",
+                optional=True,
+                translation_key="voltage_l2",
+            ),
+            RegisterDefinition(
+                key="voltage_l3",
+                name="Voltage L3",
+                address=1018,
+                count=1,
+                register_type="input",
+                data_type="uint16",
+                entity="sensor",
+                unit="V",
+                device_class="voltage",
+                state_class="measurement",
+                icon="mdi:sine-wave",
+                optional=True,
+                translation_key="voltage_l3",
+            ),
+            RegisterDefinition(
+                key="chargepoint_power_w",
+                name="Chargepoint Power",
+                address=400,
+                count=2,
+                register_type="input",
+                data_type="uint32",
+                entity="sensor",
+                unit="W",
+                device_class="power",
+                state_class="measurement",
+                entity_category="diagnostic",
+                icon="mdi:lightning-bolt",
+                optional=True,
+                translation_key="chargepoint_power_w",
+            ),
+            RegisterDefinition(
+                key="number_of_phases",
+                name="Number of Phases",
+                # The active phase mode is the phase-switch holding register
+                # (405): 0 = single-phase, 1 = three-phase. Register 404 (input)
+                # reports the installed phase count, which stays at 3 on a
+                # three-phase install and so doesn't track the active mode.
+                address=405,
+                count=1,
+                register_type="holding",
+                data_type="uint16",
+                entity="sensor",
+                device_class="enum",
+                entity_category="diagnostic",
+                icon="mdi:transmission-tower",
+                options=PHASE_COUNT_MAP,
+                optional=True,
+                translation_key="number_of_phases",
+            ),
+        )
+    )
+    return tuple(regs)
+
+
+UNITE_SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = _build_unite_sensor_registers()
+
+# Failsafe (2000/2002) and the charging-current limit (5004) are holding
+# registers on the Unite too, so the number entities are unchanged.
+UNITE_NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = NUMBER_REGISTERS
+
+# Only the keep-alive register (6000) exists on the Unite; the start/stop
+# session command (5006) does not.
+UNITE_BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = tuple(
+    register for register in BUTTON_REGISTERS if register.key == "send_keepalive"
+)
+
+UNITE_CONTROL_REGISTERS: Final[tuple[RegisterDefinition, ...]] = ()
+
+# Phase switching (1 <-> 3 phase) via holding register 405. Undocumented in the
+# v1.00 Modbus spec but confirmed working on Unite FW 3.187 (community reports
+# in issue #37). Write value 1 = three-phase, 0 = single-phase; the active phase
+# count is read back from `number_of_phases` (404). Marked optional so it is
+# harmless on firmwares that don't implement it.
+UNITE_PHASE_SWITCH_REGISTER: Final = RegisterDefinition(
+    key="phase_switch",
+    name="Phase Switch",
+    address=405,
+    count=1,
+    register_type="holding",
+    data_type="uint16",
+    entity="switch",
+    entity_category="config",
+    icon="mdi:transmission-tower",
+    writable=True,
+    write_only=True,
+    optional=True,
+    translation_key="phase_switch",
+)
+
+# Next has no register-backed switch; the Unite gets the phase switch.
+SWITCH_REGISTERS: Final[tuple[RegisterDefinition, ...]] = ()
+UNITE_SWITCH_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (UNITE_PHASE_SWITCH_REGISTER,)
+
+
+_SENSOR_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: SENSOR_REGISTERS,
+    MODEL_UNITE: UNITE_SENSOR_REGISTERS,
+}
+_NUMBER_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: NUMBER_REGISTERS,
+    MODEL_UNITE: UNITE_NUMBER_REGISTERS,
+}
+_BUTTON_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: BUTTON_REGISTERS,
+    MODEL_UNITE: UNITE_BUTTON_REGISTERS,
+}
+_CONTROL_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: CONTROL_REGISTERS,
+    MODEL_UNITE: UNITE_CONTROL_REGISTERS,
+}
+_SWITCH_REGISTERS_BY_MODEL: Final[dict[str, tuple[RegisterDefinition, ...]]] = {
+    MODEL_NEXT: SWITCH_REGISTERS,
+    MODEL_UNITE: UNITE_SWITCH_REGISTERS,
+}
+
+
+def normalize_model(model: str | None) -> str:
+    """Return a known model identifier, falling back to the default."""
+
+    return model if model in _SENSOR_REGISTERS_BY_MODEL else DEFAULT_MODEL
+
+
+def get_model_display_name(model: str | None = None) -> str:
+    """Return the human-readable model name (used for the device registry)."""
+
+    return MODEL_DISPLAY_NAMES[normalize_model(model)]
+
+
+def get_sensor_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the sensor register definitions for the given model."""
+
+    return _SENSOR_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
+def get_number_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the number register definitions for the given model."""
+
+    return _NUMBER_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
+def get_button_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the button register definitions for the given model."""
+
+    return _BUTTON_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
+def get_switch_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the Modbus switch register definitions for the given model."""
+
+    return _SWITCH_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
+def get_control_registers(model: str | None = None) -> tuple[RegisterDefinition, ...]:
+    """Return the write-only control register definitions for the given model."""
+
+    return _CONTROL_REGISTERS_BY_MODEL[normalize_model(model)]
+
+
+def get_readable_registers(
+    model: str | None = None, include_write_only: bool = False
+) -> tuple[RegisterDefinition, ...]:
+    """Return every register that should be polled for the given model."""
+
+    model = normalize_model(model)
+    regs: list[RegisterDefinition] = list(_SENSOR_REGISTERS_BY_MODEL[model])
+    for register in _NUMBER_REGISTERS_BY_MODEL[model]:
         if include_write_only or not register.write_only:
             regs.append(register)
     return tuple(regs)
 
 
-def get_register(key: str) -> RegisterDefinition:
-    """Retrieve a register definition by key."""
+def all_registers(include_write_only: bool = False) -> tuple[RegisterDefinition, ...]:
+    """Return the Webasto Next readable registers (kept for backwards compat)."""
 
-    for register in (*SENSOR_REGISTERS, *NUMBER_REGISTERS, *BUTTON_REGISTERS, *CONTROL_REGISTERS):
-        if register.key == key:
-            return register
+    return get_readable_registers(MODEL_NEXT, include_write_only)
+
+
+def get_register(key: str) -> RegisterDefinition:
+    """Retrieve a register definition by key across all supported models."""
+
+    seen: set[int] = set()
+    for collection in (
+        *_SENSOR_REGISTERS_BY_MODEL.values(),
+        *_NUMBER_REGISTERS_BY_MODEL.values(),
+        *_BUTTON_REGISTERS_BY_MODEL.values(),
+        *_CONTROL_REGISTERS_BY_MODEL.values(),
+        *_SWITCH_REGISTERS_BY_MODEL.values(),
+    ):
+        if id(collection) in seen:
+            continue
+        seen.add(id(collection))
+        for register in collection:
+            if register.key == key:
+                return register
     raise KeyError(key)
 
 
