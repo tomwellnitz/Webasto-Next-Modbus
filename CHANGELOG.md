@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Reconfigure flow**: change a wallbox's host, port, unit ID or name from *Settings → Devices & Services → ⋮ → Reconfigure* without removing and re-adding the integration.
+- **Reauthentication flow**: when the wallbox rejects the REST API credentials, Home Assistant now starts a guided reauth dialog to enter new ones (replacing the previous repair issue). The Modbus side keeps working throughout.
+- **Charging binary sensor** (`device_class: battery_charging`) — a simple on/off entity for dashboards and automations, alongside the existing Connected sensor.
+- **New device triggers**: *cable connected*, *cable disconnected* and *fault occurred* (in addition to charging started/stopped, connection lost/restored and keep-alive sent). All device triggers are now translated (English/German), and the event-notification blueprint can fire on them.
+
+### Changed
+
+- **Quality scale raised to Platinum.** Every Bronze→Platinum rule is now met or exempt (tracked in `quality_scale.yaml`): the REST client uses Home Assistant's shared aiohttp session (`inject-websession`), the code is strictly typed (`strict` mypy + `py.typed`), entity icons and user-facing exceptions are translated, `PARALLEL_UPDATES` is declared on every platform, and service actions are registered in `async_setup`.
+
+### Fixed
+
+- **Forward-compatibility (HA 2026.6)**: the reconfigure/reauth flows update the entry and rely on the existing update listener for a single reload, avoiding the now-deprecated config-entry-listener-plus-reloading-method combination that becomes an error in 2026.12.
+- **Example blueprints**: fixed the FastCharge/FullCharge, Charge-Target and Charge-Until-Full blueprints, which referenced blueprint inputs in templates in a way that failed at runtime; all four blueprints were modernised to the current `triggers`/`conditions`/`actions` syntax and are now guarded by a lint test.
+
+### Internal
+
+- Dependabot tuned: monthly pip cadence, a 7-day cooldown, and auto-merge for low-risk (patch/minor) updates once CI passes.
+- Entity icons moved to `icons.json`; exceptions carry translation keys.
+
 ## [1.2.0] - 2026-05-24
 
 ### Added
