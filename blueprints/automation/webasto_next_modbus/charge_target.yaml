@@ -1,6 +1,6 @@
 ---
 blueprint:
-  name: Webasto Next – Charge Target (kWh)
+  name: Webasto Next / Unite – Charge Target (kWh)
   description: >-
     Charges the vehicle for a specific amount of energy (kWh) and then stops.
     Requires an Input Number helper (for the target amount) and an Input Boolean
@@ -8,7 +8,7 @@ blueprint:
   domain: automation
   input:
     webasto_device:
-      name: Webasto Next Wallbox
+      name: Webasto Next / Unite wallbox
       description: The wallbox device to control.
       selector:
         device:
@@ -50,12 +50,12 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input active_switch_helper
     to: "on"
     id: "start"
-  - platform: state
+  - trigger: state
     entity_id: !input session_energy_sensor
     id: "update"
 
@@ -63,21 +63,10 @@ variables:
   webasto_device: !input webasto_device
   notify_device: !input notify_device
   target_kwh: !input target_kwh_helper
-  active_switch: !input active_switch_helper
   energy_sensor: !input session_energy_sensor
-  # Store the start energy in a variable when the switch is turned on?
-  # Blueprints are stateless across restarts, but variables are local to the
-  # run.
-  # We need a way to know the "start" value.
-  # A robust way is to reset the session energy on the wallbox, but we can't
-  # always do that. Alternatively, we assume "Session Energy" sensor starts at 0
-  # or near 0 for a new session. If the user uses the "Session Energy" sensor
-  # from the integration, it resets on new session start.
-  # So we can just check if session_energy >= target.
 
-action:
+actions:
   - choose:
-      # Case 1: User turned the switch ON -> Start charging
       - conditions:
           - condition: trigger
             id: "start"
@@ -86,21 +75,17 @@ action:
             data:
               config_entry_id: >-
                 {{ device_attr(webasto_device, 'config_entries')[0] }}
-
-      # Case 2: Energy updated -> Check if target reached
       - conditions:
           - condition: trigger
             id: "update"
           - condition: state
             entity_id: !input active_switch_helper
             state: "on"
+          # The integration reports session energy in Wh; the target is in kWh.
           - condition: template
-            # Check if current session energy >= target
             value_template: >-
               {{ states(energy_sensor) | float(0) / 1000 >=
                  states(target_kwh) | float(0) }}
-              {# Note: Integration provides Wh, input_number is usually kWh. #}
-              {# The integration sensor 'meter_reading_session' is in Wh. #}
         sequence:
           - action: webasto_next_modbus.stop_session
             data:

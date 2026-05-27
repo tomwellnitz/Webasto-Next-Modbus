@@ -1,6 +1,6 @@
 ---
 blueprint:
-  name: Webasto Next – Charge Until Full (Auto-Stop)
+  name: Webasto Next / Unite – Charge Until Full (Auto-Stop)
   description: >-
     Automatically stops the charging session when the power drops below a
     threshold for a set duration, indicating the battery is full.
@@ -8,7 +8,7 @@ blueprint:
   domain: automation
   input:
     webasto_device:
-      name: Webasto Next Wallbox
+      name: Webasto Next / Unite wallbox
       description: The wallbox device to control.
       selector:
         device:
@@ -53,29 +53,21 @@ blueprint:
         device:
           integration: mobile_app
 
-# Blueprint inputs are not available inside templates directly; expose the ones
-# used in templates here first.
+# Inputs used in templates must be exposed as variables first.
 variables:
   webasto_device: !input webasto_device
   notify_device: !input notify_device
 
-trigger:
-  - platform: numeric_state
+triggers:
+  - trigger: numeric_state
     entity_id: !input power_sensor
     below: !input power_threshold
     for:
       minutes: !input duration
 
-condition:
-  # Only stop if we are actually in a charging session.
-  # We can check the power sensor itself (redundant but safe) or just assume the
-  # trigger is enough. Better: Check if the wallbox status is 'Charging' (IEC
-  # State C). But accessing that specific entity via device selector is hard in
-  # blueprints without asking for it explicitly.
-  # We'll rely on the power drop trigger.
-  []
+conditions: []
 
-action:
+actions:
   - action: webasto_next_modbus.stop_session
     data:
       config_entry_id: >-
