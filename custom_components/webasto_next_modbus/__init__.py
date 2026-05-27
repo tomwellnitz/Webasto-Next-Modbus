@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_MODEL,
@@ -87,6 +88,18 @@ class RuntimeData:
 
 
 type WebastoConfigEntry = ConfigEntry[RuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register integration-wide service actions.
+
+    Done here (not in async_setup_entry) so the actions exist and validate even
+    before a config entry is set up, and persist for the lifetime of Home
+    Assistant regardless of entry reloads.
+    """
+
+    _register_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> bool:
@@ -198,8 +211,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
-    _register_services(hass)
-
     return True
 
 
@@ -229,19 +240,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
         await runtime.bridge.async_close()
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
-    if not _has_other_loaded_entries(hass, entry):
-        _unregister_services(hass)
-
     _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
     return unload_ok
-
-
-def _has_other_loaded_entries(hass: HomeAssistant, current: WebastoConfigEntry) -> bool:
-    """Return True if any other loaded config entry still exists."""
-    return any(
-        entry.entry_id != current.entry_id
-        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
-    )
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> None:
@@ -336,24 +336,6 @@ def _register_services(hass: HomeAssistant) -> None:
     )
 
     _SERVICES_REGISTERED = True
-
-
-def _unregister_services(hass: HomeAssistant) -> None:
-    """Remove integration services when no entries remain."""
-
-    global _SERVICES_REGISTERED
-    if not _SERVICES_REGISTERED:
-        return
-
-    hass.services.async_remove(DOMAIN, SERVICE_SET_CURRENT)
-    hass.services.async_remove(DOMAIN, SERVICE_SET_FAILSAFE)
-    hass.services.async_remove(DOMAIN, SERVICE_SEND_KEEPALIVE)
-    hass.services.async_remove(DOMAIN, SERVICE_START_SESSION)
-    hass.services.async_remove(DOMAIN, SERVICE_STOP_SESSION)
-    hass.services.async_remove(DOMAIN, SERVICE_SET_LED_BRIGHTNESS)
-    hass.services.async_remove(DOMAIN, SERVICE_SET_FREE_CHARGING)
-    hass.services.async_remove(DOMAIN, SERVICE_RESTART_WALLBOX)
-    _SERVICES_REGISTERED = False
 
 
 def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:

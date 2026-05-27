@@ -1,4 +1,6 @@
 # .vulture_whitelist.py
+async_setup  # unused function
+config  # unused arg required by Home Assistant's async_setup signature
 async_setup_entry  # unused function
 async_unload_entry  # unused function
 async_press  # unused function

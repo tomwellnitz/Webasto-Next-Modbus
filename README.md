@@ -53,6 +53,11 @@ To test upcoming changes, enable **Show beta versions** on the integration in HA
 1. Copy `custom_components/webasto_next_modbus/` from this repository into your Home Assistant `config/custom_components/` directory.
 2. Restart Home Assistant.
 
+### Removal
+
+1. Go to **Settings → Devices & Services → Webasto Next / Unite**, open the **⋮** menu on the entry and choose **Delete**. This removes the device, its entities and stored credentials.
+2. If you installed via HACS, optionally remove the repository from HACS; for a manual install, delete `custom_components/webasto_next_modbus/`. Restart Home Assistant.
+
 ## Configuration
 
 ### Before you start: enable Modbus on the wallbox

@@ -17,6 +17,9 @@ from .entity import WebastoRestEntity
 _TAG_ID_KEY = "free_charging_tag_id"
 
 
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: WebastoConfigEntry,
