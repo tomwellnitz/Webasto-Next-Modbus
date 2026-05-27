@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import (  # type: ignore[import-untyped]
@@ -118,6 +119,128 @@ async def test_user_step_cannot_connect() -> None:
 
     assert result.get("type") == FlowResultType.FORM
     assert result.get("errors") == {"base": "cannot_connect"}
+
+
+async def test_reconfigure_shows_form() -> None:
+    """The reconfigure step shows a pre-filled form when no input is given."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={
+            CONF_HOST: "192.0.2.3",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_UNIT_ID: DEFAULT_UNIT_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+            CONF_MODEL: DEFAULT_MODEL,
+        },
+        unique_id="192.0.2.3-255",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry):
+        result = await flow.async_step_reconfigure()
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "reconfigure"
+
+    # The form is pre-filled with the entry's current connection settings.
+    defaults = {
+        marker.schema: marker.default()
+        for marker in result["data_schema"].schema
+        if getattr(marker, "default", vol.UNDEFINED) is not vol.UNDEFINED
+    }
+    assert defaults[CONF_HOST] == "192.0.2.3"
+    assert defaults[CONF_PORT] == DEFAULT_PORT
+    assert defaults[CONF_UNIT_ID] == DEFAULT_UNIT_ID
+
+
+async def test_reconfigure_updates_connection() -> None:
+    """Reconfigure updates host/port/unit_id and reloads (validation via reload)."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={
+            CONF_HOST: "192.0.2.3",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_UNIT_ID: DEFAULT_UNIT_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+            CONF_MODEL: DEFAULT_MODEL,
+        },
+        unique_id="192.0.2.3-255",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    sentinel = {"type": FlowResultType.ABORT, "reason": "reconfigure_successful"}
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
+        patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry]),
+        patch.object(
+            WebastoConfigFlow, "async_update_reload_and_abort", return_value=sentinel
+        ) as reload_abort,
+    ):
+        result = await flow.async_step_reconfigure(
+            {
+                CONF_HOST: "192.0.2.99",
+                CONF_PORT: 1502,
+                CONF_UNIT_ID: 10,
+            }
+        )
+
+    reload_abort.assert_called_once()
+    _, kwargs = reload_abort.call_args
+    assert kwargs["data"][CONF_HOST] == "192.0.2.99"
+    assert kwargs["data"][CONF_PORT] == 1502
+    assert kwargs["data"][CONF_UNIT_ID] == 10
+    assert kwargs["unique_id"] == "192.0.2.99-10"
+    assert kwargs["title"] == "192.0.2.99 (unit 10)"
+    assert result is sentinel
+
+
+async def test_reconfigure_aborts_on_identity_collision() -> None:
+    """Reconfiguring onto another entry's host/unit is rejected."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={
+            CONF_HOST: "192.0.2.3",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_UNIT_ID: DEFAULT_UNIT_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+            CONF_MODEL: DEFAULT_MODEL,
+        },
+        unique_id="192.0.2.3-255",
+    )
+    other = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={CONF_HOST: "192.0.2.50", CONF_UNIT_ID: 10},
+        unique_id="192.0.2.50-10",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
+        patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry, other]),
+    ):
+        result = await flow.async_step_reconfigure(
+            {
+                CONF_HOST: "192.0.2.50",
+                CONF_PORT: DEFAULT_PORT,
+                CONF_UNIT_ID: 10,
+            }
+        )
+
+    assert result.get("type") == FlowResultType.ABORT
+    assert result.get("reason") == "already_configured"
 
 
 async def test_options_flow_updates_interval() -> None:

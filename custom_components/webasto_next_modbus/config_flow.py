@@ -160,6 +160,85 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
+    async def async_step_reconfigure(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Let the user change the connection settings of an existing entry.
+
+        The new settings are validated by the reload that follows: Home
+        Assistant unloads the entry first (which closes the existing Modbus
+        connection via ``async_unload_entry``), then sets it up again against
+        the new host/port/unit and validates on the first refresh. We do not
+        open a second connection to test here on purpose -- the wallbox accepts
+        only one Modbus TCP connection at a time and the old one is still held
+        by the running entry, so a probe would be refused or test stale data.
+        """
+
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = str(user_input[CONF_HOST]).strip()
+            port = int(user_input[CONF_PORT])
+            unit_id = int(user_input[CONF_UNIT_ID])
+            name = str(user_input.get(CONF_NAME, "")).strip()
+
+            new_unique_id = _build_unique_id(host, unit_id)
+            for other in self._async_current_entries():
+                if other.entry_id != entry.entry_id and other.unique_id == new_unique_id:
+                    return self.async_abort(reason="already_configured")
+
+            new_data = dict(entry.data)
+            new_data[CONF_HOST] = host
+            new_data[CONF_PORT] = port
+            new_data[CONF_UNIT_ID] = unit_id
+            if name:
+                new_data[CONF_NAME] = name
+                title = name
+            else:
+                new_data.pop(CONF_NAME, None)
+                title = f"{host} (unit {unit_id})"
+
+            return self.async_update_reload_and_abort(
+                entry,
+                data=new_data,
+                title=title,
+                unique_id=new_unique_id,
+            )
+
+        current = entry.data
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): vol.All(
+                    str,
+                    vol.Length(min=1),
+                ),
+                vol.Required(
+                    CONF_PORT,
+                    default=current.get(CONF_PORT, DEFAULT_PORT),
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=1, max=65535),
+                ),
+                vol.Required(
+                    CONF_UNIT_ID,
+                    default=current.get(CONF_UNIT_ID, DEFAULT_UNIT_ID),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1,
+                        max=255,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(CONF_NAME, default=current.get(CONF_NAME, "")): vol.All(
+                    str,
+                    vol.Length(max=100),
+                ),
+            }
+        )
+
+        return self.async_show_form(step_id="reconfigure", data_schema=data_schema)
+
     async def _async_validate_and_connect(self, data: Mapping[str, Any]) -> None:
         """Validate user input by performing a Modbus test read."""
         host = data[CONF_HOST]
