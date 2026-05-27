@@ -22,17 +22,15 @@ async def async_setup_entry(
     entry: WebastoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the connectivity binary sensor."""
+    """Set up the connectivity and charging binary sensors."""
 
     runtime = entry.runtime_data
+    host = entry.data[CONF_HOST]
+    unit_id = entry.data[CONF_UNIT_ID]
     async_add_entities(
         [
-            WebastoConnectivitySensor(
-                runtime.coordinator,
-                entry.data[CONF_HOST],
-                entry.data[CONF_UNIT_ID],
-                runtime.device_name,
-            )
+            WebastoConnectivitySensor(runtime.coordinator, host, unit_id, runtime.device_name),
+            WebastoChargingSensor(runtime.coordinator, host, unit_id, runtime.device_name),
         ]
     )
 
@@ -71,6 +69,49 @@ class WebastoConnectivitySensor(  # type: ignore[misc]
     @property
     def is_on(self) -> bool:
         return self.coordinator.last_update_success
+
+    def _handle_coordinator_update(self) -> None:
+        self._attr_device_info = build_device_info(
+            self._unique_prefix, self._device_name, self.coordinator
+        )
+        super()._handle_coordinator_update()
+
+
+class WebastoChargingSensor(  # type: ignore[misc]
+    CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity
+):
+    """On while the wallbox is actively charging a vehicle."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
+    _attr_translation_key = "charging"
+
+    def __init__(
+        self,
+        coordinator: WebastoDataCoordinator,
+        host: str,
+        unit_id: int,
+        device_name: str,
+    ) -> None:
+        super().__init__(coordinator)
+        prefix = build_device_slug(host, unit_id)
+        self._unique_prefix = prefix
+        self._device_name = device_name
+        self._attr_unique_id = f"{prefix}-charging"
+        self._attr_device_info = build_device_info(prefix, device_name, coordinator)
+
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        if not isinstance(data, dict):
+            return None
+        value = data.get("charging_state")
+        if value is None:
+            return None
+        try:
+            return int(value) == 1
+        except TypeError, ValueError:
+            return None
 
     def _handle_coordinator_update(self) -> None:
         self._attr_device_info = build_device_info(

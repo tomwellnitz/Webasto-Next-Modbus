@@ -86,7 +86,7 @@ Credentials are stored in the Home Assistant config entry and redacted from down
 | Sensors | Charge point state, charging state, EVSE state, cable state, fault code, per-phase current and power, total energy, session energy and times, EV current limits, smart-vehicle detection. |
 | Numbers | Charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
 | Buttons | Start charging, Stop charging, Send keep-alive. |
-| Binary sensors | Connected (`device_class: connectivity`). |
+| Binary sensors | Connected (`device_class: connectivity`), Charging (`device_class: battery_charging`). |
 
 ### REST API (when enabled)
 

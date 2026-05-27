@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.webasto_next_modbus.binary_sensor import WebastoChargingSensor
 from custom_components.webasto_next_modbus.button import WebastoButton
 from custom_components.webasto_next_modbus.const import (
     KEEPALIVE_TRIGGER_VALUE,
@@ -77,6 +78,25 @@ async def test_sensor_maps_enum_value(coordinator_fixture) -> None:
 
     assert sensor.unique_id == "192.0.2.10-7-charge_point_state"
     assert sensor.native_value == "charging"
+
+
+async def test_charging_binary_sensor_reflects_state(coordinator_fixture) -> None:
+    """The charging binary sensor is on only while charging_state == 1."""
+
+    coordinator, _bridge = coordinator_fixture
+    sensor = WebastoChargingSensor(coordinator, "192.0.2.10", 7, DEVICE_NAME)
+
+    assert sensor.unique_id == "192.0.2.10-7-charging"
+    assert sensor.translation_key == "charging"
+
+    coordinator.data = {"charging_state": 1}
+    assert sensor.is_on is True
+
+    coordinator.data = {"charging_state": 0}
+    assert sensor.is_on is False
+
+    coordinator.data = {}
+    assert sensor.is_on is None
 
 
 async def test_entity_has_correct_translation_attributes(coordinator_fixture) -> None:
