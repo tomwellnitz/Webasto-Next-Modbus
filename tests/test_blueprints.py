@@ -24,10 +24,7 @@ from pathlib import Path
 import pytest
 
 BLUEPRINT_DIR = (
-    Path(__file__).resolve().parents[1]
-    / "blueprints"
-    / "automation"
-    / "webasto_next_modbus"
+    Path(__file__).resolve().parents[1] / "blueprints" / "automation" / "webasto_next_modbus"
 )
 BLUEPRINT_PATHS = sorted(BLUEPRINT_DIR.glob("*.yaml"))
 
