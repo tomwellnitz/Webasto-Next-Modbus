@@ -128,6 +128,7 @@ Ready-to-import blueprints live under **Settings → Automations & Scenes → Bl
 - **Charge target (kWh)** — charge a set amount of energy, then stop.
 - **Charge until full** — stop automatically once charging power drops below a threshold.
 - **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption.
+- **Event notifications** — send a mobile notification on charging or connectivity events (charging started/stopped, connection lost/restored, keep-alive sent).
 
 Device triggers for charging start/stop and connection state are available for your own automations.
 
