@@ -41,19 +41,19 @@ variables:
   webasto_device: !input webasto_device
   reset_helpers: !input reset_helpers
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input fastcharge_helper
     to: "on"
     id: start
-  - platform: state
+  - trigger: state
     entity_id: !input fullcharge_helper
     to: "on"
     id: stop
 
-condition: []
+conditions: []
 
-action:
+actions:
   - choose:
       - conditions:
           - condition: trigger

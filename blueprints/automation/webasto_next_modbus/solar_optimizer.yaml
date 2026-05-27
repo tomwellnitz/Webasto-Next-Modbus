@@ -1,6 +1,6 @@
 ---
 blueprint:
-  name: Webasto Next – Solar Surplus Optimizer
+  name: Webasto Next / Unite – Solar Surplus Optimizer
   description: >-
     Adjusts the charging current based on grid export/import to maximize solar
     self-consumption. Requires a grid power sensor (negative = export, positive
@@ -58,8 +58,8 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input grid_sensor
 
 variables:
@@ -89,10 +89,10 @@ variables:
   # Round down to be safe (avoid importing)
   target_amps: "{{ target_amps_raw | int }}"
 
-action:
+actions:
+  # Only writes when the computed current actually changes, so a noisy grid
+  # sensor does not produce redundant Modbus writes.
   - choose:
-      # Only update if the target amps are within range and different from
-      # current
       - conditions:
           - condition: template
             value_template: >-
