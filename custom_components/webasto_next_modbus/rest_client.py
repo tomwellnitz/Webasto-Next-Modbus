@@ -377,8 +377,8 @@ class RestClient:
                 raise
             except (aiohttp.ClientError, TimeoutError) as err:
                 last_error = err
-                _LOGGER.warning(
-                    "Attempt %s/%s to %s failed: %s",
+                _LOGGER.debug(
+                    "Attempt %s/%s to %s failed: %r",
                     attempt,
                     MAX_RETRY_ATTEMPTS,
                     f"{method} {path}",
