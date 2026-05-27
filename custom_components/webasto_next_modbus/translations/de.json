@@ -51,6 +51,9 @@
     "binary_sensor": {
       "connected": {
         "name": "Verbunden"
+      },
+      "charging": {
+        "name": "Lädt"
       }
     },
     "sensor": {
