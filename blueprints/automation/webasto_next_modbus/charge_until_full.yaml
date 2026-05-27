@@ -53,6 +53,12 @@ blueprint:
         device:
           integration: mobile_app
 
+# Blueprint inputs are not available inside templates directly; expose the ones
+# used in templates here first.
+variables:
+  webasto_device: !input webasto_device
+  notify_device: !input notify_device
+
 trigger:
   - platform: numeric_state
     entity_id: !input power_sensor
@@ -73,9 +79,9 @@ action:
   - action: webasto_next_modbus.stop_session
     data:
       config_entry_id: >-
-        {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+        {{ device_attr(webasto_device, 'config_entries')[0] }}
   - choose:
-      - conditions: "{{ inputs.notify_device != [] }}"
+      - conditions: "{{ notify_device != [] }}"
         sequence:
           - domain: mobile_app
             type: notify
