@@ -548,7 +548,7 @@ class RestClient:
         import re
 
         pattern = r"inet\s+(\d+\.\d+\.\d+\.\d+)"
-        matches = re.findall(pattern, interfaces_str)
+        matches: list[str] = re.findall(pattern, interfaces_str)
 
         for ip in matches:
             if not ip.startswith("127.") and not ip.startswith("172.20."):

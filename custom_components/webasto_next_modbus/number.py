@@ -5,7 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
+from homeassistant.components.number import (
+    NumberEntity,
+    NumberExtraStoredData,
+    NumberMode,
+    RestoreNumber,
+)
 from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -13,10 +18,15 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, SIGNAL_REGISTER_WRITTEN, get_number_registers
+from .const import (
+    CONF_UNIT_ID,
+    SIGNAL_REGISTER_WRITTEN,
+    RegisterDefinition,
+    get_number_registers,
+)
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
-from .hub import WebastoModbusError
+from .hub import ModbusBridge, WebastoModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +71,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type: ignore[misc]
+class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
     """Expose writable Modbus registers as number entities."""
 
     _attr_has_entity_name = True
@@ -69,11 +79,11 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
 
     def __init__(
         self,
-        coordinator,
-        bridge,
+        coordinator: WebastoDataCoordinator,
+        bridge: ModbusBridge,
         host: str,
         unit_id: int,
-        register,
+        register: RegisterDefinition,
         device_name: str,
         variant_max_current: int | None = None,
     ) -> None:
@@ -185,7 +195,9 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
         )
         self.async_on_remove(remove)
 
-    async def _async_init_write_only_value(self, last_number_data) -> None:
+    async def _async_init_write_only_value(
+        self, last_number_data: NumberExtraStoredData | None
+    ) -> None:
         """Seed the value from the wallbox, or re-assert the restored value."""
 
         if await self._async_seed_from_wallbox():
@@ -255,7 +267,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):  # type
             self.async_write_ha_state()
 
 
-class WebastoLedBrightness(WebastoRestEntity, NumberEntity):  # type: ignore[misc]
+class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
     """Number entity for LED brightness via REST API."""
 
     _attr_has_entity_name = True

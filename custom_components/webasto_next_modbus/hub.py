@@ -516,18 +516,18 @@ class ModbusBridge:
                         register.address,
                         count=register.count,
                     )
-            except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+            except (modbus_exception, OSError, ConnectionError) as err:
                 # Mark client as disconnected to force reconnect on next attempt
                 self._client = None
                 raise WebastoModbusError(str(err)) from err
 
-        if not hasattr(response, "isError") or response.isError():  # type: ignore[attr-defined]
+        if not hasattr(response, "isError") or response.isError():
             raise WebastoModbusDeviceError(
                 f"reading {register.key} (@{register.address}) failed: "
                 f"{_describe_modbus_response(response)}"
             )
 
-        return _decode_register(register, response.registers)  # type: ignore[attr-defined]
+        return _decode_register(register, response.registers)
 
     async def _async_read_data_once(self) -> dict[str, float | int | str | None]:
         data: dict[str, float | int | str | None] = {}
@@ -552,12 +552,12 @@ class ModbusBridge:
                             request.start_address,
                             count=request.count,
                         )
-                except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+                except (modbus_exception, OSError, ConnectionError) as err:
                     # Mark client as disconnected to force reconnect on next attempt
                     self._client = None
                     raise WebastoModbusError(str(err)) from err
 
-                if response.isError():  # type: ignore[attr-defined]
+                if response.isError():
                     detail = _describe_modbus_response(response)
                     if not read_any:
                         # The first (core) block came back as an error: the
@@ -592,7 +592,7 @@ class ModbusBridge:
                     continue
 
                 read_any = True
-                registers = response.registers  # type: ignore[attr-defined]
+                registers = response.registers
                 for definition in request.registers:
                     offset = definition.address - request.start_address
                     slice_end = offset + definition.count
@@ -622,12 +622,12 @@ class ModbusBridge:
                     register.address,
                     value,
                 )
-            except (modbus_exception, OSError, ConnectionError) as err:  # type: ignore[misc]
+            except (modbus_exception, OSError, ConnectionError) as err:
                 # Mark client as disconnected to force reconnect on next attempt
                 self._client = None
                 raise WebastoModbusError(str(err)) from err
 
-        if response.isError():  # type: ignore[attr-defined]
+        if response.isError():
             raise WebastoModbusDeviceError(
                 f"writing {register.key} (@{register.address}) failed: "
                 f"{_describe_modbus_response(response)}"

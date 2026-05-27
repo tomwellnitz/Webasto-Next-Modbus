@@ -35,9 +35,7 @@ async def async_setup_entry(
     )
 
 
-class WebastoConnectivitySensor(  # type: ignore[misc]
-    CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity
-):
+class WebastoConnectivitySensor(CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity):
     """Reports whether the integration is currently reaching the wallbox."""
 
     _attr_has_entity_name = True
@@ -77,9 +75,7 @@ class WebastoConnectivitySensor(  # type: ignore[misc]
         super()._handle_coordinator_update()
 
 
-class WebastoChargingSensor(  # type: ignore[misc]
-    CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity
-):
+class WebastoChargingSensor(CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity):
     """On while the wallbox is actively charging a vehicle."""
 
     _attr_has_entity_name = True

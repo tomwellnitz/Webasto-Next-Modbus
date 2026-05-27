@@ -58,7 +58,7 @@ def _migrate_tag_id_unique_id(hass: HomeAssistant, host: str, unit_id: int) -> N
         registry.async_update_entity(old_entity_id, new_unique_id=new_uid)
 
 
-class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: ignore[misc]
+class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):
     """Text entity for Free Charging Tag ID via REST API."""
 
     _attr_has_entity_name = True
@@ -76,7 +76,7 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):  # type: igno
         super().__init__(coordinator, host, unit_id, _TAG_ID_KEY, device_name)
 
     @property
-    def native_value(self) -> str | None:  # type: ignore[override]
+    def native_value(self) -> str | None:
         """Return the current value."""
         if not self.coordinator.rest_data:
             return None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -14,7 +15,7 @@ from .const import CONF_REST_PASSWORD, CONF_REST_USERNAME
 TO_REDACT = {CONF_HOST, CONF_REST_PASSWORD, CONF_REST_USERNAME}
 
 
-def _iso_or_none(value):
+def _iso_or_none(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
