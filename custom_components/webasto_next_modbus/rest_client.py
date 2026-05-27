@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import ssl
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final
@@ -96,6 +94,7 @@ class RestClient:
         host: str,
         username: str,
         password: str,
+        session: aiohttp.ClientSession,
         *,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> None:
@@ -105,18 +104,22 @@ class RestClient:
             host: Wallbox IP address or hostname.
             username: Web interface username (usually "admin").
             password: Web interface password.
+            session: Shared aiohttp session (from
+                ``async_get_clientsession(hass, verify_ssl=False)``). The
+                wallbox uses a self-signed certificate, hence ``verify_ssl``
+                must be disabled by the caller. The session is owned by Home
+                Assistant and must not be closed here.
             timeout: Request timeout in seconds.
         """
         self._host = host
         self._username = username
         self._password = password
-        self._timeout = timeout
         self._base_url = f"https://{host}/api"
 
-        self._session: aiohttp.ClientSession | None = None
+        self._session = session
+        self._request_timeout = aiohttp.ClientTimeout(total=timeout)
         self._token: str | None = None
         self._token_expires: datetime | None = None
-        self._ssl_context: ssl.SSLContext | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -126,34 +129,20 @@ class RestClient:
         return datetime.now(UTC) < self._token_expires - TOKEN_REFRESH_MARGIN
 
     async def connect(self) -> None:
-        """Establish connection and authenticate.
-
-        On failure the session is closed again so callers can simply discard
-        the client without leaking an open aiohttp session.
+        """Authenticate against the wallbox REST API.
 
         Raises:
             AuthenticationError: If login fails.
             ConnectionError: If connection to wallbox fails.
         """
-        await self._ensure_session()
-        login_ok = False
-        try:
-            await self._login()
-            login_ok = True
-        finally:
-            if not login_ok:
-                # Covers exceptions *and* task cancellation (HA shutdown).
-                # Shield the close so it still runs to completion even if a
-                # cancellation interrupts us here, instead of leaving an open
-                # aiohttp session behind.
-                with contextlib.suppress(Exception):
-                    await asyncio.shield(self.disconnect())
+        await self._login()
 
     async def disconnect(self) -> None:
-        """Close the session."""
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        """Forget the auth token.
+
+        The aiohttp session is owned by Home Assistant (shared), so it is
+        intentionally not closed here.
+        """
         self._token = None
         self._token_expires = None
 
@@ -286,25 +275,6 @@ class RestClient:
     # Private methods
     # -------------------------------------------------------------------------
 
-    async def _ensure_session(self) -> None:
-        """Create the aiohttp session if it doesn't exist yet."""
-        if self._session is not None and not self._session.closed:
-            return
-
-        if self._ssl_context is None:
-            # A bare TLS-client context, not ssl.create_default_context():
-            # the latter calls load_default_certs(), which does blocking file
-            # I/O and trips Home Assistant's blocking-call detector. The wallbox
-            # uses a self-signed certificate, so verification is disabled anyway.
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            self._ssl_context = ctx
-
-        connector = aiohttp.TCPConnector(ssl=self._ssl_context)
-        timeout = aiohttp.ClientTimeout(total=self._timeout)
-        self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
-
     async def _ensure_token(self) -> None:
         """Ensure we have a valid token, refresh if needed."""
         if not self.is_connected:
@@ -312,16 +282,11 @@ class RestClient:
 
     async def _login(self) -> None:
         """Authenticate and obtain JWT token."""
-        if self._session is None:
-            await self._ensure_session()
-
-        assert self._session is not None  # noqa: S101
-
         url = f"{self._base_url}/login"
         payload = {"username": self._username, "password": self._password}
 
         try:
-            async with self._session.post(url, json=payload) as resp:
+            async with self._session.post(url, json=payload, timeout=self._request_timeout) as resp:
                 if resp.status == 401:
                     msg = "Invalid username or password"
                     raise AuthenticationError(msg)
@@ -375,10 +340,8 @@ class RestClient:
         json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
     ) -> Any:
         """Make authenticated request with retry logic."""
-        await self._ensure_session()
         await self._ensure_token()
 
-        assert self._session is not None  # noqa: S101
         assert self._token is not None  # noqa: S101
 
         url = f"{self._base_url}{path}"
@@ -390,10 +353,9 @@ class RestClient:
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
             try:
-                await self._ensure_session()
-                assert self._session is not None  # noqa: S101
-
-                async with self._session.request(method, url, headers=headers, json=json) as resp:
+                async with self._session.request(
+                    method, url, headers=headers, json=json, timeout=self._request_timeout
+                ) as resp:
                     if resp.status == 401:
                         # Token expired, re-authenticate
                         _LOGGER.debug("Token expired (401), re-authenticating...")
@@ -422,11 +384,6 @@ class RestClient:
                     f"{method} {path}",
                     err,
                 )
-
-                # Force session close to ensure fresh connection on retry
-                if self._session and not self._session.closed:
-                    await self._session.close()
-                self._session = None
 
                 if attempt == MAX_RETRY_ATTEMPTS:
                     break
