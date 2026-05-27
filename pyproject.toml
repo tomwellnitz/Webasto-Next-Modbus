@@ -48,6 +48,17 @@ packages = [
 [tool.setuptools.package-data]
 "custom_components.webasto_next_modbus" = ["py.typed"]
 
+[tool.mypy]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# voluptuous ships no type information; treat it as untyped rather than
+# erroring on the missing stubs.
+module = ["voluptuous", "voluptuous.*"]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
