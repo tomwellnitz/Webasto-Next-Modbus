@@ -20,6 +20,8 @@ from custom_components.webasto_next_modbus.config_flow import (
 from custom_components.webasto_next_modbus.const import (
     CONF_MODEL,
     CONF_REST_ENABLED,
+    CONF_REST_PASSWORD,
+    CONF_REST_USERNAME,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
@@ -30,6 +32,7 @@ from custom_components.webasto_next_modbus.const import (
     DEFAULT_VARIANT,
     VARIANT_22_KW,
 )
+from custom_components.webasto_next_modbus.rest_client import AuthenticationError
 
 pytestmark = pytest.mark.asyncio
 
@@ -293,3 +296,88 @@ async def test_options_flow_updates_interval() -> None:
         CONF_REST_ENABLED: False,
     }
     hass.config_entries.async_update_entry.assert_called_once()
+
+
+async def test_reauth_shows_form() -> None:
+    """The reauth step shows the credential form."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={CONF_HOST: "192.0.2.3", CONF_PORT: DEFAULT_PORT, CONF_UNIT_ID: DEFAULT_UNIT_ID},
+        options={CONF_REST_ENABLED: True, CONF_REST_USERNAME: "admin"},
+        unique_id="192.0.2.3-255",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry):
+        result = await flow.async_step_reauth_confirm()
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "reauth_confirm"
+
+
+async def test_reauth_updates_credentials() -> None:
+    """Reauth validates the new credentials and updates the entry options."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={CONF_HOST: "192.0.2.3", CONF_PORT: DEFAULT_PORT, CONF_UNIT_ID: DEFAULT_UNIT_ID},
+        options={CONF_REST_ENABLED: True, CONF_REST_USERNAME: "admin"},
+        unique_id="192.0.2.3-255",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    sentinel = {"type": FlowResultType.ABORT, "reason": "reauth_successful"}
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry),
+        patch.object(WebastoConfigFlow, "_async_validate_rest", AsyncMock()) as validate,
+        patch.object(
+            WebastoConfigFlow, "async_update_reload_and_abort", return_value=sentinel
+        ) as reload_abort,
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_REST_USERNAME: "admin", CONF_REST_PASSWORD: "newpass"}
+        )
+
+    validate.assert_awaited_once()
+    reload_abort.assert_called_once()
+    _, kwargs = reload_abort.call_args
+    assert kwargs["options"][CONF_REST_USERNAME] == "admin"
+    assert kwargs["options"][CONF_REST_PASSWORD] == "newpass"
+    assert kwargs["options"][CONF_REST_ENABLED] is True
+    assert result is sentinel
+
+
+async def test_reauth_invalid_auth() -> None:
+    """Rejected credentials re-show the reauth form with invalid_auth."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={CONF_HOST: "192.0.2.3", CONF_PORT: DEFAULT_PORT, CONF_UNIT_ID: DEFAULT_UNIT_ID},
+        options={CONF_REST_ENABLED: True, CONF_REST_USERNAME: "admin"},
+        unique_id="192.0.2.3-255",
+    )
+
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry),
+        patch.object(
+            WebastoConfigFlow,
+            "_async_validate_rest",
+            AsyncMock(side_effect=AuthenticationError("bad creds")),
+        ),
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_REST_USERNAME: "admin", CONF_REST_PASSWORD: "wrong"}
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "reauth_confirm"
+    assert result.get("errors") == {"base": "invalid_auth"}

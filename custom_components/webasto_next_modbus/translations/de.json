@@ -24,15 +24,26 @@
           "unit_id": "Unit-ID",
           "name": "Name (optional)"
         }
+      },
+      "reauth_confirm": {
+        "title": "REST-API neu authentifizieren",
+        "description": "Die Wallbox unter {host} hat die gespeicherten REST-API-Zugangsdaten abgelehnt. Bitte aktuellen Benutzernamen und Passwort eingeben.",
+        "data": {
+          "rest_username": "REST-API-Benutzername",
+          "rest_password": "REST-API-Passwort"
+        }
       }
     },
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen. Host, Port oder Modbus-Konfiguration prüfen.",
+      "invalid_auth": "Die Wallbox hat diese REST-API-Zugangsdaten abgelehnt.",
+      "rest_cannot_connect": "REST-API nicht erreichbar. Netzwerk prüfen und erneut versuchen.",
       "unknown": "Unerwarteter Fehler"
     },
     "abort": {
       "already_configured": "Diese Wallbox ist bereits eingerichtet.",
       "reconfigure_successful": "Die Verbindungseinstellungen wurden aktualisiert.",
+      "reauth_successful": "Die REST-API-Zugangsdaten wurden aktualisiert.",
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
   },
@@ -285,12 +296,6 @@
     },
     "abort": {
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
-    }
-  },
-  "issues": {
-    "rest_auth_failed": {
-      "title": "Webasto Next: REST-API-Anmeldung fehlgeschlagen",
-      "description": "Der REST-API-Benutzername oder das Passwort werden von der Wallbox nicht mehr akzeptiert. Bitte in den Integrations-Optionen aktualisieren (Einstellungen → Geräte & Dienste → Webasto Next → Konfigurieren). Die Modbus-Seite läuft in der Zwischenzeit weiter."
     }
   }
 }

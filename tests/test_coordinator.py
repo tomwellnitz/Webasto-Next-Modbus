@@ -260,8 +260,8 @@ async def test_coordinator_force_refreshes_rest_data() -> None:
     assert coordinator.rest_data is sentinel
 
 
-async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
-    """A 401 on the REST login surfaces a repair issue and disables REST (no retry)."""
+async def test_coordinator_rest_auth_failure_starts_reauth() -> None:
+    """A 401 on the REST login starts a reauth flow and disables REST (no retry)."""
 
     bridge = AsyncMock(spec=ModbusBridge)
     bridge.endpoint = "192.0.2.1:502 (device_id 255)"
@@ -273,7 +273,7 @@ async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
     coordinator = _build_coordinator(bridge, entry)
 
     with (
-        patch("custom_components.webasto_next_modbus.coordinator.ir") as mock_ir,
+        patch.object(entry, "async_start_reauth") as start_reauth,
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock(side_effect=AuthenticationError("bad creds"))
@@ -283,11 +283,11 @@ async def test_coordinator_rest_auth_failure_raises_repair_issue() -> None:
     assert coordinator._rest_client is None
     assert coordinator._rest_setup_retry_at is None
     mock_rc.return_value.disconnect.assert_awaited_once()
-    mock_ir.async_create_issue.assert_called_once()
+    start_reauth.assert_called_once()
 
 
-async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
-    """A successful REST connect clears the auth repair issue."""
+async def test_coordinator_rest_success_does_not_start_reauth() -> None:
+    """A successful REST connect does not trigger a reauth flow."""
 
     bridge = AsyncMock(spec=ModbusBridge)
     bridge.endpoint = "192.0.2.1:502 (device_id 255)"
@@ -299,7 +299,7 @@ async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
     coordinator = _build_coordinator(bridge, entry)
 
     with (
-        patch("custom_components.webasto_next_modbus.coordinator.ir") as mock_ir,
+        patch.object(entry, "async_start_reauth") as start_reauth,
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock()
@@ -307,4 +307,4 @@ async def test_coordinator_clears_rest_auth_issue_on_success() -> None:
         await coordinator.async_setup_rest_client()
 
     assert coordinator._rest_client is mock_rc.return_value
-    mock_ir.async_delete_issue.assert_called_once()
+    start_reauth.assert_not_called()
