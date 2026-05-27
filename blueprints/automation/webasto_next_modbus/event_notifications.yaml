@@ -1,0 +1,95 @@
+---
+blueprint:
+  name: Webasto Next / Unite – Event notifications
+  description: >-
+    Sends a mobile notification when the wallbox reports a charging or
+    connectivity event (charging started/stopped, connection lost/restored,
+    keep-alive sent). Pick which events you want to be notified about.
+  domain: automation
+  input:
+    webasto_device:
+      name: Webasto Next / Unite wallbox
+      description: The wallbox to watch.
+      selector:
+        device:
+          integration: webasto_next_modbus
+    notify_device:
+      name: Notification device
+      description: The mobile device to notify (Home Assistant companion app).
+      selector:
+        device:
+          integration: mobile_app
+    events:
+      name: Events to notify about
+      description: Which wallbox events should trigger a notification.
+      default:
+        - charging_started
+        - charging_stopped
+        - connection_lost
+        - connection_restored
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Charging started
+              value: charging_started
+            - label: Charging stopped
+              value: charging_stopped
+            - label: Connection lost
+              value: connection_lost
+            - label: Connection restored
+              value: connection_restored
+            - label: Keep-alive sent
+              value: keepalive_sent
+
+mode: queued
+max_exceeded: silent
+
+# Inputs used in templates must be exposed as variables first.
+variables:
+  webasto_device: !input webasto_device
+  selected_events: !input events
+  event_titles:
+    charging_started: Charging started
+    charging_stopped: Charging stopped
+    connection_lost: Connection lost
+    connection_restored: Connection restored
+    keepalive_sent: Keep-alive sent
+
+triggers:
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: charging_started
+    id: charging_started
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: charging_stopped
+    id: charging_stopped
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: connection_lost
+    id: connection_lost
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: connection_restored
+    id: connection_restored
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: keepalive_sent
+    id: keepalive_sent
+
+conditions:
+  - condition: template
+    value_template: "{{ trigger.id in selected_events }}"
+
+actions:
+  - device_id: !input notify_device
+    domain: mobile_app
+    type: notify
+    title: "{{ device_attr(webasto_device, 'name') }}"
+    message: "{{ event_titles[trigger.id] }}"
