@@ -14,7 +14,7 @@
     "pymodbus",
     "custom_components.webasto_next_modbus"
   ],
-  "quality_scale": "silver",
+  "quality_scale": "platinum",
   "requirements": [
     "pymodbus>=3.11.2,<3.12"
   ],
