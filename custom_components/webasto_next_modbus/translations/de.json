@@ -14,6 +14,16 @@
           "variant": "Variante",
           "name": "Name (optional)"
         }
+      },
+      "reconfigure": {
+        "title": "Verbindung neu konfigurieren",
+        "description": "Verbindungsdetails der Wallbox aktualisieren (z. B. nach einer geänderten IP-Adresse).",
+        "data": {
+          "host": "Host (IP-Adresse oder Hostname)",
+          "port": "Port",
+          "unit_id": "Unit-ID",
+          "name": "Name (optional)"
+        }
       }
     },
     "error": {
@@ -22,6 +32,7 @@
     },
     "abort": {
       "already_configured": "Diese Wallbox ist bereits eingerichtet.",
+      "reconfigure_successful": "Die Verbindungseinstellungen wurden aktualisiert.",
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
   },
