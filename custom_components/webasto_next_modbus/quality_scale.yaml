@@ -69,7 +69,18 @@ rules:
   exception-translations: todo
   icon-translations: todo
   reconfiguration-flow: done
-  repair-issues: todo
+  repair-issues:
+    status: exempt
+    comment: >-
+      The integration has no reliably-detectable, user-fixable condition that
+      warrants a persistent repair issue. A failed/refused Modbus connection is
+      ambiguous and transient (wallbox booting, a stale socket, or the
+      single-connection slot held by another client) and is surfaced via
+      ConfigEntryNotReady with automatic retry; setup guidance (enable Modbus in
+      the wallbox expert view, check host/port) lives in the README and
+      troubleshooting docs. Rejected REST credentials are handled by the reauth
+      flow. Wallbox faults are exposed as the fault_code / active_errors
+      sensors, not as repairs.
   stale-devices:
     status: exempt
     comment: >-
