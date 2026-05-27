@@ -60,6 +60,8 @@ trigger:
     id: "update"
 
 variables:
+  webasto_device: !input webasto_device
+  notify_device: !input notify_device
   target_kwh: !input target_kwh_helper
   active_switch: !input active_switch_helper
   energy_sensor: !input session_energy_sensor
@@ -83,7 +85,7 @@ action:
           - action: webasto_next_modbus.start_session
             data:
               config_entry_id: >-
-                {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+                {{ device_attr(webasto_device, 'config_entries')[0] }}
 
       # Case 2: Energy updated -> Check if target reached
       - conditions:
@@ -103,12 +105,12 @@ action:
           - action: webasto_next_modbus.stop_session
             data:
               config_entry_id: >-
-                {{ device_attr(inputs.webasto_device, 'config_entries')[0] }}
+                {{ device_attr(webasto_device, 'config_entries')[0] }}
           - action: input_boolean.turn_off
             target:
               entity_id: !input active_switch_helper
           - choose:
-              - conditions: "{{ inputs.notify_device != [] }}"
+              - conditions: "{{ notify_device != [] }}"
                 sequence:
                   - domain: mobile_app
                     type: notify
