@@ -55,6 +55,10 @@ To test upcoming changes, enable **Show beta versions** on the integration in HA
 
 ## Configuration
 
+### Before you start: enable Modbus on the wallbox
+
+Modbus TCP is **disabled by default** on the Webasto Next / Unite. Enable it first in the wallbox web interface: switch to the **expert/installer view**, then turn on **Modbus TCP** (default port `502`). Without this the integration cannot connect ([#36](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/36)).
+
 1. Go to **Settings → Devices & Services → Add Integration** and search for **Webasto Next**.
 2. Enter your wallbox details:
    - **Host** — IP address or hostname (e.g. `192.168.1.50`).
@@ -129,7 +133,7 @@ Device triggers for charging start/stop and connection state are available for y
 
 ## Troubleshooting
 
-- **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. These wallboxes accept only one Modbus TCP connection at a time, so make sure no other client (e.g. EVCC) holds it.
+- **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. Make sure **Modbus TCP is enabled on the wallbox** (expert view) — it is off by default. These wallboxes also accept only one Modbus TCP connection at a time, so make sure no other client (e.g. EVCC) holds it.
 - **Values stuck or stale** — check the logs; transient errors are retried automatically, and a booting wallbox recovers on its own within a few minutes.
 - **Diagnostics** — integration entry → three-dot menu → **Download diagnostics** (secrets are redacted).
 
