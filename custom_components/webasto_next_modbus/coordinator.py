@@ -26,10 +26,13 @@ from .const import (
     REST_SETUP_RETRY_INTERVAL,
 )
 from .device_trigger import (
+    TRIGGER_CABLE_CONNECTED,
+    TRIGGER_CABLE_DISCONNECTED,
     TRIGGER_CHARGING_STARTED,
     TRIGGER_CHARGING_STOPPED,
     TRIGGER_CONNECTION_LOST,
     TRIGGER_CONNECTION_RESTORED,
+    TRIGGER_FAULT_OCCURRED,
     async_fire_device_trigger,
 )
 from .hub import ModbusBridge, WebastoModbusError
@@ -187,6 +190,8 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     {"timestamp": self.last_success.isoformat()},
                 )
             self._emit_charging_triggers(previous_data, data)
+            self._emit_cable_triggers(previous_data, data)
+            self._emit_fault_trigger(previous_data, data)
 
             # The Modbus side is up, so the wallbox is reachable: if a previous
             # REST setup failed, retry it now (throttled).
@@ -284,6 +289,60 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._device_slug,
                 TRIGGER_CHARGING_STOPPED,
                 extra,
+            )
+
+    def _emit_cable_triggers(
+        self,
+        previous: dict[str, Any] | None,
+        current: dict[str, Any],
+    ) -> None:
+        if not previous:
+            return
+        previous_raw = previous.get("cable_state")
+        current_raw = current.get("cable_state")
+        if previous_raw is None or current_raw is None:
+            return
+        try:
+            previous_state = int(previous_raw)
+            current_state = int(current_raw)
+        except TypeError, ValueError:
+            return
+        if previous_state == current_state:
+            return
+
+        extra = {"cable_state": current_state, "previous_state": previous_state}
+        if previous_state == 0 and current_state >= 1:
+            async_fire_device_trigger(self.hass, self._device_slug, TRIGGER_CABLE_CONNECTED, extra)
+        elif previous_state >= 1 and current_state == 0:
+            async_fire_device_trigger(
+                self.hass, self._device_slug, TRIGGER_CABLE_DISCONNECTED, extra
+            )
+
+    def _emit_fault_trigger(
+        self,
+        previous: dict[str, Any] | None,
+        current: dict[str, Any],
+    ) -> None:
+        if not previous:
+            return
+        previous_raw = previous.get("fault_code")
+        current_raw = current.get("fault_code")
+        if previous_raw is None or current_raw is None:
+            return
+        try:
+            previous_code = int(previous_raw)
+            current_code = int(current_raw)
+        except TypeError, ValueError:
+            return
+
+        # Fire only on the 0 -> non-zero edge so a persisting fault does not
+        # re-fire on every poll.
+        if previous_code == 0 and current_code != 0:
+            async_fire_device_trigger(
+                self.hass,
+                self._device_slug,
+                TRIGGER_FAULT_OCCURRED,
+                {"fault_code": current_code},
             )
 
     def _ensure_failure_notification(self) -> None:

@@ -331,5 +331,17 @@
     "restart_failed": {
       "message": "Failed to restart the wallbox: {error}"
     }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "charging_started": "Charging started",
+      "charging_stopped": "Charging stopped",
+      "connection_lost": "Connection lost",
+      "connection_restored": "Connection restored",
+      "keepalive_sent": "Keep-alive sent",
+      "cable_connected": "Cable connected",
+      "cable_disconnected": "Cable disconnected",
+      "fault_occurred": "Fault occurred"
+    }
   }
 }
