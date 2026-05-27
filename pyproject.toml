@@ -45,6 +45,9 @@ packages = [
   "virtual_wallbox",
 ]
 
+[tool.setuptools.package-data]
+"custom_components.webasto_next_modbus" = ["py.typed"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
