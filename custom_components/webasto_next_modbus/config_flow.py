@@ -198,12 +198,17 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 new_data.pop(CONF_NAME, None)
                 title = f"{host} (unit {unit_id})"
 
-            return self.async_update_reload_and_abort(
+            # Update the entry and let the existing update listener perform the
+            # single reload. We deliberately do not use a reloading config-flow
+            # helper here: combining it with the update listener is deprecated
+            # (HA 2026.6, error from 2026.12) because it reloads twice.
+            self.hass.config_entries.async_update_entry(
                 entry,
                 data=new_data,
                 title=title,
                 unique_id=new_unique_id,
             )
+            return self.async_abort(reason="reconfigure_successful")
 
         current = entry.data
         data_schema = vol.Schema(
@@ -274,7 +279,10 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 new_options[CONF_REST_ENABLED] = True
                 new_options[CONF_REST_USERNAME] = username
                 new_options[CONF_REST_PASSWORD] = password
-                return self.async_update_reload_and_abort(entry, options=new_options)
+                # The update listener performs the single reload (see the note
+                # in async_step_reconfigure).
+                self.hass.config_entries.async_update_entry(entry, options=new_options)
+                return self.async_abort(reason="reauth_successful")
 
         data_schema = vol.Schema(
             {
