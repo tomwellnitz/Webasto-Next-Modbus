@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -38,9 +37,6 @@ if TYPE_CHECKING:
     from .rest_client import RestClient, RestData
 
 _LOGGER = logging.getLogger(__name__)
-
-# Repair-issue key for "REST credentials rejected".
-ISSUE_REST_AUTH = "rest_auth_failed"
 
 
 class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -112,16 +108,17 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._rest_client.connect()
             _LOGGER.info("REST API client connected successfully")
             self._rest_setup_retry_at = None
-            self._clear_rest_auth_issue()
         except AuthenticationError as err:
             _LOGGER.warning("REST API authentication failed: %s", err)
             with contextlib.suppress(Exception):
                 await self._rest_client.disconnect()
             self._rest_client = None
-            # Wrong credentials won't fix themselves by retrying — surface a
-            # repair issue so the user updates them in the options.
+            # Wrong credentials won't fix themselves by retrying — start a
+            # reauth flow so the user can enter new ones. The Modbus side keeps
+            # working regardless.
             self._rest_setup_retry_at = None
-            self._raise_rest_auth_issue()
+            if self.config_entry is not None:
+                self.config_entry.async_start_reauth(self.hass)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Failed to connect REST API client: %s", err)
             with contextlib.suppress(Exception):
@@ -130,25 +127,8 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # The wallbox may just be booting; retry later from the data poll.
             self._rest_setup_retry_at = datetime.now(UTC) + self._rest_setup_retry_interval
 
-    def _rest_auth_issue_id(self) -> str:
-        return f"{ISSUE_REST_AUTH}_{self.entry_id}"
-
-    def _raise_rest_auth_issue(self) -> None:
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            self._rest_auth_issue_id(),
-            is_fixable=False,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=ISSUE_REST_AUTH,
-        )
-
-    def _clear_rest_auth_issue(self) -> None:
-        ir.async_delete_issue(self.hass, DOMAIN, self._rest_auth_issue_id())
-
     async def async_shutdown_rest_client(self) -> None:
-        """Disconnect the REST client and clear any REST repair issue."""
-        self._clear_rest_auth_issue()
+        """Disconnect the REST client."""
         if self._rest_client is not None:
             await self._rest_client.disconnect()
             self._rest_client = None

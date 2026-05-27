@@ -239,6 +239,72 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="reconfigure", data_schema=data_schema)
 
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Handle re-authentication when the REST API rejects the credentials."""
+
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Ask the user for new REST API credentials and validate them."""
+
+        from .rest_client import AuthenticationError
+
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        current_username = entry.options.get(
+            CONF_REST_USERNAME, entry.data.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME)
+        )
+
+        if user_input is not None:
+            username = str(user_input.get(CONF_REST_USERNAME, current_username)).strip()
+            password = str(user_input.get(CONF_REST_PASSWORD, ""))
+            try:
+                await self._async_validate_rest(entry.data[CONF_HOST], username, password)
+            except AuthenticationError:
+                errors["base"] = "invalid_auth"
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("REST API validation failed during reauth: %s", err)
+                errors["base"] = "rest_cannot_connect"
+            else:
+                new_options = dict(entry.options)
+                new_options[CONF_REST_ENABLED] = True
+                new_options[CONF_REST_USERNAME] = username
+                new_options[CONF_REST_PASSWORD] = password
+                return self.async_update_reload_and_abort(entry, options=new_options)
+
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_REST_USERNAME, default=current_username): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_REST_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={"host": entry.data.get(CONF_HOST, "")},
+        )
+
+    async def _async_validate_rest(self, host: str, username: str, password: str) -> None:
+        """Open a REST session to confirm the credentials, then close it."""
+
+        from .rest_client import RestClient
+
+        client = RestClient(host, username, password)
+        try:
+            await client.connect()
+        finally:
+            await client.disconnect()
+
     async def _async_validate_and_connect(self, data: Mapping[str, Any]) -> None:
         """Validate user input by performing a Modbus test read."""
         host = data[CONF_HOST]

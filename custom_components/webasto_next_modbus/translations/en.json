@@ -24,15 +24,26 @@
           "unit_id": "Unit ID",
           "name": "Name (optional)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate REST API",
+        "description": "The wallbox at {host} rejected the stored REST API credentials. Enter the current username and password.",
+        "data": {
+          "rest_username": "REST API Username",
+          "rest_password": "REST API Password"
+        }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect. Check host, port, and Modbus configuration.",
+      "invalid_auth": "The wallbox rejected these REST API credentials.",
+      "rest_cannot_connect": "Could not reach the REST API. Check the network and try again.",
       "unknown": "Unexpected error"
     },
     "abort": {
       "already_configured": "This wallbox is already configured.",
       "reconfigure_successful": "The connection settings were updated.",
+      "reauth_successful": "The REST API credentials were updated.",
       "missing_dependency": "Required package 'voluptuous' is missing in this Home Assistant environment."
     }
   },
@@ -284,12 +295,6 @@
       "phase_switch": {
         "name": "Three-phase charging"
       }
-    }
-  },
-  "issues": {
-    "rest_auth_failed": {
-      "title": "Webasto Next: REST API authentication failed",
-      "description": "The REST API username or password is no longer accepted by the wallbox. Update them in the integration options (Settings → Devices & Services → Webasto Next → Configure). The Modbus side keeps working in the meantime."
     }
   }
 }
