@@ -299,5 +299,37 @@
         "name": "Three-phase charging"
       }
     }
+  },
+  "exceptions": {
+    "not_configured": {
+      "message": "Webasto Next / Unite is not configured."
+    },
+    "multiple_wallboxes": {
+      "message": "Multiple wallboxes are configured. Set config_entry_id in the service call."
+    },
+    "session_command_unsupported": {
+      "message": "Starting and stopping a charging session is only supported on the Webasto Next."
+    },
+    "write_failed": {
+      "message": "Writing to the wallbox failed: {error}"
+    },
+    "rest_not_enabled": {
+      "message": "The REST API is not enabled for this wallbox."
+    },
+    "rest_not_connected": {
+      "message": "The REST API is not connected."
+    },
+    "set_led_brightness_failed": {
+      "message": "Failed to set the LED brightness: {error}"
+    },
+    "set_free_charging_failed": {
+      "message": "Failed to change free charging: {error}"
+    },
+    "set_tag_id_failed": {
+      "message": "Failed to set the free-charging tag ID: {error}"
+    },
+    "restart_failed": {
+      "message": "Failed to restart the wallbox: {error}"
+    }
   }
 }

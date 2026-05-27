@@ -14,7 +14,11 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.typing import ConfigType
@@ -351,7 +355,7 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
         if isinstance(getattr(entry, "runtime_data", None), RuntimeData)
     ]
     if not entries:
-        raise ValueError("Webasto Next Modbus is not configured")
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_configured")
 
     if len(entries) == 1:
         return cast(RuntimeData, entries[0].runtime_data)
@@ -362,7 +366,7 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
             if entry.entry_id == entry_id:
                 return cast(RuntimeData, entry.runtime_data)
 
-    raise ValueError("Multiple wallboxes configured – set config_entry_id in the service call")
+    raise ServiceValidationError(translation_domain=DOMAIN, translation_key="multiple_wallboxes")
 
 
 def _require_session_command_support(runtime: RuntimeData) -> None:
@@ -370,7 +374,8 @@ def _require_session_command_support(runtime: RuntimeData) -> None:
 
     if runtime.model != MODEL_NEXT:
         raise HomeAssistantError(
-            "Starting and stopping a charging session is only supported on the Webasto Next"
+            translation_domain=DOMAIN,
+            translation_key="session_command_unsupported",
         )
 
 
@@ -385,7 +390,11 @@ async def _async_service_set_current(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(register, value)
     except WebastoModbusError as err:
-        raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="write_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     async_dispatcher_send(
         call.hass,
         SIGNAL_REGISTER_WRITTEN,
@@ -407,7 +416,11 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(amps_register, amps_value)
     except WebastoModbusError as err:
-        raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="write_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     async_dispatcher_send(
         call.hass,
         SIGNAL_REGISTER_WRITTEN,
@@ -426,7 +439,11 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
         try:
             await runtime.bridge.async_write_register(timeout_register, timeout_value)
         except WebastoModbusError as err:
-            raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="write_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         async_dispatcher_send(
             call.hass,
             SIGNAL_REGISTER_WRITTEN,
@@ -446,7 +463,11 @@ async def _async_service_send_keepalive(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
     except WebastoModbusError as err:
-        raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="write_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     async_fire_device_trigger(
         call.hass,
         runtime.device_slug,
@@ -465,7 +486,11 @@ async def _async_service_start_session(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(register, SESSION_COMMAND_START_VALUE)
     except WebastoModbusError as err:
-        raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="write_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     await runtime.coordinator.async_request_refresh()
 
 
@@ -478,7 +503,11 @@ async def _async_service_stop_session(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(register, SESSION_COMMAND_STOP_VALUE)
     except WebastoModbusError as err:
-        raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="write_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     await runtime.coordinator.async_request_refresh()
 
 
@@ -488,17 +517,21 @@ async def _async_service_set_led_brightness(call: ServiceCall) -> None:
 
     runtime = _resolve_runtime(call.hass, call)
     if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError("REST API is not enabled for this wallbox")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
 
     brightness = int(call.data["brightness"])
     rest_client = runtime.coordinator.rest_client
     if rest_client is None:
-        raise HomeAssistantError("REST client not available")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
 
     try:
         await rest_client.set_led_brightness(brightness)
     except RestClientError as err:
-        raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="set_led_brightness_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     await runtime.coordinator.async_refresh_rest_data()
 
 
@@ -508,17 +541,21 @@ async def _async_service_set_free_charging(call: ServiceCall) -> None:
 
     runtime = _resolve_runtime(call.hass, call)
     if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError("REST API is not enabled for this wallbox")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
 
     enabled = bool(call.data["enabled"])
     rest_client = runtime.coordinator.rest_client
     if rest_client is None:
-        raise HomeAssistantError("REST client not available")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
 
     try:
         await rest_client.set_free_charging(enabled)
     except RestClientError as err:
-        raise HomeAssistantError(f"Failed to set free charging: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="set_free_charging_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
     await runtime.coordinator.async_refresh_rest_data()
 
 
@@ -528,16 +565,20 @@ async def _async_service_restart_wallbox(call: ServiceCall) -> None:
 
     runtime = _resolve_runtime(call.hass, call)
     if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError("REST API is not enabled for this wallbox")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
 
     rest_client = runtime.coordinator.rest_client
     if rest_client is None:
-        raise HomeAssistantError("REST client not available")
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
 
     try:
         await rest_client.restart_system()
     except RestClientError as err:
-        raise HomeAssistantError(f"Failed to restart wallbox: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="restart_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:

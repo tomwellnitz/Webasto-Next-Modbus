@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.webasto_next_modbus import (
     DOMAIN,
@@ -108,7 +108,7 @@ def test_resolve_runtime_requires_entry_id() -> None:
     hass = _make_hass({"entry_a": runtime_a, "entry_b": runtime_b})
 
     call_missing = _make_call({})
-    with pytest.raises(ValueError):
+    with pytest.raises(ServiceValidationError):
         _resolve_runtime(hass, call_missing)
 
     call = _make_call({"config_entry_id": "entry_b"})
@@ -121,7 +121,7 @@ def test_resolve_runtime_missing_runtime_data() -> None:
     hass = _make_hass({"entry": cast(RuntimeData, SimpleNamespace())})
     call = _make_call({})
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ServiceValidationError):
         _resolve_runtime(hass, call)
 
 

@@ -88,12 +88,18 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):
     async def async_set_value(self, value: str) -> None:
         """Set the text value."""
         if not self.coordinator.rest_client:
-            raise HomeAssistantError("REST API not connected")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="rest_not_connected"
+            )
 
         try:
             await self.coordinator.rest_client.set_free_charging_tag_id(value)
         except Exception as err:
-            raise HomeAssistantError(f"Failed to set free charging tag ID: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_tag_id_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         # Regular REST polling is throttled; re-fetch now so the entity reflects
         # what the wallbox actually stored instead of the stale cached value.
         await self.coordinator.async_refresh_rest_data()

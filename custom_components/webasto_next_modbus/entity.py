@@ -109,7 +109,11 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         try:
             await self._bridge.async_write_register(self._register, value)
         except WebastoModbusError as err:
-            raise HomeAssistantError(f"Schreibvorgang fehlgeschlagen: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="write_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
     def get_coordinator_value(self) -> Any:
         """Helper returning the latest coordinator value for this register."""
