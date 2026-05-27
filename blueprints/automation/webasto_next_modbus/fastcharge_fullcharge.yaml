@@ -6,7 +6,6 @@ blueprint:
     wallbox based on two helpers (e.g. input booleans). Inspired by the work
     of @cdrfun.
   domain: automation
-  source_url: https://github.com/tomwellnitz/Webasto-Next-Modbus/blob/main/blueprints/automation/webasto_next_modbus/fastcharge_fullcharge.yaml
   input:
     webasto_device:
       name: Webasto Next / Unite wallbox
