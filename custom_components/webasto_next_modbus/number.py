@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import WebastoConfigEntry
 from .const import (
     CONF_UNIT_ID,
+    DOMAIN,
     SIGNAL_REGISTER_WRITTEN,
     RegisterDefinition,
     get_number_registers,
@@ -317,7 +318,9 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set LED brightness via REST API."""
         if self._rest_client is None:
-            raise HomeAssistantError("REST API not connected")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="rest_not_connected"
+            )
 
         int_value = int(round(value))
         self._pending_value = int_value
@@ -331,7 +334,11 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
             self._pending_value = None
             if self.hass is not None:
                 self._handle_coordinator_update()
-            raise HomeAssistantError(f"Failed to set LED brightness: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_led_brightness_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         # Re-fetch the REST data now (regular polling is throttled) so the UI
         # shows the value the wallbox actually has.

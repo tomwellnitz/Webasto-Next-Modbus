@@ -9,7 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, RegisterDefinition, get_switch_registers
+from .const import CONF_UNIT_ID, DOMAIN, RegisterDefinition, get_switch_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
@@ -164,7 +164,9 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
     async def _set_free_charging(self, enabled: bool) -> None:
         """Set free charging state via REST API."""
         if self._rest_client is None:
-            raise HomeAssistantError("REST API not connected")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="rest_not_connected"
+            )
 
         self._pending_state = enabled
         self._attr_is_on = enabled
@@ -175,7 +177,11 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
         except Exception as err:
             self._pending_state = None
             self._handle_coordinator_update()
-            raise HomeAssistantError(f"Failed to set free charging: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_free_charging_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         # Re-fetch the REST data now (regular polling is throttled) so the UI
         # shows the state the wallbox actually has.

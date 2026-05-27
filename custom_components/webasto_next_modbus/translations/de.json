@@ -300,5 +300,37 @@
     "abort": {
       "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
+  },
+  "exceptions": {
+    "not_configured": {
+      "message": "Webasto Next / Unite ist nicht eingerichtet."
+    },
+    "multiple_wallboxes": {
+      "message": "Es sind mehrere Wallboxen eingerichtet. Bitte config_entry_id im Dienstaufruf angeben."
+    },
+    "session_command_unsupported": {
+      "message": "Das Starten und Stoppen einer Ladesitzung wird nur von der Webasto Next unterstützt."
+    },
+    "write_failed": {
+      "message": "Schreibvorgang an der Wallbox fehlgeschlagen: {error}"
+    },
+    "rest_not_enabled": {
+      "message": "Die REST-API ist für diese Wallbox nicht aktiviert."
+    },
+    "rest_not_connected": {
+      "message": "Die REST-API ist nicht verbunden."
+    },
+    "set_led_brightness_failed": {
+      "message": "LED-Helligkeit konnte nicht gesetzt werden: {error}"
+    },
+    "set_free_charging_failed": {
+      "message": "Free Charging konnte nicht geändert werden: {error}"
+    },
+    "set_tag_id_failed": {
+      "message": "Free-Charging-Tag-ID konnte nicht gesetzt werden: {error}"
+    },
+    "restart_failed": {
+      "message": "Neustart der Wallbox fehlgeschlagen: {error}"
+    }
   }
 }

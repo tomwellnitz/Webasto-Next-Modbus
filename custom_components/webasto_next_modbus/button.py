@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import WebastoConfigEntry
 from .const import (
     CONF_UNIT_ID,
+    DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
@@ -109,9 +110,15 @@ class WebastoRestartButton(WebastoRestEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Restart the wallbox via REST API."""
         if self._rest_client is None:
-            raise HomeAssistantError("REST API not connected")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="rest_not_connected"
+            )
 
         try:
             await self._rest_client.restart_system()
         except Exception as err:
-            raise HomeAssistantError(f"Failed to restart wallbox: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="restart_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
