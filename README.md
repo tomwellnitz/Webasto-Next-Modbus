@@ -135,7 +135,7 @@ Ready-to-import blueprints live under **Settings → Automations & Scenes → Bl
 - **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption.
 - **Event notifications** — send a mobile notification on charging or connectivity events (charging started/stopped, connection lost/restored, keep-alive sent).
 
-Device triggers for charging start/stop and connection state are available for your own automations.
+Device triggers for charging start/stop, connection state, cable connected/disconnected and fault-occurred are available for your own automations.
 
 ## Troubleshooting
 

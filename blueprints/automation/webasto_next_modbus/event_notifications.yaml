@@ -2,9 +2,9 @@
 blueprint:
   name: Webasto Next / Unite – Event notifications
   description: >-
-    Sends a mobile notification when the wallbox reports a charging or
-    connectivity event (charging started/stopped, connection lost/restored,
-    keep-alive sent). Pick which events you want to be notified about.
+    Sends a mobile notification when the wallbox reports a charging,
+    connectivity, cable or fault event. Pick which events you want to be
+    notified about.
   domain: automation
   input:
     webasto_device:
@@ -41,6 +41,12 @@ blueprint:
               value: connection_restored
             - label: Keep-alive sent
               value: keepalive_sent
+            - label: Cable connected
+              value: cable_connected
+            - label: Cable disconnected
+              value: cable_disconnected
+            - label: Fault occurred
+              value: fault_occurred
 
 mode: queued
 max_exceeded: silent
@@ -55,6 +61,9 @@ variables:
     connection_lost: Connection lost
     connection_restored: Connection restored
     keepalive_sent: Keep-alive sent
+    cable_connected: Cable connected
+    cable_disconnected: Cable disconnected
+    fault_occurred: Fault occurred
 
 triggers:
   - trigger: device
@@ -82,6 +91,21 @@ triggers:
     device_id: !input webasto_device
     type: keepalive_sent
     id: keepalive_sent
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: cable_connected
+    id: cable_connected
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: cable_disconnected
+    id: cable_disconnected
+  - trigger: device
+    domain: webasto_next_modbus
+    device_id: !input webasto_device
+    type: fault_occurred
+    id: fault_occurred
 
 conditions:
   - condition: template

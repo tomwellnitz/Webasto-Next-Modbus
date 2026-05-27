@@ -13,10 +13,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.webasto_next_modbus.const import CONF_REST_ENABLED, CONF_REST_PASSWORD
 from custom_components.webasto_next_modbus.coordinator import WebastoDataCoordinator
 from custom_components.webasto_next_modbus.device_trigger import (
+    TRIGGER_CABLE_CONNECTED,
+    TRIGGER_CABLE_DISCONNECTED,
     TRIGGER_CHARGING_STARTED,
     TRIGGER_CHARGING_STOPPED,
     TRIGGER_CONNECTION_LOST,
     TRIGGER_CONNECTION_RESTORED,
+    TRIGGER_FAULT_OCCURRED,
 )
 from custom_components.webasto_next_modbus.hub import ModbusBridge, WebastoModbusError
 from custom_components.webasto_next_modbus.rest_client import AuthenticationError
@@ -168,6 +171,75 @@ async def test_coordinator_emits_charging_stopped_trigger() -> None:
             "previous_state": 1,
             "charge_point_state": None,
         },
+    )
+
+
+async def test_coordinator_emits_cable_connected_trigger() -> None:
+    """Plugging a cable should fire the cable_connected trigger."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.async_read_data = AsyncMock(return_value={"cable_state": 2})
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+
+    coordinator = _build_coordinator(bridge, entry)
+    coordinator.data = {"cable_state": 0}
+
+    with patch(
+        "custom_components.webasto_next_modbus.coordinator.async_fire_device_trigger"
+    ) as fire:
+        await coordinator._async_update_data()
+
+    fire.assert_any_call(
+        coordinator.hass,
+        "192.0.2.1-255",
+        TRIGGER_CABLE_CONNECTED,
+        {"cable_state": 2, "previous_state": 0},
+    )
+
+
+async def test_coordinator_emits_cable_disconnected_trigger() -> None:
+    """Unplugging the cable should fire the cable_disconnected trigger."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.async_read_data = AsyncMock(return_value={"cable_state": 0})
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+
+    coordinator = _build_coordinator(bridge, entry)
+    coordinator.data = {"cable_state": 2}
+
+    with patch(
+        "custom_components.webasto_next_modbus.coordinator.async_fire_device_trigger"
+    ) as fire:
+        await coordinator._async_update_data()
+
+    fire.assert_any_call(
+        coordinator.hass,
+        "192.0.2.1-255",
+        TRIGGER_CABLE_DISCONNECTED,
+        {"cable_state": 0, "previous_state": 2},
+    )
+
+
+async def test_coordinator_emits_fault_trigger() -> None:
+    """A fault code appearing should fire the fault_occurred trigger once."""
+
+    bridge = AsyncMock(spec=ModbusBridge)
+    bridge.async_read_data = AsyncMock(return_value={"fault_code": 5})
+    entry = MockConfigEntry(domain="webasto_next_modbus", entry_id="1234")
+
+    coordinator = _build_coordinator(bridge, entry)
+    coordinator.data = {"fault_code": 0}
+
+    with patch(
+        "custom_components.webasto_next_modbus.coordinator.async_fire_device_trigger"
+    ) as fire:
+        await coordinator._async_update_data()
+
+    fire.assert_any_call(
+        coordinator.hass,
+        "192.0.2.1-255",
+        TRIGGER_FAULT_OCCURRED,
+        {"fault_code": 5},
     )
 
 
