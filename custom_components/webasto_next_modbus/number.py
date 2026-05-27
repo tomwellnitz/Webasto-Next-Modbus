@@ -279,7 +279,6 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
     _attr_native_max_value = 100
     _attr_native_step = 1
     _attr_native_unit_of_measurement = PERCENTAGE
-    _attr_icon = "mdi:led-on"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(

@@ -25,7 +25,6 @@ class RestSensorDefinition:
 
     key: str
     value_fn: Callable[[RestData], StateType | list[str] | None]
-    icon: str | None = None
     device_class: str | None = None
     state_class: str | None = None
     unit: str | None = None
@@ -37,23 +36,19 @@ REST_SENSORS: list[RestSensorDefinition] = [
     RestSensorDefinition(
         key="comboard_firmware",
         value_fn=lambda d: d.comboard_sw_version,
-        icon="mdi:chip",
     ),
     RestSensorDefinition(
         key="powerboard_firmware",
         value_fn=lambda d: d.powerboard_sw_version,
-        icon="mdi:chip",
     ),
     RestSensorDefinition(
         key="plug_cycles",
         value_fn=lambda d: d.plug_cycles,
-        icon="mdi:ev-plug-type2",
         state_class="total_increasing",
     ),
     RestSensorDefinition(
         key="error_count",
         value_fn=lambda d: d.error_counter,
-        icon="mdi:alert-circle",
         state_class="total_increasing",
     ),
     RestSensorDefinition(
@@ -83,7 +78,6 @@ REST_SENSORS: list[RestSensorDefinition] = [
     RestSensorDefinition(
         key="active_errors",
         value_fn=lambda d: ", ".join(d.active_errors) if d.active_errors else "ok",
-        icon="mdi:alert",
         entity_category=None,
         translation_key="active_errors",
     ),
@@ -220,8 +214,6 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
         super().__init__(coordinator, host, unit_id, definition.key, device_name)
         self._definition = definition
 
-        if definition.icon:
-            self._attr_icon = definition.icon
         if definition.device_class:
             try:
                 self._attr_device_class = SensorDeviceClass(definition.device_class)

@@ -67,7 +67,7 @@ rules:
       enough to warrant being disabled.
   entity-translations: done
   exception-translations: todo
-  icon-translations: todo
+  icon-translations: done
   reconfiguration-flow: done
   repair-issues:
     status: exempt
