@@ -161,7 +161,7 @@ async def test_reconfigure_shows_form() -> None:
 
 
 async def test_reconfigure_updates_connection() -> None:
-    """Reconfigure updates host/port/unit_id and reloads (validation via reload)."""
+    """Reconfigure updates host/port/unit_id; the update listener does the reload."""
 
     entry = MockConfigEntry(
         domain="webasto_next_modbus",
@@ -179,14 +179,9 @@ async def test_reconfigure_updates_connection() -> None:
     flow = WebastoConfigFlow()
     flow.hass = MagicMock()
 
-    sentinel = {"type": FlowResultType.ABORT, "reason": "reconfigure_successful"}
-
     with (
         patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
         patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry]),
-        patch.object(
-            WebastoConfigFlow, "async_update_reload_and_abort", return_value=sentinel
-        ) as reload_abort,
     ):
         result = await flow.async_step_reconfigure(
             {
@@ -196,14 +191,16 @@ async def test_reconfigure_updates_connection() -> None:
             }
         )
 
-    reload_abort.assert_called_once()
-    _, kwargs = reload_abort.call_args
+    update = flow.hass.config_entries.async_update_entry
+    update.assert_called_once()
+    _, kwargs = update.call_args
     assert kwargs["data"][CONF_HOST] == "192.0.2.99"
     assert kwargs["data"][CONF_PORT] == 1502
     assert kwargs["data"][CONF_UNIT_ID] == 10
     assert kwargs["unique_id"] == "192.0.2.99-10"
     assert kwargs["title"] == "192.0.2.99 (unit 10)"
-    assert result is sentinel
+    assert result.get("type") == FlowResultType.ABORT
+    assert result.get("reason") == "reconfigure_successful"
 
 
 async def test_reconfigure_aborts_on_identity_collision() -> None:
@@ -331,26 +328,23 @@ async def test_reauth_updates_credentials() -> None:
     flow = WebastoConfigFlow()
     flow.hass = MagicMock()
 
-    sentinel = {"type": FlowResultType.ABORT, "reason": "reauth_successful"}
-
     with (
         patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry),
         patch.object(WebastoConfigFlow, "_async_validate_rest", AsyncMock()) as validate,
-        patch.object(
-            WebastoConfigFlow, "async_update_reload_and_abort", return_value=sentinel
-        ) as reload_abort,
     ):
         result = await flow.async_step_reauth_confirm(
             {CONF_REST_USERNAME: "admin", CONF_REST_PASSWORD: "newpass"}
         )
 
     validate.assert_awaited_once()
-    reload_abort.assert_called_once()
-    _, kwargs = reload_abort.call_args
+    update = flow.hass.config_entries.async_update_entry
+    update.assert_called_once()
+    _, kwargs = update.call_args
     assert kwargs["options"][CONF_REST_USERNAME] == "admin"
     assert kwargs["options"][CONF_REST_PASSWORD] == "newpass"
     assert kwargs["options"][CONF_REST_ENABLED] is True
-    assert result is sentinel
+    assert result.get("type") == FlowResultType.ABORT
+    assert result.get("reason") == "reauth_successful"
 
 
 async def test_reauth_invalid_auth() -> None:
