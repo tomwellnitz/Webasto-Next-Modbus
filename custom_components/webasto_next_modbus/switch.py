@@ -14,6 +14,8 @@ from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

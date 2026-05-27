@@ -16,6 +16,8 @@ from .const import CONF_UNIT_ID, build_device_slug
 from .coordinator import WebastoDataCoordinator
 from .entity import build_device_info
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

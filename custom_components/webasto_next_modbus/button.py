@@ -20,6 +20,8 @@ from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
