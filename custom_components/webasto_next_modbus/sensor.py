@@ -12,9 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, get_sensor_registers
+from .const import CONF_UNIT_ID, RegisterDefinition, get_sensor_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
+from .hub import ModbusBridge
 from .rest_client import RestData
 
 
@@ -129,18 +130,18 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
+class WebastoSensor(WebastoRegisterEntity, SensorEntity):
     """Representation of a Webasto Modbus register as a sensor."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator,
-        bridge,
+        coordinator: WebastoDataCoordinator,
+        bridge: ModbusBridge,
         host: str,
         unit_id: int,
-        register,
+        register: RegisterDefinition,
         device_name: str,
     ) -> None:
         super().__init__(coordinator, bridge, host, unit_id, register, device_name)
@@ -200,7 +201,7 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):  # type: ignore[misc]
             self._attr_native_value = value
 
 
-class WebastoRestSensor(WebastoRestEntity, SensorEntity):  # type: ignore[misc]
+class WebastoRestSensor(WebastoRestEntity, SensorEntity):
     """Sensor entity for REST API data."""
 
     _attr_has_entity_name = True

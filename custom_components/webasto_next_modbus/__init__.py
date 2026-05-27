@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
+from typing import cast
 
 import voluptuous as vol
 from homeassistant.components import persistent_notification
@@ -371,13 +372,13 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
         raise ValueError("Webasto Next Modbus is not configured")
 
     if len(entries) == 1:
-        return entries[0].runtime_data
+        return cast(RuntimeData, entries[0].runtime_data)
 
     entry_id = call.data.get("config_entry_id")
     if entry_id:
         for entry in entries:
             if entry.entry_id == entry_id:
-                return entry.runtime_data
+                return cast(RuntimeData, entry.runtime_data)
 
     raise ValueError("Multiple wallboxes configured – set config_entry_id in the service call")
 

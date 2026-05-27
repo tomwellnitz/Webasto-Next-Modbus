@@ -59,7 +59,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class WebastoButton(WebastoRegisterEntity, ButtonEntity):  # type: ignore[misc]
+class WebastoButton(WebastoRegisterEntity, ButtonEntity):
     """Represent write-only Modbus actions as buttons."""
 
     _attr_has_entity_name = True
@@ -86,7 +86,7 @@ class WebastoButton(WebastoRegisterEntity, ButtonEntity):  # type: ignore[misc]
         await self.coordinator.async_request_refresh()
 
 
-class WebastoRestartButton(WebastoRestEntity, ButtonEntity):  # type: ignore[misc]
+class WebastoRestartButton(WebastoRestEntity, ButtonEntity):
     """Button to restart the wallbox via REST API."""
 
     _attr_has_entity_name = True

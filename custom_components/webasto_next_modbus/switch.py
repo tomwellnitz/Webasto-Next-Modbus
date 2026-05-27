@@ -9,9 +9,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, get_switch_registers
+from .const import CONF_UNIT_ID, RegisterDefinition, get_switch_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
+from .hub import ModbusBridge
 
 
 async def async_setup_entry(
@@ -51,7 +52,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):  # type: ignore[misc]
+class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):
     """Switch the wallbox between single- and three-phase charging via Modbus.
 
     Writes the phase-switch holding register (1 = three-phase, 0 = single-phase)
@@ -69,10 +70,10 @@ class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):  # type: ignore[m
     def __init__(
         self,
         coordinator: WebastoDataCoordinator,
-        bridge,
+        bridge: ModbusBridge,
         host: str,
         unit_id: int,
-        register,
+        register: RegisterDefinition,
         device_name: str,
     ) -> None:
         super().__init__(coordinator, bridge, host, unit_id, register, device_name)
@@ -115,7 +116,7 @@ class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):  # type: ignore[m
         await self.coordinator.async_request_refresh()
 
 
-class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):  # type: ignore[misc]
+class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
     """Switch entity for Free Charging mode via REST API."""
 
     _attr_has_entity_name = True
