@@ -305,9 +305,12 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_validate_rest(self, host: str, username: str, password: str) -> None:
         """Open a REST session to confirm the credentials, then close it."""
 
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
         from .rest_client import RestClient
 
-        client = RestClient(host, username, password)
+        session = async_get_clientsession(self.hass, verify_ssl=False)
+        client = RestClient(host, username, password, session)
         try:
             await client.connect()
         finally:
@@ -508,9 +511,12 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 
     async def _validate_rest_connection(self, host: str, username: str, password: str) -> None:
         """Validate REST API connection."""
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
         from .rest_client import RestClient, RestClientError
 
-        client = RestClient(host, username, password)
+        session = async_get_clientsession(self.hass, verify_ssl=False)
+        client = RestClient(host, username, password, session)
         try:
             if not await client.test_connection():
                 msg = "REST API connection test failed"

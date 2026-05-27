@@ -274,6 +274,7 @@ async def test_coordinator_rest_auth_failure_starts_reauth() -> None:
 
     with (
         patch.object(entry, "async_start_reauth") as start_reauth,
+        patch("custom_components.webasto_next_modbus.coordinator.async_get_clientsession"),
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock(side_effect=AuthenticationError("bad creds"))
@@ -300,6 +301,7 @@ async def test_coordinator_rest_success_does_not_start_reauth() -> None:
 
     with (
         patch.object(entry, "async_start_reauth") as start_reauth,
+        patch("custom_components.webasto_next_modbus.coordinator.async_get_clientsession"),
         patch("custom_components.webasto_next_modbus.rest_client.RestClient") as mock_rc,
     ):
         mock_rc.return_value.connect = AsyncMock()

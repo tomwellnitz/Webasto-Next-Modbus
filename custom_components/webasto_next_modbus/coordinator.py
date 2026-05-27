@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -102,7 +103,10 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from .rest_client import AuthenticationError, RestClient
 
         host = self._bridge.endpoint.split(":")[0]
-        self._rest_client = RestClient(host, username, password)
+        # Use Home Assistant's shared aiohttp session. The wallbox has a
+        # self-signed certificate, so SSL verification must be disabled.
+        session = async_get_clientsession(self.hass, verify_ssl=False)
+        self._rest_client = RestClient(host, username, password, session)
 
         try:
             await self._rest_client.connect()
