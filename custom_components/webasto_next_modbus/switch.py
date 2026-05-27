@@ -124,7 +124,6 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
     _attr_has_entity_name = True
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:car-electric"
 
     def __init__(
         self,

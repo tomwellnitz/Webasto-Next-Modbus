@@ -84,8 +84,6 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
             self._unique_prefix, self._device_name, self.coordinator
         )
 
-        if register.icon:
-            self._attr_icon = register.icon
         if register.entity_category:
             try:
                 self._attr_entity_category = EntityCategory(register.entity_category)

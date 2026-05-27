@@ -1,0 +1,144 @@
+{
+  "entity": {
+    "sensor": {
+      "active_errors": {
+        "default": "mdi:alert"
+      },
+      "active_power_l1_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "active_power_l2_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "active_power_l3_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "active_power_total_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "cable_max_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "cable_state": {
+        "default": "mdi:cable-data"
+      },
+      "charge_point_state": {
+        "default": "mdi:ev-station"
+      },
+      "charged_energy_wh": {
+        "default": "mdi:battery-clock"
+      },
+      "chargepoint_power_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "charging_state": {
+        "default": "mdi:battery-charging"
+      },
+      "comboard_firmware": {
+        "default": "mdi:chip"
+      },
+      "current_l1_a": {
+        "default": "mdi:current-ac"
+      },
+      "current_l2_a": {
+        "default": "mdi:current-ac"
+      },
+      "current_l3_a": {
+        "default": "mdi:current-ac"
+      },
+      "energy_total_kwh": {
+        "default": "mdi:counter"
+      },
+      "equipment_state": {
+        "default": "mdi:cog-outline"
+      },
+      "error_count": {
+        "default": "mdi:alert-circle"
+      },
+      "ev_max_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "evse_max_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "evse_min_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "fault_code": {
+        "default": "mdi:alert"
+      },
+      "number_of_phases": {
+        "default": "mdi:transmission-tower"
+      },
+      "plug_cycles": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "powerboard_firmware": {
+        "default": "mdi:chip"
+      },
+      "session_duration_s": {
+        "default": "mdi:timer-outline"
+      },
+      "session_end_time": {
+        "default": "mdi:clock-end"
+      },
+      "session_max_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "session_start_time": {
+        "default": "mdi:clock-start"
+      },
+      "session_user_id": {
+        "default": "mdi:card-account-details"
+      },
+      "smart_vehicle_detected": {
+        "default": "mdi:car-connected"
+      },
+      "voltage_l1": {
+        "default": "mdi:sine-wave"
+      },
+      "voltage_l2": {
+        "default": "mdi:sine-wave"
+      },
+      "voltage_l3": {
+        "default": "mdi:sine-wave"
+      }
+    },
+    "number": {
+      "failsafe_current_a": {
+        "default": "mdi:current-ac"
+      },
+      "failsafe_timeout_s": {
+        "default": "mdi:timer-outline"
+      },
+      "led_brightness": {
+        "default": "mdi:led-on"
+      },
+      "set_current_a": {
+        "default": "mdi:speedometer"
+      }
+    },
+    "button": {
+      "restart_system": {
+        "default": "mdi:restart"
+      },
+      "send_keepalive": {
+        "default": "mdi:lan-connect"
+      },
+      "start_session": {
+        "default": "mdi:play"
+      },
+      "stop_session": {
+        "default": "mdi:stop-circle"
+      }
+    },
+    "switch": {
+      "free_charging": {
+        "default": "mdi:car-electric"
+      },
+      "phase_switch": {
+        "default": "mdi:transmission-tower"
+      }
+    }
+  }
+}
