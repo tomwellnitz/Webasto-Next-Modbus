@@ -17,6 +17,8 @@
 
 - **Forward-compatibility (HA 2026.6)**: the reconfigure/reauth flows update the entry and rely on the existing update listener for a single reload, avoiding the now-deprecated config-entry-listener-plus-reloading-method combination that becomes an error in 2026.12.
 - **Example blueprints**: fixed the FastCharge/FullCharge, Charge-Target and Charge-Until-Full blueprints, which referenced blueprint inputs in templates in a way that failed at runtime; all four blueprints were modernised to the current `triggers`/`conditions`/`actions` syntax and are now guarded by a lint test.
+- **REST API logging**: request timeouts are now retried like other transient errors instead of bubbling up as a blank `Failed to fetch <section> section:` warning, and per-section fetch failures (which keep partial/stale data) log at debug instead of repeating a warning every poll. Per-attempt retries also log at debug now (only the final outcome matters). Genuine REST outages are still surfaced once via the throttled coordinator warning.
+- **Quieter startup**: the one-time "integration loaded from &lt;path&gt;" message is now logged at debug instead of warning.
 
 ### Internal
 

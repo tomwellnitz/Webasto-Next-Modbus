@@ -111,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
 
     global _INTEGRATION_PATH_LOGGED
     if not _INTEGRATION_PATH_LOGGED:
-        _LOGGER.warning("Webasto Next Modbus integration loaded from %s", _INTEGRATION_PATH)
+        _LOGGER.debug("Webasto Next Modbus integration loaded from %s", _INTEGRATION_PATH)
         _INTEGRATION_PATH_LOGGED = True
 
     host = entry.data[CONF_HOST]

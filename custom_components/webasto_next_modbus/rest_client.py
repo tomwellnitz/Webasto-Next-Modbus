@@ -164,21 +164,21 @@ class RestClient:
             system_fields = await self._get_section("system")
             self._parse_system_fields(system_fields, values)
         except Exception as err:
-            _LOGGER.warning("Failed to fetch system section: %s", err)
+            _LOGGER.debug("Failed to fetch system section: %r", err)
 
         # Fetch auth section for free charging
         try:
             auth_fields = await self._get_section("auth")
             self._parse_auth_fields(auth_fields, values)
         except Exception as err:
-            _LOGGER.warning("Failed to fetch auth section: %s", err)
+            _LOGGER.debug("Failed to fetch auth section: %r", err)
 
         # Fetch current errors
         try:
             errors = await self._get_current_errors()
             values["active_errors"] = errors
         except Exception as err:
-            _LOGGER.warning("Failed to fetch current errors: %s", err)
+            _LOGGER.debug("Failed to fetch current errors: %r", err)
 
         return RestData(**values)
 
@@ -375,10 +375,10 @@ class RestClient:
 
             except asyncio.CancelledError:
                 raise
-            except aiohttp.ClientError as err:
+            except (aiohttp.ClientError, TimeoutError) as err:
                 last_error = err
-                _LOGGER.warning(
-                    "Attempt %s/%s to %s failed: %s",
+                _LOGGER.debug(
+                    "Attempt %s/%s to %s failed: %r",
                     attempt,
                     MAX_RETRY_ATTEMPTS,
                     f"{method} {path}",
