@@ -11,14 +11,18 @@ This document captures architectural goals, the communication protocols (Modbus 
 
 ## Functional requirements
 
-- **Configuration flow** – Guided setup that collects host, port, unit ID, scan interval, and hardware variant while validating connectivity inline. Optional REST API credentials.
-- **Modbus communication** – Async TCP client (pymodbus) with request batching, retry/backoff, and deterministic reconnect behaviour.
-- **REST API communication** – Optional async HTTPS client (aiohttp) with JWT authentication, auto token refresh, and graceful degradation.
-- **Entities** – Sensors for live telemetry and metadata, numbers for writable settings, switches for configuration toggles, and buttons for manual keep-alive and session control.
-- **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) for Modbus, plus REST API services (`set_led_brightness`, `set_free_charging`, `restart_wallbox`).
+- **Configuration flow** – Guided setup that collects host, port, unit ID, model (Next vs Unite), variant, and scan interval, validating connectivity inline. Optional REST API credentials.
+- **Reconfigure & reauth flows** – `async_step_reconfigure` allows changing host, port, unit ID and entry name in place (no remove-and-readd). `async_step_reauth` is started automatically when the wallbox rejects REST credentials (HTTP 401) to walk the user through entering new ones; the Modbus side keeps working throughout.
+- **Modbus communication** – Async TCP client (pymodbus) with request batching, retry/backoff, and deterministic reconnect behaviour. Modbus exception responses are distinguished from transport errors: an unsupported optional block is auto-detected and dropped from the read plan, while a required block raises a typed `WebastoModbusDeviceError`.
+- **REST API communication** – Optional async HTTPS client (aiohttp) sharing Home Assistant's `async_get_clientsession`, with JWT authentication, auto token refresh, retry-with-backoff for transient errors, and graceful degradation.
+- **Entities** – Sensors for live telemetry and metadata; numbers for writable settings; switches for free-charging and (Unite only) three-phase mode; buttons for manual keep-alive, session control, and (REST) restart; text for the free-charging tag ID; binary sensors for **Connected** (always-available connectivity) and **Charging** (`battery_charging` device class).
+- **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) for Modbus, plus REST API services (`set_led_brightness`, `set_free_charging`, `restart_wallbox`). Registered in `async_setup` so they exist before any config entry is set up.
+- **Device triggers** – `charging_started`, `charging_stopped`, `connection_lost`, `connection_restored`, `keepalive_sent`, `cable_connected`, `cable_disconnected`, `fault_occurred` (with English / German translations), used by the bundled blueprints and available for user automations.
+- **Diagnostics** – Downloadable config-entry diagnostics with REST credentials redacted.
+- **Quality scale** – Platinum: strict typing (`mypy --strict` + `py.typed`), `inject-websession` (HA shared aiohttp session), async-dependency, icon translations (`icons.json`), exception translations, action-setup, `PARALLEL_UPDATES` declared on every platform.
 - **Extensibility** – Centralised register descriptions drive entity creation so new datapoints require minimal boilerplate.
-- **Testing** – Pytest suite with Modbus fixtures covering the config flow, coordinator, entities, services, and device triggers.
-- **Documentation** – User-facing README plus architecture and development guides for maintainers.
+- **Testing** – Pytest suite with virtual-wallbox fixtures covering the config flow (incl. reconfigure and reauth), coordinator, entities, services, and device triggers; `pytest-homeassistant-custom-component` provides a realistic Home Assistant core.
+- **Documentation** – User-facing README and support/troubleshooting page, plus architecture and development guides for maintainers.
 
 ## Domain model
 
@@ -72,18 +76,34 @@ The register ranges are derived from community research and vendor documentation
 | `start_session` | 5006 | 1 | Start charging session |
 | `stop_session` | 5006 | 2 | Stop charging session |
 
-*Note: Voltage sensors and some other registers from the vendor PDF are not exposed as they returned invalid data in testing.*
+*Note: Voltage sensors and some other registers from the vendor PDF are not exposed on the Next as they returned invalid data in testing.*
+
+### Webasto / Ampure Unite differences (v1.2.0+)
+
+Picking the **Unite** model in the config flow switches to a corrected register map (community readouts from issue [#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37), confirmed on firmware 3.156 and 3.187):
+
+- The telemetry block (~100–1513) is read as **input registers** on the Unite; the Next answers on both holding and input, the Unite only on input. This is why a Unite configured as "Next" reads all sensors as `0`.
+- `energy_total_kwh` is decoded as a 32-bit value across registers `1036`+`1037` in **0.1 kWh** units.
+- `charged_energy_wh` (`1502`) is a `uint32` on the Unite.
+- `charge_point_state` (`1000`) uses the Unite's 9-state enum.
+- Next-only registers (session user id `1600`, smart-vehicle-detected `1620`, start/stop-session command `5006`) are not read on the Unite.
+- Unite-only optional registers: per-phase voltage `1014`/`1016`/`1018` (volts), chargepoint power `400`, installed phase count `404`, and the active phase mode at `405` — written by the "Three-phase charging" switch (`0` = single-phase, `1` = three-phase) and read back from the same register. Register `405` is undocumented in the vendor spec; phase switching has been confirmed on firmware 3.187 (#37) and the switch carries `_attr_assumed_state = True` because behaviour on other Unite firmwares is unverified.
 
 ## Software components
 
-- `__init__.py` – Integration setup/teardown, service registration, and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
-- `const.py` – Constants, register descriptions, and enum mappings. The integration version lives in `manifest.json` / `pyproject.toml`, not here.
+- `__init__.py` – Integration setup/teardown, service registration in `async_setup` (action-setup rule), and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
+- `const.py` – Constants, register descriptions (including the Unite-specific layout), and enum mappings. The integration version lives in `manifest.json` / `pyproject.toml`, not here.
 - `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
-- `rest_client.py` – `WebastoRestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus.
-- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles, normalises raw register values, and optionally fetches REST API data.
-- `config_flow.py` – User and options flows with validation and duplicate protection. Includes optional REST API credential configuration.
-- Platform modules (`sensor.py`, `number.py`, `button.py`, `switch.py`, `binary_sensor.py`, `text.py`) – Entity classes backed by static descriptions. `binary_sensor.py` exposes the always-available **Connected** connectivity sensor; the `switch`/`text` platforms provide REST-backed entities (free-charging toggle and tag ID).
+- `rest_client.py` – `RestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus; uses Home Assistant's shared aiohttp session.
+- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles, normalises raw register values, optionally fetches REST API data, and emits the dispatcher-based device triggers when relevant state changes are detected. On REST `401` it starts the reauth flow via `config_entry.async_start_reauth`.
+- `config_flow.py` – User, options, **reconfigure** and **reauth** flows with validation and duplicate protection. Includes optional REST API credential configuration.
+- `device_trigger.py` – Device-trigger registry and helpers used by `coordinator.py` to fire triggers (`async_fire_device_trigger`) for charging / connection / cable / fault events.
+- `diagnostics.py` – Config-entry diagnostics download (REST username and password are redacted).
+- Platform modules (`sensor.py`, `number.py`, `button.py`, `switch.py`, `binary_sensor.py`, `text.py`) – Entity classes backed by static descriptions. `binary_sensor.py` exposes the always-available **Connected** sensor and a **Charging** sensor (`device_class: battery_charging`); the `switch`/`text` platforms provide REST-backed entities (free-charging toggle and tag ID) plus the Unite-only three-phase switch.
 - `services.yaml` – Service schemas surfaced to Home Assistant.
+- `icons.json` – Entity icons (icon-translations rule).
+- `quality_scale.yaml` – Per-rule status for the HA integration quality scale (Platinum).
+- `translations/en.json`, `translations/de.json` – Entity, state, exception, device-trigger, config-flow and options-flow translations.
 
 ## Data flow
 
@@ -117,7 +137,10 @@ The register ranges are derived from community research and vendor documentation
 ## Assumptions and open items
 
 - Defaults assume TCP port `502` and unit ID `255`; both are user-configurable during onboarding.
-- Firmware revisions prior to `3.1` may omit the keep-alive register; the integration degrades gracefully by hiding the button.
+- The wallbox accepts a **single** Modbus TCP client at a time; the integration owns that slot for the lifetime of the config entry. A booting wallbox or a stale socket from another client therefore manifests as transient connection errors that are retried automatically.
+- Registers a given firmware doesn't implement are handled automatically: optional blocks are dropped from the read plan after the first error response, and the corresponding entities become unavailable rather than spamming warnings.
+- The Unite three-phase switch (holding register `405`) is undocumented in the vendor Modbus spec and confirmed on firmware 3.187 ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)); on other Unite firmwares the behaviour is unverified.
+- The wallbox web interface uses a self-signed TLS certificate, so the REST client is built on `async_get_clientsession(hass, verify_ssl=False)`.
 
 ## Future enhancements
 

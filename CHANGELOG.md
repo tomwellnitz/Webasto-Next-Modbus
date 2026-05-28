@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Documentation aligned with the HA quality scale Gold/Platinum doc rules: new **Data updates** section (10 s Modbus / 60 s REST / Life Bit cadence) and a consolidated **Known limitations** section in the README; a copy-paste-ready custom YAML automation example using a service action and a device trigger; the Configuration list now documents the *Model* selector (Next vs Unite) and the *Reconfigure* / *Configure* entry points. A stale "a repair issue is raised" note in the README was replaced with the actual reauth-flow behaviour shipped in 1.3.0.
+- `docs/architecture.md` updated to reflect the 1.3.0 surface: reconfigure & reauth flows, the Charging binary sensor, the eight device triggers, the Unite-specific register differences confirmed in [#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37), and the Platinum quality scale rules (strict typing, `inject-websession`, icon/exception translations, action-setup).
+- `docs/support.md`: the duplicated "Known limitations" subsection now defers to the README (which is now the single, sourced reference).
+
 ## [1.3.0] - 2026-05-27
 
 ### Added
