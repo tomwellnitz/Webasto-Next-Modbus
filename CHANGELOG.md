@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `docs/rest-api-reverse-engineering.md` — a short guide explaining how to authenticate against the wallbox's web API, discover endpoints by watching the web UI's network calls, and identify the writes. Intended for contributors adding Unite-specific REST support, since the existing REST mapping was reverse-engineered against a Webasto Next.
+
 ### Changed
 
 - Documentation aligned with the HA quality scale Gold/Platinum doc rules: new **Data updates** section (10 s Modbus / 60 s REST / Life Bit cadence) and a consolidated **Known limitations** section in the README; a copy-paste-ready custom YAML automation example using a service action and a device trigger; the Configuration list now documents the *Model* selector (Next vs Unite) and the *Reconfigure* / *Configure* entry points. A stale "a repair issue is raised" note in the README was replaced with the actual reauth-flow behaviour shipped in 1.3.0.
@@ -12,6 +16,7 @@
 ### Removed
 
 - Stale `release_notes.md` from the repository root. The release workflow has long published from the matching `CHANGELOG.md` section instead.
+- `webinterface_analysis.json` — one-off endpoint probe artifact from the original Next reverse-engineering session. Its information is already distilled into `docs/rest-api.md`, and the methodology is now captured in `docs/rest-api-reverse-engineering.md`. Kept in git history if needed.
 
 ## [1.3.0] - 2026-05-27
 

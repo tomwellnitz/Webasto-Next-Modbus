@@ -13,6 +13,7 @@ Welcome! This folder collects the human-facing documentation for the Webasto Nex
 - **Development** – [`development.md`](development.md) documents local setup, tooling commands, the virtual wallbox simulator, and the release checklist.
 - **REST API** – [`rest-api.md`](rest-api.md) provides the complete REST API specification for the wallbox web interface.
 - **REST API Integration** – [`rest-api-integration-plan.md`](rest-api-integration-plan.md) describes the implemented REST API features and roadmap.
+- **REST API reverse-engineering** – [`rest-api-reverse-engineering.md`](rest-api-reverse-engineering.md) explains how to probe the wallbox's web interface for endpoints not yet covered by the integration; intended for contributors adding Unite-specific REST support.
 
 ## Support & community
 

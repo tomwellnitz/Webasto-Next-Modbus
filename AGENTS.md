@@ -44,7 +44,8 @@ This document provides context and guidelines for AI agents working on this code
 │   └── check.sh                            # Main CI check script
 ├── docs/                                   # Documentation
 │   ├── rest-api.md                         # REST API specification
-│   └── rest-api-integration-plan.md        # Integration roadmap
+│   ├── rest-api-integration-plan.md        # Integration roadmap
+│   └── rest-api-reverse-engineering.md     # How to probe new REST endpoints
 └── pyproject.toml                          # Project configuration
 ```
 
