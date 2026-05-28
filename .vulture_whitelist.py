@@ -32,3 +32,4 @@ _attr_device_class  # unused attribute
 _attr_state_class  # unused attribute
 _attr_options  # unused attribute
 _attr_translation_key  # unused attribute
+use_as_default  # unused arg required by pymodbus' ModbusSlaveContext.setValues signature
