@@ -69,9 +69,12 @@ Modbus TCP is **disabled by default** on the Webasto Next / Unite. Enable it fir
    - **Host** — IP address or hostname (e.g. `192.168.1.50`).
    - **Port** — default `502`.
    - **Unit ID** — default `255`.
+   - **Model** — *Webasto Next* (default) or *Webasto / Ampure Unite*. Existing installs stay on Next; pick Unite for an Ampure / Webasto Unite (see [Supported hardware](#supported-hardware) — the Unite uses a different register layout).
    - **Variant** — your hardware power rating (11 kW or 22 kW).
 
 > The wallboxes do not advertise themselves on the network, so they are added manually by IP address; there is no auto-discovery.
+
+The host, port, unit ID and entry name can be changed later without removing the integration via *Settings → Devices & Services → Webasto Next / Unite → ⋮ → **Reconfigure***. Model, variant, scan interval and REST settings live under *⋮ → **Configure***.
 
 ### Optional: REST API
 
@@ -80,7 +83,13 @@ The REST API exposes features that are not available over Modbus (LED control, f
 1. Open the integration entry → three-dot menu → **Configure**.
 2. Enable **REST API features** and enter the wallbox web-interface credentials (username default `admin`).
 
-Credentials are stored in the Home Assistant config entry and redacted from downloaded diagnostics. If the wallbox later rejects them, a repair issue is raised so you can update the password; the Modbus side keeps working regardless.
+Credentials are stored in the Home Assistant config entry and redacted from downloaded diagnostics. If the wallbox later rejects them, Home Assistant starts a guided **reauthentication** dialog so you can enter new ones; the Modbus side keeps working regardless. The wallbox's web interface uses a self-signed certificate, so the integration disables TLS verification for that local HTTPS endpoint.
+
+## Data updates
+
+- **Modbus telemetry** is polled every **10 seconds** by default. The interval is configurable via *⋮ → **Configure** → Scan interval*.
+- **REST API data** (firmware info, LED brightness, free charging, diagnostics, active errors) is fetched every **60 seconds**. If the wallbox's web interface is unreachable at startup, the integration retries the REST connection every **5 minutes** until it succeeds; the Modbus side is independent and keeps working.
+- The **"Life Bit" keep-alive** runs continuously in the background: the integration writes `1` to the keep-alive register and polls until the wallbox clears it to `0`, preventing the wallbox from dropping into fail-safe mode. The cadence follows the wallbox's own clear-cycle.
 
 ## Entities
 
@@ -133,9 +142,49 @@ Ready-to-import blueprints live under **Settings → Automations & Scenes → Bl
 - **Charge target (kWh)** — charge a set amount of energy, then stop.
 - **Charge until full** — stop automatically once charging power drops below a threshold.
 - **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption.
-- **Event notifications** — send a mobile notification on charging or connectivity events (charging started/stopped, connection lost/restored, keep-alive sent).
+- **Event notifications** — send a mobile notification on wallbox events (charging started/stopped, connection lost/restored, keep-alive sent, cable connected/disconnected, fault occurred).
 
-Device triggers for charging start/stop, connection state, cable connected/disconnected and fault-occurred are available for your own automations.
+Device triggers for charging start/stop, connection state, cable connected/disconnected and fault occurred are available for your own automations.
+
+### Custom YAML example
+
+For fully custom logic the integration's services and device triggers are usable directly. Replace `<your wallbox device id>` with the device ID from *Developer Tools → States → your wallbox* (or pick it interactively in the automation editor).
+
+```yaml
+automation:
+  - alias: Webasto — cap charging current at night
+    triggers:
+      - trigger: time
+        at: "23:00:00"
+    actions:
+      - action: webasto_next_modbus.set_current
+        data:
+          amps: 6
+
+  - alias: Webasto — fault alert
+    triggers:
+      - trigger: device
+        domain: webasto_next_modbus
+        device_id: <your wallbox device id>
+        type: fault_occurred
+    actions:
+      - action: notify.mobile_app_my_phone
+        data:
+          title: Webasto fault
+          message: "Fault code {{ trigger.event.data.fault_code }}"
+```
+
+## Known limitations
+
+- **One Modbus client at a time** — the Webasto Next / Unite accepts only one Modbus TCP connection. If another client (EVCC, a manual `modbus:` block, another HA add-on) is holding the slot, this integration cannot connect.
+- **Modbus is off by default on the wallbox** — it must be enabled once in the wallbox web interface (expert / installer view) before setup will succeed ([#36](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/36)).
+- **No auto-discovery** — the wallboxes do not advertise themselves over mDNS / zeroconf, so they are added manually by IP address or hostname.
+- **Use a static address** — configure a DHCP reservation or use a hostname so the wallbox stays reachable; if the address changes, run the integration's *Reconfigure* flow.
+- **Unite three-phase switching is firmware-dependent** — the holding register used by the switch (`405`) is not in the vendor's Modbus spec. Switching and read-back are confirmed on firmware **3.187** ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)); on other Unite firmwares the behavior is unverified.
+- **REST API uses a self-signed certificate** — TLS verification is disabled for the wallbox's local web interface (required by the embedded HTTPS endpoint). REST credentials are stored in the config entry and redacted from diagnostics.
+- **Optional registers vary by firmware** — registers a given firmware doesn't implement are auto-detected and dropped from the read plan; the corresponding entities become unavailable rather than spamming errors.
+- **Firmware downgrades are blocked by the vendor** — community reports indicate Webasto does not allow rolling back to an older firmware once updated ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)).
+- **One device per config entry** — to manage several wallboxes, add the integration multiple times (one config entry per wallbox).
 
 ## Troubleshooting
 

@@ -28,10 +28,9 @@
 | **"It's broken!"** | [GitHub Issues](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues) (Please attach diagnostics!) |
 | **"I have an idea!"** | [Feature Requests](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues) |
 
-## Known Limitations
+## Known limitations
 
-- **Dynamic IP**: The integration expects a static IP. Please configure a DHCP reservation for your wallbox.
-- **Old Firmware**: Firmware < 3.1 might not support all features (like Keepalive).
+See the [Known limitations](../README.md#known-limitations) section in the README for the verified, up-to-date list (single Modbus client at a time, Modbus off by default, no auto-discovery, REST self-signed certificate, Unite three-phase switching firmware-dependent, …).
 
 ## Security
 
