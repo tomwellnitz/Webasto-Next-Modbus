@@ -1,12 +1,16 @@
 name: Upstream compatibility
 
 # Early-warning canary against the moving targets HA-Core ships. Runs
-# weekly (and on demand): installs the latest Home Assistant and
-# pymodbus releases, checks the manifest requirements are still
-# satisfiable against what HA-Core resolves, smoke-imports the
-# production modules, and re-runs hassfest.
+# weekly (and on demand):
 #
-# A failure here means an upcoming HA release will break the
+#   * ha-latest: installs the latest Home Assistant and pymodbus,
+#     verifies our manifest requirement is still satisfied, and
+#     smoke-imports the production modules — catches runtime API drift.
+#
+#   * hassfest: static schema validation against HA-Core main — catches
+#     integration-manifest / schema drift.
+#
+# A failure in either job means an upcoming HA release will break the
 # integration for end users — same failure mode as #88, but caught
 # ~1-2 weeks early so we can hot-fix or widen constraints before HACS
 # users hit it.
@@ -36,9 +40,14 @@ jobs:
         # actual latest upstream versions.
 
       - name: Create fresh venv and install latest HA + pymodbus
+        # Venv lives outside the workspace so hassfest (in the sibling
+        # job) never has a chance to walk site-packages. Kept off
+        # $HOME too so nothing accidentally leaks into the runner's
+        # default python.
         run: |
-          uv venv --python 3.14.2 .venv-canary
-          source .venv-canary/bin/activate
+          uv venv --python 3.14.2 "${RUNNER_TEMP}/venv-canary"
+          # shellcheck disable=SC1091
+          source "${RUNNER_TEMP}/venv-canary/bin/activate"
           uv pip install --upgrade \
             homeassistant \
             pymodbus \
@@ -48,10 +57,11 @@ jobs:
 
       - name: Show installed versions
         # `uv venv` intentionally creates a venv without pip (uv itself is
-        # the package manager). Read the installed version from the metadata
-        # instead of shelling out to `python -m pip show`.
+        # the package manager). Read the installed version from the
+        # metadata instead of shelling out to `python -m pip show`.
         run: |
-          source .venv-canary/bin/activate
+          # shellcheck disable=SC1091
+          source "${RUNNER_TEMP}/venv-canary/bin/activate"
           python - <<'PY'
           from importlib.metadata import version
           print(f"Home Assistant : {version('homeassistant')}")
@@ -60,7 +70,8 @@ jobs:
 
       - name: Verify manifest requirements are satisfied
         run: |
-          source .venv-canary/bin/activate
+          # shellcheck disable=SC1091
+          source "${RUNNER_TEMP}/venv-canary/bin/activate"
           python - <<'PY'
           import json, sys
           from importlib.metadata import PackageNotFoundError, version
@@ -92,14 +103,28 @@ jobs:
 
       - name: Smoke-import production modules
         run: |
-          source .venv-canary/bin/activate
+          # shellcheck disable=SC1091
+          source "${RUNNER_TEMP}/venv-canary/bin/activate"
           python -c "from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
 
-      - name: Hassfest against the latest HA-Core schema
-        # Deliberate exception to the SHA-pinning pattern used for
-        # every other Action in .github/workflows: the whole purpose of
-        # this canary is to catch upcoming HA-Core breakage, so hassfest
-        # MUST float with HA-Core's main branch — pinning it to a SHA
-        # would freeze it to a specific HA-Core snapshot and defeat the
-        # design. ci.yaml uses @master here for the same reason.
+  hassfest:
+    # Split from ha-latest so hassfest sees a clean workspace: the
+    # earlier design ran hassfest in the same job as the venv install,
+    # and hassfest then walked into `<venv>/lib/pythonX.Y/site-packages/
+    # homeassistant/components/*` and treated every built-in integration
+    # as a custom one. Mirrors ci.yaml's `validate` job (fresh checkout,
+    # no venv).
+    name: Hassfest against latest HA-Core schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Hassfest
+        # Deliberate exception to the SHA-pinning pattern used for every
+        # other Action in .github/workflows: the whole purpose of this
+        # canary is to catch upcoming HA-Core breakage, so hassfest MUST
+        # float with HA-Core's main branch — pinning it to a SHA would
+        # freeze it to a specific HA-Core snapshot and defeat the design.
+        # ci.yaml uses @master here for the same reason.
         uses: home-assistant/actions/hassfest@master
