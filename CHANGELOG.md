@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`pymodbus` runtime constraint no longer pins an upper bound** — `>=3.11.2` in both `manifest.json` and `pyproject.toml [project].dependencies` (previously `>=3.11.2,<4`). Home Assistant core dictates the installed version via its bundled `modbus` integration, and every fixed ceiling automatically blocks the integration at load time when HA-Core moves past it — see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88) for the 2026.7 incident. Our production code is defensive against pymodbus API churn, so removing the ceiling is safer than repeating the block for every user on the next HA release. The dev group still pins `pymodbus<3.12` for the `virtual_wallbox` simulator.
+
+### Added
+
+- **`.github/workflows/upstream-compat.yml`** — early-warning canary against the moving targets HA-Core ships. Runs weekly (and on demand) against the latest Home Assistant and pymodbus releases, verifies the manifest requirement is still satisfied, smoke-imports the production modules, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration ~1-2 weeks before end users hit it.
+
 ## [1.3.1] - 2026-07-02
 
 ### Fixed
