@@ -92,10 +92,10 @@ jobs:
           python -c "from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
 
       - name: Hassfest against the latest HA-Core schema
-        # Deliberate exception to the repo's SHA-pinning policy (see
-        # AGENTS.md §6): the whole purpose of this canary is to catch
-        # upcoming HA-Core breakage, so hassfest MUST float with
-        # HA-Core's main branch — pinning it to a SHA would freeze it
-        # to a specific HA-Core snapshot and defeat the design. ci.yaml
-        # uses @master here for the same reason.
+        # Deliberate exception to the SHA-pinning pattern used for
+        # every other Action in .github/workflows: the whole purpose of
+        # this canary is to catch upcoming HA-Core breakage, so hassfest
+        # MUST float with HA-Core's main branch — pinning it to a SHA
+        # would freeze it to a specific HA-Core snapshot and defeat the
+        # design. ci.yaml uses @master here for the same reason.
         uses: home-assistant/actions/hassfest@master
