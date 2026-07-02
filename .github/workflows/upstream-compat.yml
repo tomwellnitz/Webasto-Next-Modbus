@@ -47,12 +47,16 @@ jobs:
             packaging
 
       - name: Show installed versions
+        # `uv venv` intentionally creates a venv without pip (uv itself is
+        # the package manager). Read the installed version from the metadata
+        # instead of shelling out to `python -m pip show`.
         run: |
           source .venv-canary/bin/activate
-          echo "=== Home Assistant ==="
-          python -m pip show homeassistant | grep -E "^(Name|Version):"
-          echo "=== pymodbus ==="
-          python -m pip show pymodbus | grep -E "^(Name|Version):"
+          python - <<'PY'
+          from importlib.metadata import version
+          print(f"Home Assistant : {version('homeassistant')}")
+          print(f"pymodbus       : {version('pymodbus')}")
+          PY
 
       - name: Verify manifest requirements are satisfied
         run: |
