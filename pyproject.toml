@@ -6,7 +6,15 @@ authors = [{ name = "Webasto Next maintainers" }]
 readme = "README.md"
 requires-python = ">=3.14.2"
 dependencies = [
-    "pymodbus>=3.11.2,<4",
+    # No upper bound. Home Assistant core dictates the installed pymodbus
+    # version via its bundled `modbus` integration; a fixed ceiling here
+    # automatically blocks the integration whenever HA-Core moves past it
+    # (see #88 for the HA 2026.7 / pymodbus 3.13.1 incident). The dev
+    # group below still pins pymodbus<3.12 for the virtual_wallbox
+    # simulator; that pin only affects the test environment. Compat with
+    # future upstream bumps is caught early by
+    # .github/workflows/upstream-compat.yml.
+    "pymodbus>=3.11.2",
     "aiohttp>=3.13.5",
 ]
 

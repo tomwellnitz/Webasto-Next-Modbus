@@ -1,0 +1,101 @@
+name: Upstream compatibility
+
+# Early-warning canary against the moving targets HA-Core ships. Runs
+# weekly (and on demand): installs the latest Home Assistant and
+# pymodbus releases, checks the manifest requirements are still
+# satisfiable against what HA-Core resolves, smoke-imports the
+# production modules, and re-runs hassfest.
+#
+# A failure here means an upcoming HA release will break the
+# integration for end users — same failure mode as #88, but caught
+# ~1-2 weeks early so we can hot-fix or widen constraints before HACS
+# users hit it.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Monday, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ha-latest:
+    name: Latest Home Assistant + pymodbus
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        # Deliberately no cache-dependency-glob — we do NOT want to
+        # restore the project's uv.lock, whose dev group pins
+        # pymodbus<3.12 for the virtual_wallbox simulator. This job
+        # runs against a fresh environment that resolves to the
+        # actual latest upstream versions.
+
+      - name: Create fresh venv and install latest HA + pymodbus
+        run: |
+          uv venv --python 3.14.2 .venv-canary
+          source .venv-canary/bin/activate
+          uv pip install --upgrade \
+            homeassistant \
+            pymodbus \
+            voluptuous \
+            colorlog \
+            packaging
+
+      - name: Show installed versions
+        run: |
+          source .venv-canary/bin/activate
+          echo "=== Home Assistant ==="
+          python -m pip show homeassistant | grep -E "^(Name|Version):"
+          echo "=== pymodbus ==="
+          python -m pip show pymodbus | grep -E "^(Name|Version):"
+
+      - name: Verify manifest requirements are satisfied
+        run: |
+          source .venv-canary/bin/activate
+          python - <<'PY'
+          import json, sys
+          from importlib.metadata import PackageNotFoundError, version
+          from packaging.requirements import Requirement
+
+          with open("custom_components/webasto_next_modbus/manifest.json") as f:
+              reqs = json.load(f).get("requirements", [])
+
+          if not reqs:
+              print("manifest.requirements is empty — nothing to check")
+              sys.exit(0)
+
+          failed = False
+          for req_str in reqs:
+              req = Requirement(req_str)
+              try:
+                  installed = version(req.name)
+              except PackageNotFoundError:
+                  print(f"❌ {req.name} not installed")
+                  failed = True
+                  continue
+              if req.specifier.contains(installed, prereleases=True):
+                  print(f"✓ {req.name}=={installed} satisfies {req_str!r}")
+              else:
+                  print(f"❌ installed {req.name}=={installed} does NOT satisfy {req_str!r}")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Smoke-import production modules
+        run: |
+          source .venv-canary/bin/activate
+          python -c "from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
+
+      - name: Hassfest against the latest HA-Core schema
+        # Deliberate exception to the SHA-pinning pattern used for
+        # every other Action in .github/workflows: the whole purpose of
+        # this canary is to catch upcoming HA-Core breakage, so hassfest
+        # MUST float with HA-Core's main branch — pinning it to a SHA
+        # would freeze it to a specific HA-Core snapshot and defeat the
+        # design. ci.yaml uses @master here for the same reason.
+        uses: home-assistant/actions/hassfest@master
