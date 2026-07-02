@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-02
+
+### Fixed
+
+- **Home Assistant 2026.7 compatibility** ([#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88)) — HA 2026.7 pins `pymodbus==3.13.1`, but the 1.3.0 manifest required `pymodbus>=3.11.2,<3.12`. Home Assistant refused to load the integration with `Setup failed … Requirements for webasto_next_modbus not found: ['pymodbus>=3.11.2,<3.12']`. The manifest and the `pyproject.toml` runtime constraint are widened to `pymodbus>=3.11.2,<4` to cover all HA-Core-shipped pymodbus 3.x versions. No user-side changes required; a Home Assistant restart after updating is enough.
+
 ### Added
 
 - `docs/rest-api-reverse-engineering.md` — a short guide explaining how to authenticate against the wallbox's web API, discover endpoints by watching the web UI's network calls, and identify the writes. Intended for contributors adding Unite-specific REST support, since the existing REST mapping was reverse-engineered against a Webasto Next.
