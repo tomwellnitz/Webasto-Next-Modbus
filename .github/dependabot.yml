@@ -15,9 +15,10 @@ updates:
     allow:
       - dependency-type: "direct"
     ignore:
-      # pymodbus is pinned to match Home Assistant core's `modbus` integration
-      # (pymodbus==3.11.2 as of HA 2026.5); see AGENTS.md. Only patch bumps
-      # within the 3.11.x line are acceptable until HA core moves.
+      # pymodbus bumps are driven by Home Assistant core's `modbus`
+      # integration, not by us (HA 2026.5/6: 3.11.x, HA 2026.7: 3.13.1).
+      # Ignore automatic major/minor bumps so they don't drift ahead of
+      # HA core; see AGENTS.md § Dependency Pinning.
       - dependency-name: "pymodbus"
         update-types:
           - "version-update:semver-major"
