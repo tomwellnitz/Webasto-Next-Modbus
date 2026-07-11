@@ -1,6 +1,8 @@
 # Reverse-engineering the wallbox web interface
 
-The REST mapping shipped by this integration was reverse-engineered against a **Webasto Next**. The **Ampure / Webasto Unite** likely exposes similar but not identical routes (different phase / off-peak / random-delay handling, for example), and contributions adding Unite-specific REST support are welcome. This guide explains how to probe the wallbox's web API to discover endpoints that aren't yet covered.
+The REST mapping shipped by this integration was reverse-engineered against a **Webasto Next**. The **Ampure / Webasto Unite** exposes a different REST surface — it serves all configuration through a single flat endpoint rather than the Next's per-section split, and the Next's section endpoints return `404` there ([discussion #96](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions/96), tracked in [#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97)). Contributions adding Unite-specific REST support are welcome. This guide explains how to probe the wallbox's web API to discover endpoints that aren't yet covered.
+
+> The endpoints in the examples below are the **Next's**. Where the Unite is known to differ it is called out inline. Treat every path as model- and firmware-specific until you have confirmed it against your own box.
 
 ## Prerequisites
 
@@ -23,9 +25,9 @@ TOKEN=$(curl -sk -X POST "$WALLBOX/api/login" \
 echo "$TOKEN"
 ```
 
-## Step 2 — Inspect the known sections
+## Step 2 — Read the configuration fields
 
-The wallbox groups configuration fields into named sections. The integration currently reads `system` and `auth`:
+**Webasto Next** groups configuration fields into named sections. The integration currently reads `system` and `auth`:
 
 ```bash
 curl -sk -H "Authorization: Bearer $TOKEN" "$WALLBOX/api/sections/system" | jq
@@ -33,7 +35,13 @@ curl -sk -H "Authorization: Bearer $TOKEN" "$WALLBOX/api/sections/auth"   | jq
 curl -sk -H "Authorization: Bearer $TOKEN" "$WALLBOX/api/current-errors"  | jq
 ```
 
-Each entry has a `fieldKey`, a `value` and metadata describing whether it's writable and what `configurationFieldUpdateType` to use when writing.
+**Ampure / Webasto Unite** does *not* expose those section endpoints (they `404`). It serves every field in one flat call instead ([#96](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions/96)):
+
+```bash
+curl -sk -H "Authorization: Bearer $TOKEN" "$WALLBOX/api/configuration-fields/" | jq
+```
+
+Either way, each entry has a `fieldKey`, a `value` and metadata describing whether it's writable and what `configurationFieldUpdateType` to use when writing. If one form returns `404`, try the other — and note which model and firmware you are on.
 
 ## Step 3 — Discover new endpoints by watching the UI
 
@@ -51,7 +59,7 @@ For systematic probing of a path like `/api/sections/<name>`, try plausible name
 For fields that the UI lets you change, watch the **Network** tab when you click *Save*. The integration uses two write endpoints today:
 
 - `POST /api/configuration-updates` with a JSON **array** of `{fieldKey, value, configurationFieldUpdateType}` objects — used for settings updates (LED brightness, free charging, free-charging tag, …).
-- `POST /api/custom-actions/<action>` — used for one-shot actions (the integration calls `restart-system`).
+- `POST /api/custom-actions/<action>` — used for one-shot actions. The action name is model-specific: the Next uses `restart-system`, while the Unite was found to use `soft-reset` ([#96](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions/96)).
 
 Capture the exact request payload and note the `configurationFieldUpdateType` value, which differs by field type — e.g. `number-configuration-field-update`, `boolean-configuration-field-update`, `simple-string-configuration-field-update`.
 
@@ -60,7 +68,7 @@ Capture the exact request payload and note the `configurationFieldUpdateType` va
 - New `fieldKey` values not yet parsed in `custom_components/webasto_next_modbus/rest_client.py` (`_parse_system_fields` / `_parse_auth_fields`).
 - New sections beyond `system` and `auth`.
 - The endpoint(s) backing **Off-Peak Charging**, **Skip Random Delay** and any **phase-switching** controls exposed via REST.
-- Confirmation that the Unite returns the same field layout (or where it diverges).
+- A scrubbed dump of the Unite's `GET /api/configuration-fields/` so its `fieldKey` values can be mapped to the integration's sensors (tracked in [#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97)).
 
 ## Privacy and sharing
 
