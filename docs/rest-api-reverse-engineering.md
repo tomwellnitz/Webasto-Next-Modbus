@@ -59,7 +59,7 @@ For systematic probing of a path like `/api/sections/<name>`, try plausible name
 For fields that the UI lets you change, watch the **Network** tab when you click *Save*. The integration uses two write endpoints today:
 
 - `POST /api/configuration-updates` with a JSON **array** of `{fieldKey, value, configurationFieldUpdateType}` objects — used for settings updates (LED brightness, free charging, free-charging tag, …).
-- `POST /api/custom-actions/<action>` — used for one-shot actions. The action name is model-specific: the Next uses `restart-system`, while the Unite was found to use `soft-reset` ([#96](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions/96)).
+- `POST /api/custom-actions/<action>` — used for one-shot actions. Action names vary by model: the Next uses `restart-system`; the Unite exposes both `restart-system` (full restart, resets uptime) and `soft-reset` (reboot without resetting uptime) ([#96](https://github.com/tomwellnitz/Webasto-Next-Modbus/discussions/96)). Be careful probing other `custom-actions/*` paths — they perform actions rather than reads, so some may be destructive (a factory reset, for example). Don't fire them blindly.
 
 Capture the exact request payload and note the `configurationFieldUpdateType` value, which differs by field type — e.g. `number-configuration-field-update`, `boolean-configuration-field-update`, `simple-string-configuration-field-update`.
 
