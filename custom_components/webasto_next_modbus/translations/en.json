@@ -156,7 +156,8 @@
           "pwr_internal_error": "Internal power error",
           "ev_communication_error_negative_pilot": "EV communication error (negative pilot)",
           "dc_residual_current_error": "DC residual current error"
-        }      },
+        }
+      },
       "current_l1_a": {
         "name": "Current L1"
       },
@@ -275,6 +276,9 @@
       },
       "led_brightness": {
         "name": "LED Brightness"
+      },
+      "randomised_delay": {
+        "name": "Randomised start delay"
       }
     },
     "button": {
@@ -297,6 +301,18 @@
       },
       "phase_switch": {
         "name": "Three-phase charging"
+      }
+    },
+    "select": {
+      "led_dimming": {
+        "name": "LED dimming level",
+        "state": {
+          "veryLow": "Very low",
+          "low": "Low",
+          "mid": "Medium",
+          "high": "High",
+          "timeBased": "Time based"
+        }
       }
     }
   },
@@ -330,6 +346,12 @@
     },
     "restart_failed": {
       "message": "Failed to restart the wallbox: {error}"
+    },
+    "set_led_dimming_failed": {
+      "message": "Failed to set LED dimming level: {error}"
+    },
+    "set_randomised_delay_failed": {
+      "message": "Failed to set randomised delay: {error}"
     }
   },
   "device_automation": {

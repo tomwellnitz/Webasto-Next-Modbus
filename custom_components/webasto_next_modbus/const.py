@@ -29,6 +29,12 @@ DEFAULT_REST_USERNAME: Final = "admin"
 REST_SCAN_INTERVAL: Final = 60  # REST API polling interval (seconds)
 REST_SETUP_RETRY_INTERVAL: Final = 300  # retry a failed REST connect this often (seconds)
 
+# Webasto / Ampure Unite REST settings (served via the flat
+# `/api/configuration-fields/` endpoint; see issue #97). The LED dimming level
+# is an enum on the Unite rather than the Next's 0-100 brightness.
+UNITE_LED_DIMMING_LEVELS: Final = ("veryLow", "low", "mid", "high", "timeBased")
+UNITE_RANDOMISED_DELAY_MAX: Final = 1800  # seconds
+
 VARIANT_11_KW: Final = "11kw"
 VARIANT_22_KW: Final = "22kw"
 DEFAULT_VARIANT: Final = VARIANT_22_KW

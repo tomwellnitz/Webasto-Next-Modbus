@@ -22,6 +22,7 @@ from .const import (
     FAILURE_NOTIFICATION_THRESHOLD,
     FAILURE_NOTIFICATION_TITLE,
     MODEL,
+    MODEL_NEXT,
     REST_SCAN_INTERVAL,
     REST_SETUP_RETRY_INTERVAL,
 )
@@ -55,10 +56,12 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device_slug: str,
         config_entry: ConfigEntry | None = None,
         device_model_name: str = MODEL,
+        model: str = MODEL_NEXT,
     ) -> None:
         self._bridge = bridge
         self._device_slug = device_slug
         self.device_model_name = device_model_name
+        self._model = model
         self.entry_id = entry_id
         self.consecutive_failures = 0
         self.last_success: datetime | None = None
@@ -109,7 +112,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Use Home Assistant's shared aiohttp session. The wallbox has a
         # self-signed certificate, so SSL verification must be disabled.
         session = async_get_clientsession(self.hass, verify_ssl=False)
-        self._rest_client = RestClient(host, username, password, session)
+        self._rest_client = RestClient(host, username, password, session, model=self._model)
 
         try:
             await self._rest_client.connect()

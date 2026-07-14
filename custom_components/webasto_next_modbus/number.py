@@ -11,7 +11,7 @@ from homeassistant.components.number import (
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory
+from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -21,7 +21,10 @@ from . import WebastoConfigEntry
 from .const import (
     CONF_UNIT_ID,
     DOMAIN,
+    MODEL_NEXT,
+    MODEL_UNITE,
     SIGNAL_REGISTER_WRITTEN,
+    UNITE_RANDOMISED_DELAY_MAX,
     RegisterDefinition,
     get_number_registers,
 )
@@ -61,16 +64,28 @@ async def async_setup_entry(
         for register in get_number_registers(runtime.model)
     ]
 
-    # Add LED brightness if REST API is enabled
+    # REST-backed number entities are model-specific: the Next exposes a 0-100
+    # LED brightness; the Unite has no such field but exposes a randomised
+    # start-delay (its LED control is an enum, handled by the select platform).
     if runtime.coordinator.rest_enabled:
-        entities.append(
-            WebastoLedBrightness(
-                runtime.coordinator,
-                host,
-                unit_id,
-                runtime.device_name,
+        if runtime.model == MODEL_NEXT:
+            entities.append(
+                WebastoLedBrightness(
+                    runtime.coordinator,
+                    host,
+                    unit_id,
+                    runtime.device_name,
+                )
             )
-        )
+        elif runtime.model == MODEL_UNITE:
+            entities.append(
+                WebastoRandomisedDelay(
+                    runtime.coordinator,
+                    host,
+                    unit_id,
+                    runtime.device_name,
+                )
+            )
 
     async_add_entities(entities)
 
@@ -342,4 +357,78 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
 
         # Re-fetch the REST data now (regular polling is throttled) so the UI
         # shows the value the wallbox actually has.
+        await self.coordinator.async_refresh_rest_data()
+
+
+class WebastoRandomisedDelay(WebastoRestEntity, NumberEntity):
+    """Number entity for the Unite's randomised start delay via REST API.
+
+    ``0`` disables the delay; otherwise the wallbox waits up to the configured
+    number of seconds before starting a charge (grid-friendly load spreading).
+    """
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 0
+    _attr_native_max_value = UNITE_RANDOMISED_DELAY_MAX
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: WebastoDataCoordinator,
+        host: str,
+        unit_id: int,
+        device_name: str,
+    ) -> None:
+        super().__init__(
+            coordinator, host, unit_id, "randomised_delay", device_name, coordinator.rest_client
+        )
+        self._pending_value: int | None = None
+
+    def _handle_coordinator_update(self) -> None:
+        """Update the native value from coordinator REST data."""
+
+        rest_data = self.coordinator.rest_data
+        current = (
+            None
+            if rest_data is None or rest_data.randomised_delay is None
+            else int(rest_data.randomised_delay)
+        )
+        if self._pending_value is not None and current == self._pending_value:
+            self._pending_value = None
+
+        if self._pending_value is not None:
+            self._attr_native_value = float(self._pending_value)
+        else:
+            self._attr_native_value = None if current is None else float(current)
+
+        super()._handle_coordinator_update()
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the randomised delay via REST API."""
+        if self._rest_client is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="rest_not_connected"
+            )
+
+        int_value = int(round(value))
+        self._pending_value = int_value
+        self._attr_native_value = float(int_value)
+        if self.hass is not None:
+            self.async_write_ha_state()
+
+        try:
+            await self._rest_client.set_randomised_delay(int_value)
+        except Exception as err:
+            self._pending_value = None
+            if self.hass is not None:
+                self._handle_coordinator_update()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_randomised_delay_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
         await self.coordinator.async_refresh_rest_data()
