@@ -74,6 +74,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BUTTON,
     Platform.SWITCH,
+    Platform.SELECT,
     Platform.TEXT,
 ]
 
@@ -184,6 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         device_slug,
         config_entry=entry,
         device_model_name=get_model_display_name(model),
+        model=model,
     )
 
     try:

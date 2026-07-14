@@ -10,10 +10,21 @@ from typing import TYPE_CHECKING, Any, Final
 
 import aiohttp
 
+from .const import (
+    MODEL_NEXT,
+    MODEL_UNITE,
+    UNITE_LED_DIMMING_LEVELS,
+    UNITE_RANDOMISED_DELAY_MAX,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 _LOGGER = logging.getLogger(__name__)
+
+# Unite writes go through a single update type for every field, unlike the
+# Next's per-type values (see issue #97).
+_UNITE_UPDATE_TYPE: Final = "simple-configuration-field-update"
 
 # API Configuration
 DEFAULT_TIMEOUT: Final = 30
@@ -77,16 +88,21 @@ class RestData:
     signal_voltage_l3: float | None = None
     active_errors: list[str] | None = None
 
+    # Unite-only settings (served via /api/configuration-fields/)
+    led_dimming_level: str | None = None
+    randomised_delay: int | None = None
+
 
 class RestClient:
-    """Async REST API client for Webasto Next wallbox.
+    """Async REST API client for Webasto Next / Ampure Unite wallboxes.
 
-    This client provides access to features not available via Modbus:
-    - LED brightness control
-    - Firmware/hardware versions
-    - MAC addresses and network info
-    - Diagnostic counters (plug cycles, errors)
-    - System restart
+    Provides access to features not available via Modbus. The two models expose
+    different REST surfaces, so the client is model-aware:
+
+    - Next: per-section endpoints — firmware/hardware versions, MAC/network
+      info, diagnostic counters, LED brightness, free charging, restart.
+    - Unite: a single flat ``configuration-fields`` endpoint — free charging,
+      LED dimming level, randomised start delay, restart (no diagnostic data).
     """
 
     def __init__(
@@ -97,6 +113,7 @@ class RestClient:
         session: aiohttp.ClientSession,
         *,
         timeout: int = DEFAULT_TIMEOUT,
+        model: str = MODEL_NEXT,
     ) -> None:
         """Initialize the REST client.
 
@@ -110,16 +127,25 @@ class RestClient:
                 must be disabled by the caller. The session is owned by Home
                 Assistant and must not be closed here.
             timeout: Request timeout in seconds.
+            model: Wallbox model (``MODEL_NEXT`` or ``MODEL_UNITE``). The Unite
+                serves a different REST surface (flat configuration-fields
+                endpoint, different field keys and a single update type).
         """
         self._host = host
         self._username = username
         self._password = password
         self._base_url = f"https://{host}/api"
+        self._model = model
 
         self._session = session
         self._request_timeout = aiohttp.ClientTimeout(total=timeout)
         self._token: str | None = None
         self._token_expires: datetime | None = None
+
+    @property
+    def _is_unite(self) -> bool:
+        """Return True if this client targets a Webasto / Ampure Unite."""
+        return self._model == MODEL_UNITE
 
     @property
     def is_connected(self) -> bool:
@@ -156,7 +182,12 @@ class RestClient:
             RestClientError: If fetching data fails.
         """
         await self._ensure_token()
+        if self._is_unite:
+            return await self._get_data_unite()
+        return await self._get_data_next()
 
+    async def _get_data_next(self) -> RestData:
+        """Fetch REST data for the Webasto Next (per-section endpoints)."""
         values: dict[str, Any] = {}
 
         # Fetch system section
@@ -182,6 +213,21 @@ class RestClient:
 
         return RestData(**values)
 
+    async def _get_data_unite(self) -> RestData:
+        """Fetch REST data for the Unite (flat configuration-fields endpoint).
+
+        The Unite has no equivalent for the Next's firmware / diagnostic
+        sensors — its REST surface is configuration only — so only the mappable
+        settings (free charging, LED dimming, randomised delay) are returned.
+        """
+        values: dict[str, Any] = {}
+        try:
+            fields = await self._get_configuration_fields()
+            self._parse_unite_fields(fields, values)
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch Unite configuration fields: %r", err)
+        return RestData(**values)
+
     async def set_led_brightness(self, brightness: int) -> None:
         """Set LED brightness.
 
@@ -192,6 +238,12 @@ class RestClient:
             ValueError: If brightness is out of range.
             RestClientError: If the request fails.
         """
+        if self._is_unite:
+            # The Unite has no 0-100 brightness field; it uses an enum dimming
+            # level instead (see set_led_dimming_level).
+            msg = "LED brightness is not available on the Unite; use LED dimming level"
+            raise RestClientError(msg)
+
         if not 0 <= brightness <= 100:
             msg = f"Brightness must be 0-100, got {brightness}"
             raise ValueError(msg)
@@ -207,6 +259,48 @@ class RestClient:
             ]
         )
 
+    async def set_led_dimming_level(self, level: str) -> None:
+        """Set the LED dimming level (Unite only).
+
+        Args:
+            level: One of ``UNITE_LED_DIMMING_LEVELS``.
+
+        Raises:
+            ValueError: If the level is unknown.
+            RestClientError: If called on a non-Unite model or the request fails.
+        """
+        if not self._is_unite:
+            msg = "LED dimming level is only available on the Unite"
+            raise RestClientError(msg)
+        if level not in UNITE_LED_DIMMING_LEVELS:
+            msg = f"Unknown LED dimming level {level!r}"
+            raise ValueError(msg)
+
+        await self._ensure_token()
+        await self._update_config([self._unite_update("generalSettings.ledDimmingLevel", level)])
+
+    async def set_randomised_delay(self, seconds: int) -> None:
+        """Set the randomised charging-start delay in seconds (Unite only).
+
+        Args:
+            seconds: 0 (disabled) to ``UNITE_RANDOMISED_DELAY_MAX``.
+
+        Raises:
+            ValueError: If the value is out of range.
+            RestClientError: If called on a non-Unite model or the request fails.
+        """
+        if not self._is_unite:
+            msg = "Randomised delay is only available on the Unite"
+            raise RestClientError(msg)
+        if not 0 <= seconds <= UNITE_RANDOMISED_DELAY_MAX:
+            msg = f"Randomised delay must be 0-{UNITE_RANDOMISED_DELAY_MAX}, got {seconds}"
+            raise ValueError(msg)
+
+        await self._ensure_token()
+        await self._update_config(
+            [self._unite_update("generalSettings.randomisedDelayMaximumDuration", str(seconds))]
+        )
+
     async def set_free_charging(self, enabled: bool) -> None:
         """Enable or disable free charging mode.
 
@@ -217,6 +311,15 @@ class RestClient:
             RestClientError: If the request fails.
         """
         await self._ensure_token()
+        if self._is_unite:
+            await self._update_config(
+                [
+                    self._unite_update(
+                        "ocppConfigurations.freeModeActive", "TRUE" if enabled else "FALSE"
+                    )
+                ]
+            )
+            return
         await self._update_config(
             [
                 {
@@ -237,6 +340,11 @@ class RestClient:
             RestClientError: If the request fails.
         """
         await self._ensure_token()
+        if self._is_unite:
+            await self._update_config(
+                [self._unite_update("ocppConfigurations.freeModeRfid", tag_id)]
+            )
+            return
         await self._update_config(
             [
                 {
@@ -246,6 +354,15 @@ class RestClient:
                 }
             ]
         )
+
+    @staticmethod
+    def _unite_update(field_key: str, value: str) -> dict[str, Any]:
+        """Build a Unite configuration-update payload entry."""
+        return {
+            "fieldKey": field_key,
+            "value": value,
+            "configurationFieldUpdateType": _UNITE_UPDATE_TYPE,
+        }
 
     async def restart_system(self) -> None:
         """Trigger a system restart.
@@ -417,9 +534,50 @@ class RestClient:
                 errors.append(str(error))
         return errors
 
+    async def _get_configuration_fields(self) -> list[dict[str, Any]]:
+        """Get the Unite's flat list of configuration fields."""
+        result = await self._get("/configuration-fields/")
+        if not isinstance(result, list):
+            return []
+        return result
+
     async def _update_config(self, updates: list[dict[str, Any]]) -> None:
         """Update configuration fields."""
         await self._post("/configuration-updates", json=updates)
+
+    def _parse_unite_fields(self, fields: list[dict[str, Any]], values: dict[str, Any]) -> None:
+        """Parse the Unite's flat configuration fields into values dict."""
+        for field in fields:
+            key = field.get("fieldKey", "")
+            value = field.get("value")
+
+            if key == "ocppConfigurations.freeModeActive":
+                values["free_charging_enabled"] = self._parse_bool(value)
+            elif key == "ocppConfigurations.freeModeRfid":
+                values["free_charging_tag_id"] = value
+            elif key == "generalSettings.ledDimmingLevel":
+                values["led_dimming_level"] = value if value in UNITE_LED_DIMMING_LEVELS else None
+            elif key == "generalSettings.randomisedDelayMaximumDuration":
+                values["randomised_delay"] = self._safe_int(value)
+
+    @staticmethod
+    def _parse_bool(value: Any) -> bool | None:
+        """Parse the Unite's boolean fields (returned as "TRUE"/"FALSE" strings).
+
+        Returns None for unrecognised values rather than silently treating them
+        as False, so an unexpected API value surfaces as "unknown" instead of a
+        wrong state.
+        """
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        text = str(value).strip().lower()
+        if text in ("true", "1", "on", "yes"):
+            return True
+        if text in ("false", "0", "off", "no"):
+            return False
+        return None
 
     def _parse_system_fields(self, fields: list[dict[str, Any]], values: dict[str, Any]) -> None:
         """Parse system section fields into values dict."""

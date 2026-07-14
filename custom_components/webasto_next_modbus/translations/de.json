@@ -241,6 +241,9 @@
       },
       "led_brightness": {
         "name": "LED Helligkeit"
+      },
+      "randomised_delay": {
+        "name": "Zufällige Startverzögerung"
       }
     },
     "button": {
@@ -268,6 +271,18 @@
       },
       "phase_switch": {
         "name": "Dreiphasiges Laden"
+      }
+    },
+    "select": {
+      "led_dimming": {
+        "name": "LED-Dimmstufe",
+        "state": {
+          "very_low": "Sehr niedrig",
+          "low": "Niedrig",
+          "mid": "Mittel",
+          "high": "Hoch",
+          "time_based": "Zeitbasiert"
+        }
       }
     }
   },
@@ -331,6 +346,12 @@
     },
     "restart_failed": {
       "message": "Neustart der Wallbox fehlgeschlagen: {error}"
+    },
+    "set_led_dimming_failed": {
+      "message": "LED-Dimmstufe konnte nicht gesetzt werden: {error}"
+    },
+    "set_randomised_delay_failed": {
+      "message": "Zufällige Startverzögerung konnte nicht gesetzt werden: {error}"
     }
   },
   "device_automation": {

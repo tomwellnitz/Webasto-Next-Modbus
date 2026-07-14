@@ -8,6 +8,7 @@
 
 ### Added
 
+- **REST API support for the Ampure / Webasto Unite** ([#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97), thanks @lonkhuijzen for the reverse-engineering). The Unite serves a different REST surface than the Next — a single flat `/api/configuration-fields/` endpoint with its own field keys and a single update type — so the REST client is now model-aware. On a Unite, enabling the REST API exposes the **Free charging** switch and **tag ID**, a new **LED dimming level** select (`veryLow`/`low`/`mid`/`high`/`timeBased`, since the Unite has no 0-100 brightness), and a **Randomised start delay** number (0-1800 s). The Next's firmware/diagnostic REST sensors have no Unite equivalent (that data isn't in the Unite's REST API) and are not created on a Unite; live telemetry is unaffected — it comes over Modbus.
 - **`.github/workflows/upstream-compat.yml`** — early-warning canary against the moving targets HA-Core ships. Runs weekly (and on demand) against the latest Home Assistant and pymodbus releases, verifies the manifest requirement is still satisfied, smoke-imports the production modules, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration ~1-2 weeks before end users hit it.
 
 ## [1.3.1] - 2026-07-02

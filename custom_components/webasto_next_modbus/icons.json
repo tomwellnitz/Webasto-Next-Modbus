@@ -116,6 +116,9 @@
       },
       "set_current_a": {
         "default": "mdi:speedometer"
+      },
+      "randomised_delay": {
+        "default": "mdi:timer-sand"
       }
     },
     "button": {
@@ -138,6 +141,11 @@
       },
       "phase_switch": {
         "default": "mdi:transmission-tower"
+      }
+    },
+    "select": {
+      "led_dimming": {
+        "default": "mdi:brightness-6"
       }
     }
   }
