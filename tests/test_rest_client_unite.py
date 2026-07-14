@@ -166,6 +166,35 @@ async def test_unite_led_brightness_not_supported() -> None:
     client._update_config.assert_not_awaited()
 
 
+async def test_unite_unknown_bool_is_none() -> None:
+    client = _unite_client()
+    client._get = AsyncMock(  # type: ignore[method-assign]
+        return_value=[{"fieldKey": "ocppConfigurations.freeModeActive", "value": "maybe"}]
+    )
+
+    data = await client.get_data()
+
+    assert data.free_charging_enabled is None
+
+
+async def test_next_led_dimming_not_supported() -> None:
+    client = _next_client()
+    client._update_config = AsyncMock()  # type: ignore[method-assign]
+
+    with pytest.raises(RestClientError):
+        await client.set_led_dimming_level("mid")
+    client._update_config.assert_not_awaited()
+
+
+async def test_next_randomised_delay_not_supported() -> None:
+    client = _next_client()
+    client._update_config = AsyncMock()  # type: ignore[method-assign]
+
+    with pytest.raises(RestClientError):
+        await client.set_randomised_delay(60)
+    client._update_config.assert_not_awaited()
+
+
 async def test_next_set_free_charging_uses_boolean_update_type() -> None:
     client = _next_client()
     client._update_config = AsyncMock()  # type: ignore[method-assign]

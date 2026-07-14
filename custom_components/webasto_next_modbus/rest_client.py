@@ -94,14 +94,15 @@ class RestData:
 
 
 class RestClient:
-    """Async REST API client for Webasto Next wallbox.
+    """Async REST API client for Webasto Next / Ampure Unite wallboxes.
 
-    This client provides access to features not available via Modbus:
-    - LED brightness control
-    - Firmware/hardware versions
-    - MAC addresses and network info
-    - Diagnostic counters (plug cycles, errors)
-    - System restart
+    Provides access to features not available via Modbus. The two models expose
+    different REST surfaces, so the client is model-aware:
+
+    - Next: per-section endpoints — firmware/hardware versions, MAC/network
+      info, diagnostic counters, LED brightness, free charging, restart.
+    - Unite: a single flat ``configuration-fields`` endpoint — free charging,
+      LED dimming level, randomised start delay, restart (no diagnostic data).
     """
 
     def __init__(
@@ -266,8 +267,11 @@ class RestClient:
 
         Raises:
             ValueError: If the level is unknown.
-            RestClientError: If the request fails.
+            RestClientError: If called on a non-Unite model or the request fails.
         """
+        if not self._is_unite:
+            msg = "LED dimming level is only available on the Unite"
+            raise RestClientError(msg)
         if level not in UNITE_LED_DIMMING_LEVELS:
             msg = f"Unknown LED dimming level {level!r}"
             raise ValueError(msg)
@@ -283,8 +287,11 @@ class RestClient:
 
         Raises:
             ValueError: If the value is out of range.
-            RestClientError: If the request fails.
+            RestClientError: If called on a non-Unite model or the request fails.
         """
+        if not self._is_unite:
+            msg = "Randomised delay is only available on the Unite"
+            raise RestClientError(msg)
         if not 0 <= seconds <= UNITE_RANDOMISED_DELAY_MAX:
             msg = f"Randomised delay must be 0-{UNITE_RANDOMISED_DELAY_MAX}, got {seconds}"
             raise ValueError(msg)
@@ -555,12 +562,22 @@ class RestClient:
 
     @staticmethod
     def _parse_bool(value: Any) -> bool | None:
-        """Parse the Unite's boolean fields (returned as "TRUE"/"FALSE" strings)."""
+        """Parse the Unite's boolean fields (returned as "TRUE"/"FALSE" strings).
+
+        Returns None for unrecognised values rather than silently treating them
+        as False, so an unexpected API value surfaces as "unknown" instead of a
+        wrong state.
+        """
         if value is None:
             return None
         if isinstance(value, bool):
             return value
-        return str(value).strip().lower() in ("true", "1", "on", "yes")
+        text = str(value).strip().lower()
+        if text in ("true", "1", "on", "yes"):
+            return True
+        if text in ("false", "0", "off", "no"):
+            return False
+        return None
 
     def _parse_system_fields(self, fields: list[dict[str, Any]], values: dict[str, Any]) -> None:
         """Parse system section fields into values dict."""
