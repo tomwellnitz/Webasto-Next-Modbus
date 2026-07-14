@@ -307,11 +307,11 @@
       "led_dimming": {
         "name": "LED dimming level",
         "state": {
-          "veryLow": "Very low",
+          "very_low": "Very low",
           "low": "Low",
           "mid": "Medium",
           "high": "High",
-          "timeBased": "Time based"
+          "time_based": "Time based"
         }
       }
     }

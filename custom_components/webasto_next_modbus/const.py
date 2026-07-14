@@ -33,6 +33,19 @@ REST_SETUP_RETRY_INTERVAL: Final = 300  # retry a failed REST connect this often
 # `/api/configuration-fields/` endpoint; see issue #97). The LED dimming level
 # is an enum on the Unite rather than the Next's 0-100 brightness.
 UNITE_LED_DIMMING_LEVELS: Final = ("veryLow", "low", "mid", "high", "timeBased")
+# Home Assistant select options and translation keys must be lowercase slugs,
+# but the wallbox API values are camelCase. Map the HA-facing option to the API
+# value; the select entity translates in both directions.
+UNITE_LED_DIMMING_OPTION_TO_API: Final = {
+    "very_low": "veryLow",
+    "low": "low",
+    "mid": "mid",
+    "high": "high",
+    "time_based": "timeBased",
+}
+UNITE_LED_DIMMING_API_TO_OPTION: Final = {
+    api: option for option, api in UNITE_LED_DIMMING_OPTION_TO_API.items()
+}
 UNITE_RANDOMISED_DELAY_MAX: Final = 1800  # seconds
 
 VARIANT_11_KW: Final = "11kw"

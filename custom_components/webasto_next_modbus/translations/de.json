@@ -277,11 +277,11 @@
       "led_dimming": {
         "name": "LED-Dimmstufe",
         "state": {
-          "veryLow": "Sehr niedrig",
+          "very_low": "Sehr niedrig",
           "low": "Niedrig",
           "mid": "Mittel",
           "high": "Hoch",
-          "timeBased": "Zeitbasiert"
+          "time_based": "Zeitbasiert"
         }
       }
     }

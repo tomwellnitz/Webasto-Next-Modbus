@@ -9,7 +9,13 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, DOMAIN, MODEL_UNITE, UNITE_LED_DIMMING_LEVELS
+from .const import (
+    CONF_UNIT_ID,
+    DOMAIN,
+    MODEL_UNITE,
+    UNITE_LED_DIMMING_API_TO_OPTION,
+    UNITE_LED_DIMMING_OPTION_TO_API,
+)
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRestEntity
 
@@ -49,7 +55,9 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = list(UNITE_LED_DIMMING_LEVELS)
+    # HA-facing options are lowercase slugs (translation keys must be); the
+    # wallbox's camelCase API values are mapped in/out below.
+    _attr_options = list(UNITE_LED_DIMMING_OPTION_TO_API)
 
     def __init__(
         self,
@@ -67,7 +75,8 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
         """Update the current option from coordinator REST data."""
 
         rest_data = self.coordinator.rest_data
-        current = None if rest_data is None else rest_data.led_dimming_level
+        api_value = None if rest_data is None else rest_data.led_dimming_level
+        current = UNITE_LED_DIMMING_API_TO_OPTION.get(api_value) if api_value else None
         # Drop the optimistic value once the wallbox confirms it via REST.
         if self._pending_option is not None and current == self._pending_option:
             self._pending_option = None
@@ -91,7 +100,7 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
             self.async_write_ha_state()
 
         try:
-            await self._rest_client.set_led_dimming_level(option)
+            await self._rest_client.set_led_dimming_level(UNITE_LED_DIMMING_OPTION_TO_API[option])
         except Exception as err:
             self._pending_option = None
             if self.hass is not None:
