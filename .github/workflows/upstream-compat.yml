@@ -102,10 +102,16 @@ jobs:
           PY
 
       - name: Smoke-import production modules
+        # Import `homeassistant` first, the way a real HA install does: HA is
+        # bootstrapped (and runs install_as_voluptuous(), which swaps in
+        # probatio) long before any custom integration is imported. Importing
+        # our package first would pull in the real `voluptuous` and make HA warn
+        # that it is shadowing an already-imported module — an artefact of the
+        # canary's import order, not of the integration.
         run: |
           # shellcheck disable=SC1091
           source "${RUNNER_TEMP}/venv-canary/bin/activate"
-          python -c "from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
+          python -c "import homeassistant; from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
 
   hassfest:
     # Split from ha-latest so hassfest sees a clean workspace: the
