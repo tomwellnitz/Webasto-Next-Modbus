@@ -82,7 +82,6 @@ async def test_unite_set_free_charging_payload() -> None:
             {
                 "fieldKey": "ocppConfigurations.freeModeActive",
                 "value": "FALSE",
-                "configurationFieldUpdateType": "simple-configuration-field-update",
             }
         ]
     )
@@ -99,7 +98,6 @@ async def test_unite_set_free_charging_tag_payload() -> None:
             {
                 "fieldKey": "ocppConfigurations.freeModeRfid",
                 "value": "NEW-TAG",
-                "configurationFieldUpdateType": "simple-configuration-field-update",
             }
         ]
     )
@@ -116,7 +114,6 @@ async def test_unite_set_led_dimming_payload() -> None:
             {
                 "fieldKey": "generalSettings.ledDimmingLevel",
                 "value": "veryLow",
-                "configurationFieldUpdateType": "simple-configuration-field-update",
             }
         ]
     )
@@ -142,7 +139,6 @@ async def test_unite_set_randomised_delay_payload() -> None:
             {
                 "fieldKey": "generalSettings.randomisedDelayMaximumDuration",
                 "value": "600",
-                "configurationFieldUpdateType": "simple-configuration-field-update",
             }
         ]
     )

@@ -22,10 +22,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Unite writes go through a single update type for every field, unlike the
-# Next's per-type values (see issue #97).
-_UNITE_UPDATE_TYPE: Final = "simple-configuration-field-update"
-
 # API Configuration
 DEFAULT_TIMEOUT: Final = 30
 TOKEN_REFRESH_MARGIN: Final = timedelta(minutes=5)
@@ -357,11 +353,16 @@ class RestClient:
 
     @staticmethod
     def _unite_update(field_key: str, value: str) -> dict[str, Any]:
-        """Build a Unite configuration-update payload entry."""
+        """Build a Unite configuration-update payload entry.
+
+        The Unite accepts (and only needs) ``fieldKey`` + ``value`` — unlike the
+        Next it does not require a ``configurationFieldUpdateType``. This is the
+        exact shape verified against FW 3.187 hardware in issue #97; we send
+        nothing beyond it so a write can't be rejected over an extra property.
+        """
         return {
             "fieldKey": field_key,
             "value": value,
-            "configurationFieldUpdateType": _UNITE_UPDATE_TYPE,
         }
 
     async def restart_system(self) -> None:
