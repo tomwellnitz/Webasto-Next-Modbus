@@ -10,7 +10,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
-    CONF_UNIT_ID,
     DOMAIN,
     MODEL_UNITE,
     UNITE_LED_DIMMING_API_TO_OPTION,
@@ -32,7 +31,6 @@ async def async_setup_entry(
     runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
 
     entities: list[SelectEntity] = []
 
@@ -43,7 +41,6 @@ async def async_setup_entry(
             WebastoLedDimming(
                 rest,
                 host,
-                unit_id,
                 runtime.device_name,
                 runtime.coordinator.device_model_name,
             )
@@ -65,11 +62,10 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
         model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, "led_dimming", device_name, model_name)
+        super().__init__(coordinator, host, "led_dimming", device_name, model_name)
         self._pending_option: str | None = None
         self._update_from_rest()
 

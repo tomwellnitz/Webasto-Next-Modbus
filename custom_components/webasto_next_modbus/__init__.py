@@ -13,13 +13,15 @@ from typing import Any, cast
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
     ServiceValidationError,
 )
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.typing import ConfigType
@@ -51,11 +53,11 @@ from .const import (
     SESSION_COMMAND_START_VALUE,
     SESSION_COMMAND_STOP_VALUE,
     SIGNAL_REGISTER_WRITTEN,
-    build_device_slug,
     get_max_current_for_variant,
     get_model_display_name,
     get_readable_registers,
     get_register,
+    legacy_device_slug,
     normalize_model,
 )
 from .coordinator import WebastoDataCoordinator, connection_issue_id
@@ -72,9 +74,12 @@ _INTEGRATION_PATH_LOGGED = False
 # Config entries only; there is no YAML configuration.
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-# Minor version 2: CONF_VARIANT / CONF_MODEL are always stored in entry.data
-# and an empty CONF_NAME is not.
-CONFIG_ENTRY_MINOR_VERSION = 2
+# Config entry minor versions:
+#   2: CONF_VARIANT / CONF_MODEL are always stored in entry.data and an empty
+#      CONF_NAME is not.
+#   3: device identifier and entity unique IDs are based on the entry ID
+#      instead of host + unit ID.
+CONFIG_ENTRY_MINOR_VERSION = 3
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -139,7 +144,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         entry.options.get(CONF_MODEL, entry.data.get(CONF_MODEL, DEFAULT_MODEL))
     )
     max_current = get_max_current_for_variant(variant)
-    device_slug = build_device_slug(host, unit_id)
+    # The config entry ID is the wallbox's identity: it doesn't change when
+    # the host is reconfigured, unlike the host-based slug used before 1.3.
+    device_slug = entry.entry_id
     device_name = entry.data.get(CONF_NAME) or entry.title or DEVICE_NAME
 
     bridge = ModbusBridge(
@@ -221,20 +228,70 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Downgraded from a future version we don't know how to read.
         return False
 
-    if entry.minor_version < CONFIG_ENTRY_MINOR_VERSION:
+    if entry.minor_version < 2:
         data = dict(entry.data)
         data.setdefault(CONF_VARIANT, entry.options.get(CONF_VARIANT, DEFAULT_VARIANT))
         data.setdefault(CONF_MODEL, normalize_model(entry.options.get(CONF_MODEL, DEFAULT_MODEL)))
         if not data.get(CONF_NAME):
             data.pop(CONF_NAME, None)
-        hass.config_entries.async_update_entry(
-            entry, data=data, minor_version=CONFIG_ENTRY_MINOR_VERSION
-        )
-        _LOGGER.debug(
-            "Migrated config entry %s to version 1.%s", entry.entry_id, entry.minor_version
-        )
+        hass.config_entries.async_update_entry(entry, data=data, minor_version=2)
 
+    if entry.minor_version < 3:
+        _async_migrate_identity(hass, entry)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
+
+    _LOGGER.debug("Config entry %s is at version 1.%s", entry.entry_id, entry.minor_version)
     return True
+
+
+@callback
+def _async_migrate_identity(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Move the device and entities from the host-based slug to the entry ID.
+
+    Only registry entries of the current host are migrated. Leftovers from an
+    earlier IP change (which used to create a second device) stay as they
+    are and can be deleted from the device page.
+    """
+
+    old_slug = legacy_device_slug(entry.data[CONF_HOST], entry.data[CONF_UNIT_ID])
+    new_slug = entry.entry_id
+    # Free charging tag ID entities from before 1.1.7 used yet another scheme.
+    legacy_tag_uid = f"{entry.data[CONF_HOST]}_{entry.data[CONF_UNIT_ID]}_free_charging_tag_id"
+
+    entity_registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        if unique_id == legacy_tag_uid:
+            new_unique_id = f"{new_slug}-rest-free_charging_tag_id"
+        elif unique_id.startswith(f"{old_slug}-"):
+            new_unique_id = new_slug + unique_id[len(old_slug) :]
+        else:
+            continue
+        if entity_registry.async_get_entity_id(entity_entry.domain, DOMAIN, new_unique_id):
+            _LOGGER.warning(
+                "Not migrating %s: unique ID %s is already taken",
+                entity_entry.entity_id,
+                new_unique_id,
+            )
+            continue
+        entity_registry.async_update_entity(entity_entry.entity_id, new_unique_id=new_unique_id)
+
+    device_registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        if (DOMAIN, old_slug) in device.identifiers:
+            device_registry.async_update_device(device.id, new_identifiers={(DOMAIN, new_slug)})
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Allow deleting devices that are not the entry's current wallbox.
+
+    Such stale devices are left over from versions that created a new device
+    whenever the host was reconfigured.
+    """
+
+    return (DOMAIN, entry.entry_id) not in device_entry.identifiers
 
 
 async def _async_shutdown_runtime(bridge: ModbusBridge) -> None:

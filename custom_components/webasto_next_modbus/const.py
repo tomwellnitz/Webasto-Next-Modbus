@@ -929,8 +929,12 @@ def get_register(key: str) -> RegisterDefinition:
     raise KeyError(key)
 
 
-def build_device_slug(host: str, unit_id: int) -> str:
-    """Return the canonical device slug used for device registry identifiers."""
+def legacy_device_slug(host: str, unit_id: int) -> str:
+    """Return the host-based identity used before config entry version 1.3.
+
+    Device identifiers and entity unique IDs are now based on the config entry
+    ID, which survives an IP change; this is only needed to migrate old entries.
+    """
 
     return f"{host.lower()}-{unit_id}"
 

@@ -46,7 +46,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Webasto Next Modbus config flow."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(
         self, user_input: Mapping[str, Any] | None = None

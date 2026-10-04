@@ -55,7 +55,7 @@ class WebastoRestCoordinator(DataUpdateCoordinator[RestData]):
             update_interval=timedelta(seconds=REST_SCAN_INTERVAL),
         )
         self.client = client
-        self._device_slug = device_slug
+        self.device_slug = device_slug
         self._model = model
         self._system_fetched_at: datetime | None = None
         self._force_system = False
@@ -144,7 +144,7 @@ class WebastoRestCoordinator(DataUpdateCoordinator[RestData]):
             kwargs["connections"] = connections
         dr.async_get(self.hass).async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
-            identifiers={(DOMAIN, self._device_slug)},
+            identifiers={(DOMAIN, self.device_slug)},
             **kwargs,  # type: ignore[arg-type]
         )
 

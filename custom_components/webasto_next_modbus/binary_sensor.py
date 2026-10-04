@@ -12,7 +12,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, build_device_slug
 from .coordinator import WebastoDataCoordinator
 from .entity import build_device_info
 
@@ -28,11 +27,10 @@ async def async_setup_entry(
 
     runtime = entry.runtime_data
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
     async_add_entities(
         [
-            WebastoConnectivitySensor(runtime.coordinator, host, unit_id, runtime.device_name),
-            WebastoChargingSensor(runtime.coordinator, host, unit_id, runtime.device_name),
+            WebastoConnectivitySensor(runtime.coordinator, host, runtime.device_name),
+            WebastoChargingSensor(runtime.coordinator, host, runtime.device_name),
         ]
     )
 
@@ -49,11 +47,10 @@ class WebastoConnectivitySensor(CoordinatorEntity[WebastoDataCoordinator], Binar
         self,
         coordinator: WebastoDataCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
     ) -> None:
         super().__init__(coordinator)
-        prefix = build_device_slug(host, unit_id)
+        prefix = coordinator.device_slug
         self._unique_prefix = prefix
         self._device_name = device_name
         self._attr_unique_id = f"{prefix}-connected"
@@ -84,11 +81,10 @@ class WebastoChargingSensor(CoordinatorEntity[WebastoDataCoordinator], BinarySen
         self,
         coordinator: WebastoDataCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
     ) -> None:
         super().__init__(coordinator)
-        prefix = build_device_slug(host, unit_id)
+        prefix = coordinator.device_slug
         self._unique_prefix = prefix
         self._device_name = device_name
         self._attr_unique_id = f"{prefix}-charging"
