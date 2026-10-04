@@ -102,7 +102,9 @@ class WebastoRestCoordinator(DataUpdateCoordinator[RestData]):
                 translation_placeholders={"error": str(err) or type(err).__name__},
             ) from err
 
-        if include_system:
+        # A failed system section is retried on the next poll, not only
+        # after REST_SYSTEM_SECTION_INTERVAL.
+        if self.client.system_fetched:
             self._system_fetched_at = now
             self._force_system = False
         self._async_update_device_registry(data)

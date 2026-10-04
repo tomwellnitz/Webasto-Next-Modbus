@@ -225,6 +225,12 @@ async def test_slow_section_does_not_fail_the_poll(
     system_calls = [call for call in aioclient_mock.mock_calls if "sections/system" in str(call[1])]
     assert len(system_calls) == 1
 
+    # The failed section is tried again on the next regular poll, not only
+    # after REST_SYSTEM_SECTION_INTERVAL.
+    await rest.async_refresh()
+    system_calls = [call for call in aioclient_mock.mock_calls if "sections/system" in str(call[1])]
+    assert len(system_calls) == 2
+
 
 async def test_missing_endpoint_keeps_previous_values(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, rest_entry: MockConfigEntry

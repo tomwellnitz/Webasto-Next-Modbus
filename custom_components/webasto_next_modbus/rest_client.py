@@ -203,6 +203,10 @@ class RestClient:
         self._login_lock = asyncio.Lock()
         self._last_login_error: AuthenticationError | None = None
         self._last_login_failed_at = 0.0
+        # Whether the last get_data() call read the system data (Next: the
+        # slow system section, Unite: the configuration fields), so the
+        # caller can retry it on the next poll when it failed.
+        self.system_fetched = False
 
     @property
     def _is_unite(self) -> bool:
@@ -275,6 +279,7 @@ class RestClient:
                     0, ("system section", lambda: self._fetch_section("system", values))
                 )
 
+        self.system_fetched = False
         last_error: RestClientError | None = None
         fetched_any = False
         for name, fetch in fetchers:
@@ -289,6 +294,8 @@ class RestClient:
                 last_error = err
             else:
                 fetched_any = True
+                if name in ("system section", "configuration fields"):
+                    self.system_fetched = True
 
         if not fetched_any:
             assert last_error is not None
