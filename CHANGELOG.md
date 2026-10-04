@@ -14,6 +14,7 @@
 - **REST API support for the Ampure / Webasto Unite** ([#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97), thanks @lonkhuijzen for the reverse-engineering). The Unite serves a different REST surface than the Next — a single flat `/api/configuration-fields/` endpoint with its own dotted field keys, and writes that take only `{fieldKey, value}` — so the REST client is now model-aware. On a Unite, enabling the REST API exposes the **Free charging** switch and **tag ID**, a new **LED dimming level** select (`veryLow`/`low`/`mid`/`high`/`timeBased`, since the Unite has no 0-100 brightness), and a **Randomised start delay** number (0-1800 s). The Next's firmware/diagnostic REST sensors have no Unite equivalent and are not created on a Unite; live telemetry is unaffected — it comes over Modbus.
 - **Repair issue** when the wallbox stays unreachable; it clears itself on recovery.
 - Devices left over from earlier IP changes can be deleted from their device page.
+- **Solar surplus optimizer: phase-aware, with optional phase switching.** With the *Number of phases* sensor the blueprint converts watts to amps for the active phase mode (230 W/A single-phase, 690 W/A three-phase) instead of a fixed factor. On a Unite it can also switch to single-phase charging when the surplus can't carry 6 A on three phases, and back once it can (with headroom and a minimum interval between changes). A new option chooses between keeping the minimum current and pausing (0 A) when the surplus is too small.
 
 ### Changed
 
@@ -62,6 +63,11 @@
 - **Service calls accept rendered templates** such as `amps: "{{ states('input_number.x') }}"` (`16.0`) and normal booleans for `enabled`; an unknown `config_entry_id` is reported instead of silently ignored.
 - A failed phase switch no longer leaves the switch showing a mode that was never applied.
 - Writing the charging current via a service no longer updates the number entity from a worker thread, which Home Assistant flags as unsafe.
+
+#### Blueprints
+
+- **Three blueprints could not be used at all.** *Solar surplus optimizer*, *Charge target (kWh)* and *Charge until full* used `unit_of_measurement` in an entity selector, which Home Assistant does not accept, so it rejected the whole blueprint ("Invalid blueprint"). Every blueprint is now validated against Home Assistant's blueprint schema in the tests.
+- The solar surplus optimizer now raises the current to the maximum when the surplus exceeds it; before, it kept the old current.
 
 #### Diagnostics
 
