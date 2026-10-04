@@ -43,8 +43,7 @@
     "abort": {
       "already_configured": "This wallbox is already configured.",
       "reconfigure_successful": "The connection settings were updated.",
-      "reauth_successful": "The REST API credentials were updated.",
-      "missing_dependency": "Required package 'voluptuous' is missing in this Home Assistant environment."
+      "reauth_successful": "The REST API credentials were updated."
     }
   },
   "options": {
@@ -72,9 +71,6 @@
       "rest_password_required": "REST API is enabled but no password is stored.",
       "rest_cannot_connect": "Could not connect to REST API. Check credentials and network.",
       "rest_connection_failed": "Could not connect to REST API. Check credentials and network."
-    },
-    "abort": {
-      "missing_dependency": "Required package 'voluptuous' is missing in this Home Assistant environment."
     }
   },
   "entity": {
