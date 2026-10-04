@@ -12,7 +12,7 @@
 - **The Modbus connection now comes from Home Assistant's `modbus` integration** (`async_get_unit`, backed by `modbus-connection` / tmodbus) instead of a pymodbus client of our own. Home Assistant owns the connection: it reconnects by itself, and anything in Home Assistant that talks to the same wallbox through it shares its single Modbus TCP slot instead of competing for it.
 - **The integration no longer installs pymodbus.** `manifest.json` has no requirements left, so a Home Assistant release that bumps pymodbus (as 2026.7 did, see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88)) can no longer block it from loading.
 - **Reconfigure tests the new host, port and unit ID before saving them** and shows *cannot connect* (keeping what you typed) instead of saving settings that then fail on the reload. This was not possible before because the running entry held the wallbox's only Modbus TCP slot.
-- Each Modbus request is bounded by a 5 s timeout (with modbus-connection 4.11 or newer; older versions rely on the 30 s budget per operation), and a timed-out request drops the connection so the next one starts clean.
+- A timed-out Modbus request drops the connection, so the next attempt does not wait on a dead peer. Each request asks for a 5 s timeout where modbus-connection supports it (4.11 or newer); Home Assistant 2026.9 ships 4.10, whose own 10 s default applies. Either way an operation, retries included, stays within 30 s.
 - `integration_type` is now `device` (one config entry per wallbox).
 - **Enable debug logging** on the integration's page now also logs the Modbus connection (`modbus_connection`, `tmodbus`); `docs/support.md` lists the loggers for `configuration.yaml`.
 
