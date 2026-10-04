@@ -110,7 +110,7 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
 1. `async_setup_entry` creates the `ModbusBridge`, optionally the `WebastoRestClient`, and the `DataUpdateCoordinator`.
 1. After the coordinator completes its first refresh, the `ModbusBridge` starts a background "Life Bit" task.
-1. The Life Bit task writes `1` to register `6000`, then polls every second until the wallbox clears it to `0`, then repeats. This prevents failsafe mode.
+1. The Life Bit task writes `1` to register `6000` every `comTimeout / 2` seconds (register `2002`, clamped to 2–30 s), as the Modbus specification requires; the wallbox clears it to `0`. This prevents failsafe mode. While the wallbox is unreachable the loop backs off (2 s doubling to 30 s) and is woken early by the next successful data poll.
 1. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
 1. If REST API is enabled, the coordinator also fetches data from the wallbox web interface (firmware info, LED brightness, diagnostics, etc.).
 1. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
@@ -120,7 +120,9 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 
 ## Error handling
 
-- **Connection Retries**: During setup, the integration attempts to connect up to 5 times with a delay, notifying the user if it fails.
+- **Setup**: one connection attempt; on failure a translated `ConfigEntryNotReady` lets Home Assistant retry with its own backoff.
+- **Operation retries**: reads are attempted 3×, writes 2×, with a 30 s total budget per operation. pymodbus' own retries and auto-reconnect are disabled, and a client that hit a transport error is closed immediately so the wallbox's single Modbus TCP slot is never held by an orphaned socket. Cancellation (unload, timeouts) is propagated, not retried.
+- **Lasting outages**: after 3 failed polls a repair issue is raised; it is removed on the next successful poll.
 - **Communication errors**: Raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
 - **Individual register errors**: Logged and surfaced as `None` without blocking the entire payload.
 - **Write helpers**: Clamp values to safe ranges and surface validation errors back to the UI.

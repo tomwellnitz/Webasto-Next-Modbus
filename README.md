@@ -89,7 +89,8 @@ Credentials are stored in the Home Assistant config entry and redacted from down
 
 - **Modbus telemetry** is polled every **10 seconds** by default. The interval is configurable via *⋮ → **Configure** → Scan interval*.
 - **REST API data** (firmware info, LED brightness, free charging, diagnostics, active errors) is fetched every **60 seconds**. If the wallbox's web interface is unreachable at startup, the integration retries the REST connection every **5 minutes** until it succeeds; the Modbus side is independent and keeps working.
-- The **"Life Bit" keep-alive** runs continuously in the background: the integration writes `1` to the keep-alive register and polls until the wallbox clears it to `0`, preventing the wallbox from dropping into fail-safe mode. The cadence follows the wallbox's own clear-cycle.
+- The **"Life Bit" keep-alive** runs continuously in the background: as the Modbus specification requires, the integration writes `1` to the keep-alive register every half of the configured **fail-safe timeout** (at most every 30 s, at least every 2 s), so the wallbox never drops into fail-safe mode while Home Assistant is running. While the wallbox is unreachable it backs off and resumes as soon as a poll succeeds again.
+- Each Modbus operation is retried a few times (reads 3×, writes 2×) and bounded to 30 s in total, so a wallbox that stops answering can't block a service call for minutes.
 
 ## Entities
 
