@@ -29,8 +29,11 @@ jobs:
 
       # The tag, manifest.json and pyproject.toml must agree: HACS shows the
       # tag, Home Assistant the manifest version. A final release also needs
-      # its own CHANGELOG section (pre-releases use "Unreleased").
+      # its own CHANGELOG section (pre-releases use "Unreleased"), and that
+      # section's heading must carry a short title for the release name, e.g.
+      # "## [1.4.0] - 2026-10-04 - REST for the Unite, stable device IDs".
       - name: Verify version and changelog
+        id: verify
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
@@ -57,10 +60,29 @@ jobs:
               errors.append(f"manifest.json version {manifest_version} != tag {tag}")
           if project_version != base_version:
               errors.append(f"pyproject.toml version {project_version} != tag {tag}")
-          if version == base_version and not re.search(
-              rf"^## \[{re.escape(version)}\]", changelog, re.MULTILINE
-          ):
-              errors.append(f"CHANGELOG.md has no '## [{version}]' section")
+
+          section = version if version == base_version else "Unreleased"
+          heading = re.search(
+              rf"^## \[{re.escape(section)}\]"
+              r"(?: - \d{4}-\d{2}-\d{2})?(?: - (?P<title>.+?))?[ \t]*$",
+              changelog,
+              re.MULTILINE,
+          )
+          if heading is None:
+              errors.append(f"CHANGELOG.md has no '## [{section}]' section")
+          elif not heading["title"]:
+              expected = (
+                  "## [Unreleased] - Short title"
+                  if section == "Unreleased"
+                  else f"## [{section}] - YYYY-MM-DD - Short title"
+              )
+              errors.append(
+                  f"The CHANGELOG.md heading for [{section}] has no title; "
+                  f"expected '{expected}' (it becomes the release name)"
+              )
+          else:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                  output.write(f"title={heading['title'].strip()}\n")
 
           for error in errors:
               print(f"::error::{error}")
@@ -109,6 +131,9 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          # e.g. "v1.4.0 - REST for the Unite, stable device IDs", the title
+          # HACS and the releases page show.
+          name: ${{ github.ref_name }} - ${{ steps.verify.outputs.title }}
           files: webasto_next_modbus.zip
           body_path: RELEASE_NOTES.md
           prerelease: ${{ contains(github.ref_name, '-') }}

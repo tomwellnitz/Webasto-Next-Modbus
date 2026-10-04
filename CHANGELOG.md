@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] - Unite REST API, stable device IDs, hardened Modbus and REST
 
 ### Upgrade notes
 
@@ -69,6 +69,7 @@
 
 ### Development
 
+- **Every release has a title again.** Each CHANGELOG heading carries a short title (`## [X.Y.Z] - YYYY-MM-DD - Title`, `## [Unreleased] - Title` for pre-releases); the release workflow uses it as the release name (`vX.Y.Z - Title`, as shown by HACS and the releases page) and refuses a tag whose heading has none. Releases made by the workflow since 1.1.7 were named after the tag only.
 - `uv.lock` is committed and CI installs with `uv sync --locked`; Dependabot uses the `uv` ecosystem and now also bumps `pytest-homeassistant-custom-component` patch releases (every HA release is one), so the tests follow Home Assistant.
 - CI runs `./scripts/check.sh --check`, the same read-only script contributors run locally. The script no longer reformats Markdown inside `.venv`, and gained `mdformat`, `actionlint` and a coverage gate (80 % line + branch).
 - End-to-end tests in a real Home Assistant; snapshot tests cover every entity (registry entry and state), the device and the diagnostics for both models; a static test checks every register's device class, state class and entity category. The global `pymodbus` / `voluptuous` test stubs are gone.
@@ -78,7 +79,7 @@
 - Ruff additionally enforces `BLE`, `RUF`, `SIM` and `PT`; one codespell configuration in `pyproject.toml`; pre-commit hooks run the locked tools via `uv run`.
 - `webasto-smoke` finds the entities by config entry (it failed with an `ImportError` after the identity change).
 
-## [1.3.1] - 2026-07-02
+## [1.3.1] - 2026-07-02 - Home Assistant 2026.7 compatibility
 
 ### Fixed
 
@@ -100,7 +101,7 @@
 - Stale `release_notes.md` from the repository root. The release workflow has long published from the matching `CHANGELOG.md` section instead.
 - `webinterface_analysis.json` — one-off endpoint probe artifact from the original Next reverse-engineering session. Its information is already distilled into `docs/rest-api.md`, and the methodology is now captured in `docs/rest-api-reverse-engineering.md`. Kept in git history if needed.
 
-## [1.3.0] - 2026-05-27
+## [1.3.0] - 2026-05-27 - Reconfigure and reauth flows, Platinum quality scale
 
 ### Added
 
@@ -125,7 +126,7 @@
 - Dependabot tuned: monthly pip cadence, a 7-day cooldown, and auto-merge for low-risk (patch/minor) updates once CI passes.
 - Entity icons moved to `icons.json`; exceptions carry translation keys.
 
-## [1.2.0] - 2026-05-24
+## [1.2.0] - 2026-05-24 - Webasto / Ampure Unite support
 
 ### Added
 
@@ -140,7 +141,7 @@
 
 - The virtual wallbox simulator is now model-aware: a Unite simulator serves its telemetry only on input registers (no holding mirror), so the test suite reproduces the real Next-vs-Unite behaviour and guards the Unite register map against regressions.
 
-## [1.1.7] - 2026-05-12
+## [1.1.7] - 2026-05-12 - Offline wallbox handling, modern config entries
 
 ### Added
 
@@ -176,26 +177,26 @@
 - CI: third-party GitHub Actions are pinned to commit SHAs (with `# vX.Y.Z` comments so Dependabot still tracks them), and `dependabot.yml` was tightened (direct deps only, `pymodbus` major/minor held, grouped updates).
 - Release workflow: pre-release tags (`v*-beta.*`, `v*-rc.*`, …) are now published as GitHub pre-releases so HACS only offers them under "Show beta versions".
 
-## [1.1.6] - 2026-05-11
+## [1.1.6] - 2026-05-11 - Home Assistant 2026.5 compatibility
 
 ### Changed
 
 - **Home Assistant 2026.5 compatibility**: Bumped minimum Python to 3.14.2 (now required by HA core), raised the minimum `aiohttp` to `3.13.5` to match HA core, and updated test dependencies (`homeassistant>=2026.5.1`, `pytest-homeassistant-custom-component==0.13.330`).
 - **CI**: Pinned GitHub Actions matrix to Python 3.14.2 (CI and release workflows).
 
-## [1.1.5] - 2025-12-19
+## [1.1.5] - 2025-12-19 - Fix HACS validation
 
 ### Fixed
 
 - **HACS Validation**: Fixed a JSON syntax error (trailing comma) in `manifest.json` that caused HACS validation to fail.
 
-## [1.1.4] - 2025-12-19
+## [1.1.4] - 2025-12-19 - Fix charged energy and translations
 
 ### Fixed
 
 - **Active Errors**: Fixed "Aktive Fehler" showing "None" in German translation. It now correctly shows "Keine Fehler" (or "No Error" in English) when no errors are present.
 
-## [1.1.3] - 2025-12-16
+## [1.1.3] - 2025-12-16 - Major reconnection fix
 
 ### Fixed
 
@@ -208,7 +209,7 @@
 
 ______________________________________________________________________
 
-## [1.1.2] - 2025-12-15
+## [1.1.2] - 2025-12-15 - Remove non-functional auto-discovery
 
 ### Changed
 
@@ -216,7 +217,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## [1.1.1] - 2025-12-15
+## [1.1.1] - 2025-12-15 - Bug fixes
 
 ### Fixed
 
@@ -226,7 +227,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## [1.1.0] - 2025-12-15
+## [1.1.0] - 2025-12-15 - Optional REST API
 
 ### Added
 
@@ -250,7 +251,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## [1.0.0] - 2024-03-20
+## [1.0.0] - 2024-03-20 - Initial release
 
 ### Added
 
