@@ -27,7 +27,6 @@ from custom_components.webasto_next_modbus.const import (
     SERVICE_SET_FAILSAFE,
     SERVICE_START_SESSION,
     SERVICE_STOP_SESSION,
-    build_device_slug,
 )
 
 DEFAULT_TIMEOUT = 30.0
@@ -111,8 +110,7 @@ class IntegrationSmokeTest:
     def __init__(
         self,
         api: HomeAssistantAPI,
-        host: str,
-        unit_id: int,
+        config_entry_id: str | None,
         timeout: float,
         poll_interval: float,
         entity_prefix: str,
@@ -120,7 +118,7 @@ class IntegrationSmokeTest:
         self._api = api
         self._timeout = timeout
         self._poll_interval = poll_interval
-        self._slug = build_device_slug(host, unit_id)
+        self._config_entry_id = config_entry_id
         self._entity_prefix = entity_prefix
         self._entities = self._resolve_entities()
 
@@ -220,19 +218,20 @@ class IntegrationSmokeTest:
                 if "404" not in str(fallback_err):
                     raise
                 return self._resolve_entities_from_states()
-        entries = _extract_entity_entries(registry_response)
-
-        prefix = f"{self._slug}-"
-        matches = [entry for entry in entries if str(entry.get("unique_id", "")).startswith(prefix)]
-        if not matches:
+        entries = [
+            entry
+            for entry in _extract_entity_entries(registry_response)
+            if entry.get("platform") == DOMAIN
+        ]
+        config_entry_id = self._config_entry_id or _single_config_entry_id(entries)
+        if config_entry_id is None:
             return self._resolve_entities_from_states()
 
-        config_entry_ids = {
-            entry.get("config_entry_id")
-            for entry in matches
-            if entry.get("config_entry_id") is not None
-        }
-        config_entry_id = next(iter(config_entry_ids), None)
+        # Unique IDs are "<config entry id>-<register key>".
+        prefix = f"{config_entry_id}-"
+        matches = [entry for entry in entries if entry.get("config_entry_id") == config_entry_id]
+        if not matches:
+            raise RuntimeError(f"No {DOMAIN} entities found for config entry {config_entry_id}")
 
         def resolve(unique_suffix: str) -> str:
             unique_id = f"{prefix}{unique_suffix}"
@@ -247,7 +246,7 @@ class IntegrationSmokeTest:
         return EntityRefs(
             config_entry_id=config_entry_id,
             charging_state=resolve("charging_state"),
-            charge_power=resolve("charge_power_w"),
+            charge_power=resolve("active_power_total_w"),
             failsafe_current=resolve("failsafe_current_a"),
             failsafe_timeout=resolve("failsafe_timeout_s"),
             keepalive_button=resolve("send_keepalive"),
@@ -257,7 +256,7 @@ class IntegrationSmokeTest:
         base = self._entity_prefix
         candidates = {
             "charging_state": f"sensor.{base}_charging_state",
-            "charge_power": f"sensor.{base}_charge_power",
+            "charge_power": f"sensor.{base}_active_power_total",
             "failsafe_current": f"number.{base}_failsafe_current",
             "failsafe_timeout": f"number.{base}_failsafe_timeout",
             "keepalive_button": f"button.{base}_send_keepalive",
@@ -354,6 +353,24 @@ class IntegrationSmokeTest:
         print(f"[webasto-smoke] {message}")
 
 
+def _single_config_entry_id(entries: Iterable[dict[str, Any]]) -> str | None:
+    """Return the only config entry the integration's entities belong to.
+
+    With several wallboxes configured the entry is ambiguous; ``--config-entry-id``
+    must then name it.
+    """
+
+    entry_ids = sorted(
+        {str(entry["config_entry_id"]) for entry in entries if entry.get("config_entry_id")}
+    )
+    if len(entry_ids) > 1:
+        raise RuntimeError(
+            f"Several {DOMAIN} config entries found ({', '.join(entry_ids)}); "
+            "pick one with --config-entry-id"
+        )
+    return entry_ids[0] if entry_ids else None
+
+
 def _extract_entity_entries(response: Any) -> Iterable[dict[str, Any]]:
     """Normalise the entity registry response shape."""
 
@@ -382,15 +399,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Long-lived access token with admin permissions (defaults to HA_TOKEN env)",
     )
     parser.add_argument(
-        "--device-host",
-        required=True,
-        help="Host/IP used in the Webasto Next Modbus config entry",
-    )
-    parser.add_argument(
-        "--unit-id",
-        type=int,
-        default=255,
-        help="Unit ID of the wallbox (default: %(default)s)",
+        "--config-entry-id",
+        default=None,
+        help=(
+            "Config entry of the wallbox to test (Settings → Devices & services → "
+            "the entry's ⋮ menu). Only needed when several wallboxes are configured."
+        ),
     )
     parser.add_argument(
         "--timeout",
@@ -440,8 +454,7 @@ def main(argv: list[str] | None = None) -> int:
 
     tester = IntegrationSmokeTest(
         api,
-        host=args.device_host,
-        unit_id=args.unit_id,
+        config_entry_id=args.config_entry_id,
         timeout=args.timeout,
         poll_interval=args.poll_interval,
         entity_prefix=args.entity_prefix,
