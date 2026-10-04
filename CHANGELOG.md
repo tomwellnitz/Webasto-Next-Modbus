@@ -1,6 +1,26 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] - Home Assistant's shared Modbus connection
+
+### Upgrade notes
+
+- **Requires Home Assistant 2026.9 or newer.** HACS offers 2.0.0 only from that version on; older installations stay on 1.4.0.
+- No reconfiguration is needed: config entries, devices, entity IDs, history and automations stay as they are.
+
+### Changed
+
+- **The Modbus connection now comes from Home Assistant's `modbus` integration** (`async_get_unit`, backed by `modbus-connection` / tmodbus) instead of a pymodbus client of our own. Home Assistant owns the connection: it reconnects by itself, and anything in Home Assistant that talks to the same wallbox through it shares its single Modbus TCP slot instead of competing for it.
+- **The integration no longer installs pymodbus.** `manifest.json` has no requirements left, so a Home Assistant release that bumps pymodbus (as 2026.7 did, see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88)) can no longer block it from loading.
+- **Reconfigure tests the new host, port and unit ID before saving them** and shows *cannot connect* (keeping what you typed) instead of saving settings that then fail on the reload. This was not possible before because the running entry held the wallbox's only Modbus TCP slot.
+- A timed-out Modbus request drops the connection, so the next attempt does not wait on a dead peer. Each request asks for a 5 s timeout where modbus-connection supports it (4.11 or newer); Home Assistant 2026.9 ships 4.10, whose own 10 s default applies. Either way an operation, retries included, stays within 30 s.
+- `integration_type` is now `device` (one config entry per wallbox).
+- **Enable debug logging** on the integration's page now also logs the Modbus connection (`modbus_connection`, `tmodbus`); `docs/support.md` lists the loggers for `configuration.yaml`.
+
+### Development
+
+- Tests run Home Assistant's real shared connection against the virtual wallbox TCP simulator (`tests/test_shared_connection.py`); transport tests use `modbus_connection.mock.MockModbusConnection` or a scripted unit.
+- The dev group pins `modbus-connection[tmodbus]` / `tmodbus` to what Home Assistant's `modbus` integration requires in the HA version the tests run against. pymodbus is only left in the dev group for the simulator.
+- The weekly upstream check installs the requirements of Home Assistant's `modbus` integration and checks that `async_get_unit`, `async_get_temporary_unit` and the `ModbusUnit` methods the bridge uses still exist.
 
 ## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST
 

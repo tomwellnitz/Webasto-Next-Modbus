@@ -1,12 +1,21 @@
-"""Transport-level tests for the Modbus bridge (connections, retries, life bit)."""
+"""Transport-level tests for the Modbus bridge (retries, close, life bit)."""
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
-from typing import Any, ClassVar
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import Any
 
 import pytest
+from modbus_connection import (
+    AcknowledgeError,
+    IllegalDataAddressError,
+    IllegalFunctionError,
+    ModbusConnectionError,
+    ModbusTcpParams,
+    ModbusTimeoutError,
+    ServerDeviceBusyError,
+)
 
 from custom_components.webasto_next_modbus import hub as hub_module
 from custom_components.webasto_next_modbus.const import RegisterDefinition, get_register
@@ -15,8 +24,10 @@ from custom_components.webasto_next_modbus.hub import (
     LIFE_BIT_MAX_INTERVAL,
     LIFE_BIT_MIN_INTERVAL,
     READ_ATTEMPTS,
+    REQUEST_TIMEOUT,
     WRITE_ATTEMPTS,
     ModbusBridge,
+    WebastoModbusDeviceError,
     WebastoModbusError,
     life_bit_interval,
 )
@@ -41,115 +52,120 @@ OPTIONAL = RegisterDefinition(
     optional=True,
 )
 
-
-class FakeModbusError(Exception):
-    """Stands in for pymodbus.exceptions.ModbusException."""
+Behaviour = Callable[[str, int, int], Awaitable[list[int] | None]]
 
 
-class _Ok:
-    def __init__(self, count: int = 1) -> None:
-        self.registers = [1] * count
+class ScriptedUnit:
+    """Fake ``ModbusUnit`` recording every request; behaviour set per test."""
 
-    def isError(self) -> bool:
-        return False
+    def __init__(self, behaviour: Behaviour | None = None) -> None:
+        self.requests: list[tuple[str, int, int]] = []
+        self.disconnects = 0
+        self.timeout: float | None = None
+        self.behaviour = behaviour
 
+    def require_timeout(self, seconds: float | None) -> None:
+        self.timeout = seconds
 
-class _Err:
-    def __init__(self, code: int) -> None:
-        self.exception_code = code
+    async def _run(self, kind: str, address: int, count_or_value: int) -> list[int] | None:
+        self.requests.append((kind, address, count_or_value))
+        if self.behaviour is not None:
+            return await self.behaviour(kind, address, count_or_value)
+        return [1] * count_or_value if kind != "write" else None
 
-    def isError(self) -> bool:
-        return True
+    async def read_holding_registers(self, address: int, count: int) -> list[int]:
+        result = await self._run("holding", address, count)
+        assert result is not None
+        return result
 
+    async def read_input_registers(self, address: int, count: int) -> list[int]:
+        result = await self._run("input", address, count)
+        assert result is not None
+        return result
 
-class ScriptedClient:
-    """Fake pymodbus client recording its lifecycle; behaviour set per test."""
+    async def write_register(self, address: int, value: int) -> None:
+        await self._run("write", address, value)
 
-    instances: ClassVar[list[ScriptedClient]] = []
-    behaviour: Any = None
-    kwargs_seen: ClassVar[list[dict[str, Any]]] = []
-
-    def __init__(self, host: str, **kwargs: Any) -> None:
-        self.connected = False
-        self.closed = False
-        type(self).instances.append(self)
-        type(self).kwargs_seen.append(kwargs)
-
-    async def connect(self) -> bool:
-        self.connected = True
-        return True
-
-    def close(self) -> None:
-        self.connected = False
-        self.closed = True
-
-    async def read_holding_registers(self, address: int, count: int, **_kw: Any) -> Any:
-        return await type(self).behaviour(self, address, count)
-
-    async def read_input_registers(self, address: int, count: int, **_kw: Any) -> Any:
-        return await type(self).behaviour(self, address, count)
-
-    async def write_register(self, address: int, value: int, **_kw: Any) -> Any:
-        return await type(self).behaviour(self, address, 1)
+    async def disconnect(self) -> None:
+        self.disconnects += 1
 
 
 @pytest.fixture(autouse=True)
-def scripted_client(monkeypatch: pytest.MonkeyPatch) -> type[ScriptedClient]:
-    ScriptedClient.instances = []
-    ScriptedClient.kwargs_seen = []
-
-    async def _ok(_client: ScriptedClient, _address: int, count: int) -> Any:
-        return _Ok(count)
-
-    ScriptedClient.behaviour = _ok
-    monkeypatch.setattr(hub_module, "_ensure_pymodbus", lambda: (ScriptedClient, FakeModbusError))
+def _no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hub_module, "RETRY_BACKOFF", 0)
-    return ScriptedClient
 
 
-def _bridge(*registers: RegisterDefinition) -> ModbusBridge:
-    return ModbusBridge("wallbox", 502, 255, read_timeout=0.5, registers=registers or (CORE,))
+def _bridge(unit: Any, *registers: RegisterDefinition) -> ModbusBridge:
+    return ModbusBridge(unit, host="wallbox", port=502, unit_id=255, registers=registers or (CORE,))
 
 
-async def test_pymodbus_reconnect_and_retries_are_disabled() -> None:
-    """The bridge is the only retry/reconnect layer."""
+def _raising(error: Exception) -> Behaviour:
+    async def _behaviour(_kind: str, _address: int, _count: int) -> list[int] | None:
+        raise error
 
-    bridge = _bridge()
-    await bridge.async_connect()
-
-    assert ScriptedClient.kwargs_seen[0]["reconnect_delay"] == 0
-    assert ScriptedClient.kwargs_seen[0]["retries"] == 0
-    await bridge.async_close()
+    return _behaviour
 
 
-async def test_failed_request_closes_its_client() -> None:
-    """Every client that hit a transport error is closed, none is left connected."""
+async def test_bridge_asks_for_its_request_timeout() -> None:
+    unit = ScriptedUnit()
+    _bridge(unit)
 
-    async def _broken(_client: ScriptedClient, _address: int, _count: int) -> Any:
-        raise FakeModbusError("connection reset")
+    assert unit.timeout == REQUEST_TIMEOUT
 
-    ScriptedClient.behaviour = _broken
-    bridge = _bridge()
 
-    with pytest.raises(WebastoModbusError):
+async def test_bridge_works_without_require_timeout() -> None:
+    """modbus-connection < 4.11 (HA 2026.9) has no ``require_timeout``."""
+
+    class _OldUnit(ScriptedUnit):
+        require_timeout = None  # type: ignore[assignment]
+
+    bridge = _bridge(_OldUnit())
+
+    assert await bridge.async_read_register(CORE) == 1
+
+
+async def test_transport_errors_are_retried() -> None:
+    unit = ScriptedUnit(_raising(ModbusConnectionError("connection refused")))
+    bridge = _bridge(unit)
+
+    with pytest.raises(WebastoModbusError, match="connection refused"):
         await bridge.async_read_register(CORE)
 
-    assert len(ScriptedClient.instances) == READ_ATTEMPTS
-    assert all(client.closed for client in ScriptedClient.instances)
-    assert not any(client.connected for client in ScriptedClient.instances)
+    assert len(unit.requests) == READ_ATTEMPTS
 
 
 async def test_write_uses_fewer_attempts_than_read() -> None:
-    async def _broken(_client: ScriptedClient, _address: int, _count: int) -> Any:
-        raise FakeModbusError("timeout")
-
-    ScriptedClient.behaviour = _broken
-    bridge = _bridge()
+    unit = ScriptedUnit(_raising(ModbusConnectionError("connection lost")))
+    bridge = _bridge(unit)
 
     with pytest.raises(WebastoModbusError):
         await bridge.async_write_register(get_register("set_current_a"), 10)
 
-    assert len(ScriptedClient.instances) == WRITE_ATTEMPTS
+    assert len(unit.requests) == WRITE_ATTEMPTS
+
+
+async def test_device_exception_is_not_retried() -> None:
+    """The wallbox answered and refused: retrying won't change the answer."""
+
+    unit = ScriptedUnit(_raising(IllegalDataAddressError(2)))
+    bridge = _bridge(unit)
+
+    with pytest.raises(WebastoModbusDeviceError, match="Illegal Data Address"):
+        await bridge.async_read_register(CORE)
+
+    assert len(unit.requests) == 1
+
+
+async def test_timeout_drops_the_link() -> None:
+    """A dead peer gets a fresh link on the next attempt instead of more waiting."""
+
+    unit = ScriptedUnit(_raising(ModbusTimeoutError("no response")))
+    bridge = _bridge(unit)
+
+    with pytest.raises(WebastoModbusError, match="timed out"):
+        await bridge.async_read_register(CORE)
+
+    assert unit.disconnects == READ_ATTEMPTS
 
 
 async def test_operation_has_a_total_time_budget(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,28 +173,28 @@ async def test_operation_has_a_total_time_budget(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(hub_module, "OPERATION_TIMEOUT", 0.2)
 
-    async def _hang(_client: ScriptedClient, _address: int, _count: int) -> Any:
+    async def _hang(_kind: str, _address: int, _count: int) -> list[int] | None:
         await asyncio.sleep(3600)
+        return None
 
-    ScriptedClient.behaviour = _hang
-    bridge = _bridge()
+    unit = ScriptedUnit(_hang)
+    bridge = _bridge(unit)
 
     async with asyncio.timeout(5):
         with pytest.raises(WebastoModbusError, match="timed out"):
             await bridge.async_read_register(CORE)
+    # The request that was still waiting when the budget ran out never saw
+    # its own timeout, so the budget drops the link itself.
+    assert unit.disconnects == 1
 
 
 async def test_cancellation_is_not_swallowed() -> None:
-    """pymodbus turns CancelledError into ModbusIOException; the bridge undoes that."""
+    async def _hang(_kind: str, _address: int, _count: int) -> list[int] | None:
+        await asyncio.sleep(3600)
+        return None
 
-    async def _hang_like_pymodbus(_client: ScriptedClient, _address: int, _count: int) -> Any:
-        try:
-            await asyncio.sleep(3600)
-        except asyncio.CancelledError as err:
-            raise FakeModbusError("Request cancelled outside library.") from err
-
-    ScriptedClient.behaviour = _hang_like_pymodbus
-    bridge = _bridge()
+    unit = ScriptedUnit(_hang)
+    bridge = _bridge(unit)
 
     task = asyncio.create_task(bridge.async_read_register(CORE))
     await asyncio.sleep(0.05)
@@ -186,25 +202,20 @@ async def test_cancellation_is_not_swallowed() -> None:
     async with asyncio.timeout(2):
         with pytest.raises(asyncio.CancelledError):
             await task
-    assert len(ScriptedClient.instances) == 1
+    assert len(unit.requests) == 1
 
 
-async def test_forced_close_ends_the_running_operation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Closing while a request holds the lock gives a clean error and no reconnect."""
+async def test_close_is_final_even_for_a_running_operation() -> None:
+    """After close (the entry releases the shared connection) nothing is sent."""
 
-    monkeypatch.setattr(hub_module, "CLOSE_LOCK_TIMEOUT", 0.05)
     release = asyncio.Event()
 
-    async def _slow_then_closed(client: ScriptedClient, _address: int, _count: int) -> Any:
+    async def _slow_then_lost(_kind: str, _address: int, _count: int) -> list[int] | None:
         await release.wait()
-        if client.closed:
-            raise FakeModbusError("client closed")
-        return _Ok()
+        raise ModbusConnectionError("connection is closed")
 
-    ScriptedClient.behaviour = _slow_then_closed
-    bridge = _bridge()
+    unit = ScriptedUnit(_slow_then_lost)
+    bridge = _bridge(unit)
     task = asyncio.create_task(bridge.async_read_register(CORE))
     await asyncio.sleep(0.01)
 
@@ -213,53 +224,62 @@ async def test_forced_close_ends_the_running_operation(
 
     with pytest.raises(WebastoModbusError):
         await task
-    # The retry loop must not have opened a new connection after the close.
-    assert len(ScriptedClient.instances) == 1
+    # The retry loop must not send another request after the close.
+    assert len(unit.requests) == 1
     with pytest.raises(WebastoModbusError, match="closed"):
         await bridge.async_read_register(CORE)
-    assert len(ScriptedClient.instances) == 1
+    assert len(unit.requests) == 1
+
+
+async def test_core_block_error_means_wallbox_not_responding() -> None:
+    unit = ScriptedUnit(_raising(ServerDeviceBusyError(6)))
+    bridge = _bridge(unit, CORE, OPTIONAL)
+
+    with pytest.raises(WebastoModbusDeviceError, match="not responding"):
+        await bridge.async_read_data()
+
+    # The remaining blocks are skipped.
+    assert unit.requests == [("holding", CORE.address, CORE.count)]
+
+
+@pytest.mark.parametrize(
+    ("error", "pruned"),
+    [
+        (IllegalFunctionError(1), True),
+        (IllegalDataAddressError(2), True),
+        (AcknowledgeError(5), False),
+        (ServerDeviceBusyError(6), False),
+    ],
+)
+async def test_optional_block_pruned_only_when_unsupported(error: Exception, pruned: bool) -> None:
+    async def _optional_fails(_kind: str, address: int, count: int) -> list[int] | None:
+        if address == OPTIONAL.address:
+            raise error
+        return [1] * count
+
+    bridge = _bridge(ScriptedUnit(_optional_fails), CORE, OPTIONAL)
+
+    data = await bridge.async_read_data()
+
+    assert data[CORE.key] == 1
+    assert data[OPTIONAL.key] is None
+    remaining = [request.start_address for request in bridge._read_plan]
+    assert (OPTIONAL.address in remaining) is not pruned
 
 
 async def test_life_bit_write_happens_even_if_reads_fail() -> None:
     """A failed comTimeout read must not gate the keep-alive write."""
 
-    writes: list[int] = []
+    async def _reads_fail(kind: str, address: int, _count: int) -> list[int] | None:
+        if kind == "write":
+            return None
+        raise ModbusTimeoutError(f"read @{address} timed out")
 
-    async def _reads_fail(_client: ScriptedClient, address: int, _count: int) -> Any:
-        raise FakeModbusError(f"read @{address} timed out")
+    unit = ScriptedUnit(_reads_fail)
+    interval = await _bridge(unit)._async_life_bit_cycle()
 
-    async def _write(self: ScriptedClient, address: int, value: int, **_kw: Any) -> Any:
-        writes.append(address)
-        return _Ok()
-
-    ScriptedClient.behaviour = _reads_fail
-    original_write = ScriptedClient.write_register
-    ScriptedClient.write_register = _write  # type: ignore[method-assign]
-    try:
-        bridge = _bridge()
-        interval = await bridge._async_life_bit_cycle()
-    finally:
-        ScriptedClient.write_register = original_write  # type: ignore[method-assign]
-
-    assert writes == [6000]
+    assert [request for request in unit.requests if request[0] == "write"] == [("write", 6000, 1)]
     assert interval == LIFE_BIT_DEFAULT_COM_TIMEOUT / 2
-    await bridge.async_close()
-
-
-@pytest.mark.parametrize(("code", "pruned"), [(1, True), (2, True), (5, False), (6, False)])
-async def test_optional_block_pruned_only_when_unsupported(code: int, pruned: bool) -> None:
-    async def _optional_fails(_client: ScriptedClient, address: int, count: int) -> Any:
-        return _Err(code) if address == OPTIONAL.address else _Ok(count)
-
-    ScriptedClient.behaviour = _optional_fails
-    bridge = _bridge(CORE, OPTIONAL)
-
-    data = await bridge.async_read_data()
-
-    assert data[OPTIONAL.key] is None
-    remaining = [request.start_address for request in bridge._read_plan]
-    assert (OPTIONAL.address in remaining) is not pruned
-    await bridge.async_close()
 
 
 @pytest.mark.parametrize(
@@ -280,40 +300,23 @@ def test_life_bit_interval_is_half_the_com_timeout(com_timeout: object, expected
 
 
 async def test_life_bit_cycle_writes_one_and_returns_interval() -> None:
-    reads: list[int] = []
-    writes: list[tuple[int, int]] = []
+    async def _wallbox(kind: str, address: int, count: int) -> list[int] | None:
+        if kind == "write":
+            return None
+        return {2002: [20]}.get(address, [1] * count)
 
-    async def _wallbox(client: ScriptedClient, address: int, count: int) -> Any:
-        reads.append(address)
-        result = _Ok(count)
-        if address == 2002:
-            result.registers = [20]
-        return result
-
-    async def _write(self: ScriptedClient, address: int, value: int, **_kw: Any) -> Any:
-        writes.append((address, value))
-        return _Ok()
-
-    ScriptedClient.behaviour = _wallbox
-    original_write = ScriptedClient.write_register
-    ScriptedClient.write_register = _write  # type: ignore[method-assign]
-    try:
-        bridge = _bridge()
-        interval = await bridge._async_life_bit_cycle()
-    finally:
-        ScriptedClient.write_register = original_write  # type: ignore[method-assign]
+    unit = ScriptedUnit(_wallbox)
+    interval = await _bridge(unit)._async_life_bit_cycle()
 
     # Only comTimeout is read. The life bit itself is not read back: the
     # wallbox clears it about comTimeout/2 after the write, so right before
     # the next write it still holds our 1.
-    assert reads == [2002]
-    assert writes == [(6000, 1)]
+    assert unit.requests == [("holding", 2002, 1), ("write", 6000, 1)]
     assert interval == 10.0
-    await bridge.async_close()
 
 
 async def test_life_bit_backoff_ends_when_wallbox_reachable() -> None:
-    bridge = _bridge()
+    bridge = _bridge(ScriptedUnit())
 
     waiter = asyncio.create_task(bridge._async_wait_reachable(3600))
     await asyncio.sleep(0)
@@ -324,7 +327,7 @@ async def test_life_bit_backoff_ends_when_wallbox_reachable() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Real pymodbus against a TCP server that accepts but never answers
+# Real modbus-connection (tmodbus) against a server that never answers
 # --------------------------------------------------------------------------- #
 
 
@@ -350,32 +353,25 @@ async def silent_server() -> AsyncGenerator[tuple[int, list[asyncio.StreamWriter
 
 
 @pytest.mark.enable_socket
-async def test_real_pymodbus_does_not_leak_connections(
+async def test_real_connection_recovers_from_a_silent_peer(
     socket_enabled: None,
-    monkeypatch: pytest.MonkeyPatch,
     silent_server: tuple[int, list[asyncio.StreamWriter]],
 ) -> None:
-    """One failed read must not leave sockets or reconnect tasks behind."""
+    """Timed-out requests drop their link, so no half-dead socket is kept open."""
 
-    pymodbus_client = pytest.importorskip("pymodbus.client")
-    pymodbus_exceptions = pytest.importorskip("pymodbus.exceptions")
-    monkeypatch.setattr(
-        hub_module,
-        "_ensure_pymodbus",
-        lambda: (pymodbus_client.AsyncModbusTcpClient, pymodbus_exceptions.ModbusException),
-    )
+    from modbus_connection.tmodbus import ModbusConnection
+
     port, connections = silent_server
-    bridge = ModbusBridge("127.0.0.1", port, 255, read_timeout=0.2, registers=(CORE,))
+    connection = ModbusConnection(ModbusTcpParams(host="127.0.0.1", port=port), timeout=0.2)
+    bridge = ModbusBridge(
+        connection.for_unit(255), host="127.0.0.1", port=port, unit_id=255, registers=(CORE,)
+    )
 
-    with pytest.raises(WebastoModbusError):
+    with pytest.raises(WebastoModbusError, match="timed out"):
         await bridge.async_read_register(CORE)
-    await bridge.async_close()
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(0.1)
 
-    open_connections = [w for w in connections if not w.is_closing()]
-    # The server sees the client's FIN as EOF and closes its side.
-    assert open_connections == []
-    reconnect_tasks = [
-        task for task in asyncio.all_tasks() if "reconnect" in (task.get_name() or "")
-    ]
-    assert reconnect_tasks == []
+    # Each attempt used its own link, and every timed-out one was dropped.
+    assert len(connections) == READ_ATTEMPTS
+    assert [writer for writer in connections if not writer.is_closing()] == []
+    await connection.close()

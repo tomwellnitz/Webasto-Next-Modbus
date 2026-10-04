@@ -8,7 +8,7 @@ This document provides context and guidelines for AI agents working on this code
 
 - **Domain**: `webasto_next_modbus`
 - **Communication**:
-  - **Primary**: Modbus TCP (using `pymodbus`) - real-time charging data
+  - **Primary**: Modbus TCP over Home Assistant's shared Modbus connection (`homeassistant.components.modbus.async_get_unit`, backed by `modbus-connection` / tmodbus) - real-time charging data
   - **Optional**: REST API (using `aiohttp`) - configuration & diagnostics
 - **IoT Class**: Local Polling
 - **Config Flow**: UI-based configuration (host / port / unit ID entered manually — the wallboxes do not advertise themselves via mDNS/zeroconf), plus reconfigure, reauth and options flows.
@@ -34,7 +34,7 @@ This document provides context and guidelines for AI agents working on this code
 │   ├── config_flow.py                      # Config & Options flow (UI)
 │   ├── const.py                            # Constants & Register definitions
 │   ├── coordinator.py                      # DataUpdateCoordinator (polling)
-│   ├── hub.py                              # Modbus communication logic
+│   ├── hub.py                              # Modbus register access (shared HA connection)
 │   ├── rest_client.py                      # REST API client (optional features)
 │   ├── entity.py                           # Base entity class
 │   └── ...                                 # Platform files (sensor, number, button)
@@ -85,7 +85,7 @@ This script executes:
 ### 2. Async/Await
 
 - This integration is fully async.
-- Blocking I/O (like Modbus calls) must be run in the executor or use async libraries (`pymodbus` async client is used here).
+- Blocking I/O (like Modbus calls) must be run in the executor or use async libraries (the async `modbus_connection.ModbusUnit` is used here).
 - Use `asyncio.sleep` instead of `time.sleep`.
 
 ### 3. Error Handling
@@ -105,15 +105,16 @@ This script executes:
 
 ### 5. Dependency Pinning
 
-- `manifest.json` `requirements` lists **only** packages that Home Assistant core does not already provide — currently just `pymodbus`. `aiohttp` is part of HA core, so it must **not** be listed in the manifest (a `>=` requirement there can interfere with pip resolving HA core's own pin). It still belongs in `pyproject.toml` `[project].dependencies` because the test/dev environment imports it directly (`rest_client.py`).
-- Where a package appears in **both** `pyproject.toml` and `manifest.json` (i.e. `pymodbus`), the version specifiers must stay in sync — HACS / hassfest validation flags drift. Update both in the same commit.
-- `pymodbus` runtime constraint (both `manifest.json` and `pyproject.toml [project].dependencies`) is `>=3.11.2` — **no upper bound**. Home Assistant core dictates the installed pymodbus version via its bundled `modbus` integration, and every fixed ceiling we set eventually blocks the integration at load time when HA-Core moves past it (that is exactly what [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88) was: HA 2026.7 shipped `pymodbus==3.13.1`, our `<3.12` pin refused to resolve, HA refused to load us). Our production code is defensive against pymodbus API churn (`_invoke_with_unit` walks the `device_id` / `unit` / `slave` kwarg rename; no removed 3.12+ APIs are touched by the integration itself), so removing the ceiling is safer than eventually blocking every user again on the next HA release.
-- The **dev group** in `pyproject.toml` still pins `pymodbus<3.12` because `virtual_wallbox/server.py` targets the 3.11 datastore API (`ModbusDeviceContext.store`/`decode`, dropped in 3.12+ in favour of `SimData`/`SimDevice`). Follow-up: port `virtual_wallbox` to the new API, then drop the dev pin so tests run against the same pymodbus as production.
-- `.github/workflows/upstream-compat.yml` runs weekly (and on demand) against the latest Home Assistant and pymodbus releases: verifies the manifest requirement is still satisfied by what HA-Core resolves, smoke-imports the production modules, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration — the point is to catch it ~1-2 weeks before end users would.
+- The Modbus connection comes from Home Assistant core's `modbus` integration: `manifest.json` declares `"dependencies": ["modbus"]` and `"requirements": []`. HA's `modbus` integration installs `modbus-connection` (tmodbus backend) and owns the connection: entries that talk to the same wallbox share it, it reconnects by itself, and it is released when the last config entry holding a unit unloads. Get units with `async_get_unit(hass, entry, ModbusTcpParams(...), unit_id)` in setup and `async_get_temporary_unit(...)` in config flows; never open a Modbus client of our own (the wallbox has a single Modbus TCP slot), and never close the connection from the integration.
+- `manifest.json` `requirements` lists **only** packages that Home Assistant core does not already provide — currently none. `aiohttp` and `modbus-connection` come with HA core, so they must **not** be listed (a `>=` requirement there can interfere with pip resolving HA core's own pin). They still belong in `pyproject.toml` `[project].dependencies` because the integration imports them.
+- Minimum Home Assistant is **2026.9.0** (first release with `async_get_unit`). The per-request timeout the bridge asks for (`ModbusUnit.require_timeout`) only exists from modbus-connection 4.11 on; the bridge calls it when available and is otherwise bounded by its own 30 s operation budget.
+- The **dev group** pins `modbus-connection[tmodbus]` / `tmodbus` to exactly what HA's `modbus` manifest requires in the HA version `pytest-homeassistant-custom-component` pins, so the tests run production's connection code. Bump them together with phcc.
+- The integration no longer uses `pymodbus` (no more version pin to break on an HA upgrade, see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88)). Only the dev group still pins `pymodbus<3.12`, for the `virtual_wallbox` TCP simulator (`virtual_wallbox/server.py`, 3.11 datastore API); deptry ignores it as a dev tool. Follow-up: port the simulator server to the current pymodbus API (or a tmodbus server).
+- `.github/workflows/upstream-compat.yml` runs weekly (and on demand) against the latest Home Assistant: installs the requirements of its `modbus` integration, checks that `async_get_unit` / `async_get_temporary_unit` and the `ModbusUnit` methods we use still exist, smoke-imports every production module, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration — the point is to catch it ~1-2 weeks before end users would.
 
 ### 6. Dependabot & auto-merge
 
-- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, grouped per ecosystem, monthly, a 7-day `cooldown`, and `pymodbus` major/minor bumps ignored. `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against.
+- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, grouped per ecosystem, monthly, a 7-day `cooldown`, and `pymodbus` major/minor bumps ignored (the simulator needs 3.11). `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against.
 - `.github/workflows/dependabot-auto-merge.yml` enables GitHub auto-merge for **patch + minor** Dependabot PRs; **major** bumps are left for manual review. For grouped PRs the highest semver bump in the group decides.
 - **Two repository settings are required for auto-merge to be safe**, otherwise GitHub would merge without waiting for CI:
   1. Settings → General → **Allow auto-merge** (enabled).
@@ -127,15 +128,15 @@ This script executes:
 ## 🧪 Testing Strategy
 
 - **Unit Tests**: Cover all config flows, sensor parsing, and coordinator logic.
-- **Integration tests in a real Home Assistant** (`tests/test_init.py`, `tests/test_rest.py`, `tests/test_snapshots.py`): opt in with `pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")`, use the `wallbox` / `config_entry` fixtures from `tests/conftest.py`, and mock REST with `aioclient_mock`.
+- **Integration tests in a real Home Assistant** (`tests/test_init.py`, `tests/test_rest.py`, `tests/test_snapshots.py`): opt in with `pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus")`, use the `wallbox` / `config_entry` fixtures from `tests/conftest.py`, and mock REST with `aioclient_mock`.
 - **Snapshots**: `tests/test_snapshots.py` records every entity, the device and the diagnostics in `tests/snapshots/`. Regenerate with `--snapshot-update` after intended changes and review the diff.
-- **Mocking**: Use `unittest.mock` to mock the `ModbusBridge`; patch `hub._ensure_pymodbus` (the `fake_pymodbus` fixture) to route the client to the virtual wallbox. There are no global module stubs: tests import the real `pymodbus` and `voluptuous`.
+- **Mocking**: The `fake_modbus` fixture replaces `async_get_unit` / `async_get_temporary_unit` with in-process `VirtualWallboxUnit`s; bridge unit tests use `modbus_connection.mock.MockModbusConnection` or a scripted unit. `tests/test_shared_connection.py` runs a real entry on HA's shared connection against the TCP simulator. There are no global module stubs.
 - **Virtual Wallbox**: The `virtual_wallbox` module provides a fake Modbus server for end-to-end testing or local development without hardware.
 
 ## 🔑 Key Files to Know
 
 - **`custom_components/webasto_next_modbus/const.py`**: Contains the `RegisterDefinition` dataclasses and all register addresses. **Edit this file to add new sensors.**
-- **`custom_components/webasto_next_modbus/hub.py`**: Handles the low-level Modbus TCP connection, reading/writing registers, and the background Life Bit loop.
+- **`custom_components/webasto_next_modbus/hub.py`**: `ModbusBridge` on a `ModbusUnit` from Home Assistant's shared Modbus connection (`async_get_unit`): register map, decoding, bounded retries, reading/writing registers, and the background Life Bit loop. It never opens or closes the connection itself.
 - **`custom_components/webasto_next_modbus/rest_client.py`**: Async REST API client for optional features (LED brightness, firmware info, diagnostics). Uses JWT authentication.
 - **`custom_components/webasto_next_modbus/coordinator.py`**: Modbus `DataUpdateCoordinator`: polling, device triggers, the connection repair issue.
 - **`custom_components/webasto_next_modbus/rest_coordinator.py`**: Separate `DataUpdateCoordinator` for the optional REST API (60 s). Raises `ConfigEntryAuthFailed` on rejected credentials (reauth, polling stops) and pushes firmware/MACs to the device registry. REST entities subclass `WebastoRestEntity` on this coordinator; it exists whenever REST is *configured*, reachable or not.

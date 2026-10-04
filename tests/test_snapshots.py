@@ -38,7 +38,7 @@ from custom_components.webasto_next_modbus.const import (
 )
 from tests.conftest import HA_HOST, make_config_entry
 
-pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus", "wallbox")
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus", "wallbox")
 
 ENTRY_ID = "01JWEBASTOSNAPSHOTENTRY000"
 BASE = f"https://{HA_HOST}/api"

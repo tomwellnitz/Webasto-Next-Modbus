@@ -1,20 +1,16 @@
 [project]
 name = "webasto-next-modbus"
-version = "1.4.0"
+version = "2.0.0"
 description = "Home Assistant integration for Webasto Next / Ampure Unite wallboxes via Modbus TCP and REST API"
 authors = [{ name = "Webasto Next maintainers" }]
 readme = "README.md"
 requires-python = ">=3.14.2"
 dependencies = [
-    # No upper bound. Home Assistant core dictates the installed pymodbus
-    # version via its bundled `modbus` integration; a fixed ceiling here
-    # automatically blocks the integration whenever HA-Core moves past it
-    # (see #88 for the HA 2026.7 / pymodbus 3.13.1 incident). The dev
-    # group below still pins pymodbus<3.12 for the virtual_wallbox
-    # simulator; that pin only affects the test environment. Compat with
-    # future upstream bumps is caught early by
-    # .github/workflows/upstream-compat.yml.
-    "pymodbus>=3.11.2",
+    # The Modbus connection comes from Home Assistant core's `modbus`
+    # integration (manifest `dependencies: ["modbus"]`), which installs
+    # modbus-connection with its tmodbus backend; manifest.json therefore has
+    # no requirements. Listed here because the integration imports it.
+    "modbus-connection>=4.10.0",
     "aiohttp>=3.13.5",
 ]
 
@@ -97,22 +93,26 @@ dev = [
     "colorlog>=6.10.1",
     "coverage>=7.10.6",
     "deptry>=0.24.0",
-    "homeassistant>=2026.5.1",
+    "homeassistant>=2026.9.0",
     "mdformat>=0.7.19",
+    # Pinned to what Home Assistant's `modbus` integration requires in the HA
+    # version pytest-homeassistant-custom-component pins (HA 2026.9.4), so
+    # the tests run the same connection code as production. Bump together
+    # with phcc. pytest-homeassistant-custom-component does not install
+    # integration requirements, hence the explicit entries.
+    "modbus-connection[tmodbus]==4.10.0",
     "mypy>=1.8",
     "pycares<6.0.0",
-    # Keep pymodbus on 3.11.x in the dev/test environment while
-    # virtual_wallbox/server.py still targets the 3.11 datastore API
-    # (ModbusDeviceContext.store / .decode were dropped in 3.12+, replaced
-    # by SimData/SimDevice). Manifest + [project].dependencies allow the
-    # full 3.x range for production users on HA 2026.7 (pymodbus 3.13.1).
-    # Drop this pin once virtual_wallbox is ported to the new API.
+    # Only for the virtual_wallbox TCP simulator (virtual_wallbox/server.py),
+    # which still targets the pymodbus 3.11 datastore API; the integration
+    # itself no longer uses pymodbus.
     "pymodbus>=3.11.2,<3.12",
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.1.0",
     "pytest-homeassistant-custom-component==0.13.367",
     "ruff>=0.5",
+    "tmodbus==0.6.2",  # see modbus-connection above
     "voluptuous>=0.15.2",
     "vulture>=2.14",
     "yamllint>=1.37.1",
@@ -123,7 +123,9 @@ extend_exclude = ["scripts"]
 
 [tool.deptry.per_rule_ignores]
 DEP003 = ["custom_components"]
-DEP004 = ["homeassistant", "voluptuous"]
+# virtual_wallbox (a dev tool shipped in the same package) uses pymodbus for
+# its TCP simulator.
+DEP004 = ["homeassistant", "voluptuous", "pymodbus"]
 
 # Single codespell configuration, used by CI, scripts/check.sh and pre-commit.
 [tool.codespell]

@@ -11,9 +11,9 @@ This document captures architectural goals, the communication protocols (Modbus 
 
 ## Functional requirements
 
-- **Configuration flow** – Guided setup that collects host, port, unit ID, model (Next vs Unite), variant, and scan interval, validating connectivity inline. Optional REST API credentials.
+- **Configuration flow** – Guided setup that collects host, port, unit ID, model (Next vs Unite), variant, and scan interval, validating connectivity inline with a single read over a temporary unit (`async_get_temporary_unit`, which shares the connection of an entry already talking to that wallbox). Reconfigure tests new settings the same way before saving them. Optional REST API credentials.
 - **Reconfigure & reauth flows** – `async_step_reconfigure` allows changing host, port, unit ID and entry name in place (no remove-and-readd). `async_step_reauth` is started automatically when the wallbox rejects REST credentials (HTTP 401) to walk the user through entering new ones; the Modbus side keeps working throughout.
-- **Modbus communication** – Async TCP client (pymodbus) with request batching, retry/backoff, and deterministic reconnect behaviour. Modbus exception responses are distinguished from transport errors: an unsupported optional block is auto-detected and dropped from the read plan, while a required block raises a typed `WebastoModbusDeviceError`.
+- **Modbus communication** – A `ModbusUnit` on Home Assistant's shared Modbus connection (`async_get_unit`, modbus-connection with the tmodbus backend), with request batching and bounded retries on top. The connection is owned by HA's `modbus` integration: it reconnects by itself, serialises the requests of every integration talking to the same wallbox, and is released when the entry unloads. Modbus exception responses are distinguished from transport errors: an unsupported optional block is auto-detected and dropped from the read plan, while a required block raises a typed `WebastoModbusDeviceError`.
 - **REST API communication** – Optional async HTTPS client (aiohttp) sharing Home Assistant's `async_get_clientsession`, with JWT authentication, auto token refresh, retry-with-backoff for transient errors, and graceful degradation.
 - **Entities** – Sensors for live telemetry and metadata; numbers for writable settings; switches for free-charging and (Unite only) three-phase mode; buttons for manual keep-alive, session control, and (REST) restart; text for the free-charging tag ID; binary sensors for **Connected** (always-available connectivity) and **Charging** (`battery_charging` device class).
 - **Services** – Dedicated helpers (`set_current`, `set_failsafe`, `send_keepalive`, `start_session`, `stop_session`) for Modbus, plus REST API services (`set_led_brightness`, `set_free_charging`, `restart_wallbox`). Registered in `async_setup` so they exist before any config entry is set up.
@@ -91,9 +91,9 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 
 ## Software components
 
-- `__init__.py` – Integration setup/teardown, service registration in `async_setup` (action-setup rule), and coordinator bootstrap. Handles connection retries and starts the Life Bit loop.
+- `__init__.py` – Integration setup/teardown, service registration in `async_setup` (action-setup rule), and coordinator bootstrap. Gets the Modbus unit from Home Assistant's shared connection (`async_get_unit`, no I/O; an unreachable wallbox surfaces from the first refresh as `ConfigEntryNotReady`) and starts the Life Bit loop.
 - `const.py` – Constants, register descriptions (including the Unite-specific layout), and enum mappings. The integration version lives in `manifest.json` / `pyproject.toml`, not here.
-- `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
+- `hub.py` – `ModbusBridge` on a `ModbusUnit` from Home Assistant's shared connection: register map, decoding, bounded retries, read/write helpers and the background "Life Bit" loop.
 - `rest_client.py` – `RestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus; uses Home Assistant's shared aiohttp session.
 - `coordinator.py` – Modbus `DataUpdateCoordinator`: schedules read cycles, emits the dispatcher-based device triggers when relevant state changes are detected, and raises/clears the connection repair issue.
 - `rest_coordinator.py` – Separate `DataUpdateCoordinator` for the optional REST API, so the web interface never delays Modbus. Keeps the last good data when a poll fails, raises `ConfigEntryAuthFailed` on rejected credentials (reauth flow, polling stops), and pushes firmware/hardware versions and MACs to the device registry.
@@ -122,7 +122,7 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 ## Error handling
 
 - **Setup**: one connection attempt; on failure a translated `ConfigEntryNotReady` lets Home Assistant retry with its own backoff.
-- **Operation retries**: reads are attempted 3×, writes 2×, with a 30 s total budget per operation. pymodbus' own retries and auto-reconnect are disabled, and a client that hit a transport error is closed immediately so the wallbox's single Modbus TCP slot is never held by an orphaned socket. Cancellation (unload, timeouts) is propagated, not retried.
+- **Operation retries**: reads are attempted 3×, writes 2×, with a 30 s total budget per operation. A timed-out request drops the link, so the next attempt opens a fresh one instead of waiting on a dead peer. Modbus exception responses are not retried. After unload the bridge sends nothing, not even a retry of a request that was in flight. Cancellation (unload, timeouts) is propagated, not retried.
 - **Lasting outages**: after 3 failed polls a repair issue is raised; it is removed on the next successful poll.
 - **Communication errors**: Raise `UpdateFailed`, automatically retried by the coordinator on the next polling interval.
 - **Individual register errors**: Logged and surfaced as `None` without blocking the entire payload.
@@ -140,7 +140,7 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 ## Assumptions and open items
 
 - Defaults assume TCP port `502` and unit ID `255`; both are user-configurable during onboarding.
-- The wallbox accepts a **single** Modbus TCP client at a time; the integration owns that slot for the lifetime of the config entry. A booting wallbox or a stale socket from another client therefore manifests as transient connection errors that are retried automatically.
+- The wallbox accepts a **single** Modbus TCP client at a time. Inside Home Assistant, every user of the shared connection to the same host/port shares that slot (the config flow's test read included), and the connection holds it for the lifetime of the config entry. A booting wallbox or a stale socket from another client therefore manifests as transient connection errors that are retried automatically.
 - Registers a given firmware doesn't implement are handled automatically: optional blocks are dropped from the read plan after the first error response, and the corresponding entities become unavailable rather than spamming warnings.
 - The Unite three-phase switch (holding register `405`) is undocumented in the vendor Modbus spec and confirmed on firmware 3.187 ([#37](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/37)); on other Unite firmwares the behaviour is unverified.
 - The wallbox web interface uses a self-signed TLS certificate, so the REST client is built on `async_get_clientsession(hass, verify_ssl=False)`.
