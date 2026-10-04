@@ -25,7 +25,12 @@ CONF_REST_USERNAME: Final = "rest_username"
 CONF_REST_PASSWORD: Final = "rest_password"
 DEFAULT_REST_USERNAME: Final = "admin"
 REST_SCAN_INTERVAL: Final = 60  # REST API polling interval (seconds)
-REST_SETUP_RETRY_INTERVAL: Final = 300  # retry a failed REST connect this often (seconds)
+# The Next's `system` section (firmware, MACs, counters, LED brightness) is
+# slow to serve and rarely changes, so it is only re-read this often (and
+# right after a write).
+REST_SYSTEM_SECTION_INTERVAL: Final = 300  # seconds
+# Upper bound for one REST poll (all endpoints, including a login).
+REST_FETCH_TIMEOUT: Final = 45  # seconds
 
 # Webasto / Ampure Unite REST settings (served via the flat
 # `/api/configuration-fields/` endpoint; see issue #97). The LED dimming level

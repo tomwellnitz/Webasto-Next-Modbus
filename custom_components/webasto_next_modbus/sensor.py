@@ -14,11 +14,12 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, RegisterDefinition, get_sensor_registers
+from .const import CONF_UNIT_ID, MODEL_NEXT, RegisterDefinition, get_sensor_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
 from .rest_client import RestData
+from .rest_coordinator import WebastoRestCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,16 +35,21 @@ class RestSensorDefinition:
     unit: str | None = None
     entity_category: str | None = "diagnostic"
     translation_key: str | None = None
+    entity_registry_enabled_default: bool = True
 
 
 REST_SENSORS: list[RestSensorDefinition] = [
     RestSensorDefinition(
         key="comboard_firmware",
         value_fn=lambda d: d.comboard_sw_version,
+        # Also shown on the device page (pushed to the device registry).
+        entity_registry_enabled_default=False,
     ),
     RestSensorDefinition(
         key="powerboard_firmware",
         value_fn=lambda d: d.powerboard_sw_version,
+        # Also shown on the device page (pushed to the device registry).
+        entity_registry_enabled_default=False,
     ),
     RestSensorDefinition(
         key="plug_cycles",
@@ -81,7 +87,8 @@ REST_SENSORS: list[RestSensorDefinition] = [
     ),
     RestSensorDefinition(
         key="active_errors",
-        value_fn=lambda d: ", ".join(d.active_errors) if d.active_errors else "ok",
+        # None (not fetched yet) is unknown, an empty list means no errors.
+        value_fn=lambda d: None if d.active_errors is None else ", ".join(d.active_errors) or "ok",
         entity_category=None,
         translation_key="active_errors",
     ),
@@ -115,15 +122,17 @@ async def async_setup_entry(
         for definition in get_sensor_registers(runtime.model)
     ]
 
-    # Add REST sensors if REST API is enabled
-    if runtime.coordinator.rest_enabled:
+    # The diagnostic REST sensors only exist on the Next; the Unite's REST API
+    # has no equivalent fields.
+    if (rest := runtime.rest_coordinator) is not None and runtime.model == MODEL_NEXT:
         entities.extend(
             WebastoRestSensor(
-                runtime.coordinator,
+                rest,
                 host,
                 unit_id,
                 definition,
                 runtime.device_name,
+                runtime.coordinator.device_model_name,
             )
             for definition in REST_SENSORS
         )
@@ -229,13 +238,14 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         definition: RestSensorDefinition,
         device_name: str,
+        model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, definition.key, device_name)
+        super().__init__(coordinator, host, unit_id, definition.key, device_name, model_name)
         self._definition = definition
 
         if definition.device_class:
@@ -257,6 +267,7 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
                 pass
         if definition.translation_key:
             self._attr_translation_key = definition.translation_key
+        self._attr_entity_registry_enabled_default = definition.entity_registry_enabled_default
 
         self._update_value()
 
@@ -267,16 +278,13 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
 
     def _update_value(self) -> None:
         """Update the native value from REST data."""
-        rest_data = self.coordinator.rest_data
+        rest_data = self.rest_data
         if rest_data is None:
             self._attr_native_value = None
             return
 
         value = self._definition.value_fn(rest_data)
 
-        # Handle list values (e.g. active_errors)
         if isinstance(value, list):
-            self._attr_native_value = ", ".join(str(v) for v in value) if value else "ok"
-            return
-
+            value = ", ".join(str(v) for v in value) or "ok"
         self._attr_native_value = value

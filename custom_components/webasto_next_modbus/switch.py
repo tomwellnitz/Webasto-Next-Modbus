@@ -13,6 +13,8 @@ from .const import CONF_UNIT_ID, DOMAIN, RegisterDefinition, get_switch_register
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
+from .rest_client import RestClientError
+from .rest_coordinator import WebastoRestCoordinator
 
 PARALLEL_UPDATES = 0
 
@@ -40,14 +42,15 @@ async def async_setup_entry(
         for register in get_switch_registers(runtime.model)
     ]
 
-    # Add Free Charging switch if REST API is enabled
-    if runtime.coordinator.rest_enabled:
+    # Free charging is a REST setting (Next and Unite).
+    if (rest := runtime.rest_coordinator) is not None:
         entities.append(
             WebastoFreeChargingSwitch(
-                runtime.coordinator,
+                rest,
                 host,
                 unit_id,
                 runtime.device_name,
+                runtime.coordinator.device_model_name,
             )
         )
 
@@ -139,21 +142,21 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         device_name: str,
+        model_name: str,
     ) -> None:
         """Initialize the Free Charging switch."""
-        super().__init__(
-            coordinator, host, unit_id, "free_charging", device_name, coordinator.rest_client
-        )
+        super().__init__(coordinator, host, unit_id, "free_charging", device_name, model_name)
         self._pending_state: bool | None = None
         self._attr_is_on: bool | None = None
+        self._update_from_rest()
 
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        rest_data = self.coordinator.rest_data
+    def _update_from_rest(self) -> None:
+        """Derive the state from the latest REST data."""
+        rest_data = self.rest_data
         current = None if rest_data is None else rest_data.free_charging_enabled
         # Drop the optimistic value once the wallbox confirms it via REST.
         if self._pending_state is not None and current == self._pending_state:
@@ -163,6 +166,9 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
             self._attr_is_on = self._pending_state
         else:
             self._attr_is_on = current
+
+    def _handle_coordinator_update(self) -> None:
+        self._update_from_rest()
         super()._handle_coordinator_update()
 
     async def async_turn_on(self, **kwargs: object) -> None:
@@ -175,20 +181,17 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
 
     async def _set_free_charging(self, enabled: bool) -> None:
         """Set free charging state via REST API."""
-        if self._rest_client is None:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="rest_not_connected"
-            )
 
         self._pending_state = enabled
         self._attr_is_on = enabled
         self.async_write_ha_state()
 
         try:
-            await self._rest_client.set_free_charging(enabled)
-        except Exception as err:
+            await self.rest_client.set_free_charging(enabled)
+        except (RestClientError, ValueError) as err:
             self._pending_state = None
-            self._handle_coordinator_update()
+            self._update_from_rest()
+            self.async_write_ha_state()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="set_free_charging_failed",
@@ -197,4 +200,4 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
 
         # Re-fetch the REST data now (regular polling is throttled) so the UI
         # shows the state the wallbox actually has.
-        await self.coordinator.async_refresh_rest_data()
+        await self.coordinator.async_refresh_after_write()

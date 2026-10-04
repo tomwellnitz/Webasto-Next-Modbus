@@ -17,10 +17,11 @@ from .const import (
     SESSION_COMMAND_STOP_VALUE,
     get_button_registers,
 )
-from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import WebastoModbusError
+from .rest_client import RestClientError
+from .rest_coordinator import WebastoRestCoordinator
 
 PARALLEL_UPDATES = 0
 
@@ -49,14 +50,15 @@ async def async_setup_entry(
         for register in get_button_registers(runtime.model)
     ]
 
-    # Add restart button if REST API is enabled
-    if runtime.coordinator.rest_enabled:
+    # Restart is a REST action (Next and Unite).
+    if (rest := runtime.rest_coordinator) is not None:
         entities.append(
             WebastoRestartButton(
-                runtime.coordinator,
+                rest,
                 host,
                 unit_id,
                 runtime.device_name,
+                runtime.coordinator.device_model_name,
             )
         )
 
@@ -106,25 +108,20 @@ class WebastoRestartButton(WebastoRestEntity, ButtonEntity):
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         device_name: str,
+        model_name: str,
     ) -> None:
-        super().__init__(
-            coordinator, host, unit_id, "restart_system", device_name, coordinator.rest_client
-        )
+        super().__init__(coordinator, host, unit_id, "restart_system", device_name, model_name)
 
     async def async_press(self) -> None:
         """Restart the wallbox via REST API."""
-        if self._rest_client is None:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="rest_not_connected"
-            )
 
         try:
-            await self._rest_client.restart_system()
-        except Exception as err:
+            await self.rest_client.restart_system()
+        except (RestClientError, ValueError) as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="restart_failed",

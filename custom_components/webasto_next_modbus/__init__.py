@@ -27,7 +27,6 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_MODEL,
     CONF_NAME,
-    CONF_REST_ENABLED,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
@@ -62,7 +61,8 @@ from .const import (
 from .coordinator import WebastoDataCoordinator, connection_issue_id
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .hub import ModbusBridge, WebastoModbusError
-from .rest_client import RestClient, RestClientError
+from .rest_client import RestClientError
+from .rest_coordinator import WebastoRestCoordinator, build_rest_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,6 +98,9 @@ class RuntimeData:
     device_slug: str
     device_name: str
     model: str = MODEL_NEXT
+    # Present when the REST API is configured (independent of whether it is
+    # currently reachable).
+    rest_coordinator: WebastoRestCoordinator | None = None
 
 
 type WebastoConfigEntry = ConfigEntry[RuntimeData]
@@ -177,8 +180,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     try:
         await coordinator.async_config_entry_first_refresh()
 
-        # Initialize REST client if configured
-        await coordinator.async_setup_rest_client()
+        rest_coordinator: WebastoRestCoordinator | None = None
+        if (rest_client := build_rest_client(hass, entry, model)) is not None:
+            rest_coordinator = WebastoRestCoordinator(hass, entry, rest_client, device_slug, model)
+            # Not a first refresh: an unreachable web interface must not block
+            # the Modbus side. Failures leave the REST entities unavailable
+            # until a later poll succeeds; rejected credentials start reauth.
+            await rest_coordinator.async_refresh()
 
         # Start the Life Bit loop after coordinator is ready
         await bridge.start_life_bit_loop(_create_background_task)
@@ -191,6 +199,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
             device_slug=device_slug,
             device_name=device_name,
             model=model,
+            rest_coordinator=rest_coordinator,
         )
 
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -198,7 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         # Don't leave the Modbus socket open on a failed setup: these wallboxes
         # typically accept only one Modbus TCP connection, so a stale socket
         # makes the automatic retry fail with "connection refused".
-        await _async_shutdown_runtime(coordinator, bridge)
+        await _async_shutdown_runtime(bridge)
         raise
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -229,12 +238,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_shutdown_runtime(
-    coordinator: WebastoDataCoordinator, bridge: ModbusBridge
-) -> None:
+async def _async_shutdown_runtime(bridge: ModbusBridge) -> None:
     """Stop background work and release the wallbox connection."""
 
-    await coordinator.async_shutdown_rest_client()
     await bridge.stop_life_bit_loop()
     await bridge.async_close()
 
@@ -260,7 +266,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
     runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
     if runtime is not None:
         _LOGGER.debug("Stopping life bit loop and closing connection...")
-        await _async_shutdown_runtime(runtime.coordinator, runtime.bridge)
+        await _async_shutdown_runtime(runtime.bridge)
+        if runtime.rest_coordinator is not None:
+            await runtime.rest_coordinator.client.disconnect()
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
     # Nothing polls an unloaded entry any more, so its connection issue could
@@ -477,57 +485,53 @@ async def _async_service_stop_session(call: ServiceCall) -> None:
     await _async_send_session_command(call, SESSION_COMMAND_STOP_VALUE)
 
 
-def _require_rest_client(runtime: RuntimeData) -> RestClient:
-    """Return the REST client, or raise a translated error explaining why not."""
+def _require_rest(runtime: RuntimeData) -> WebastoRestCoordinator:
+    """Return the REST coordinator, or raise a translated error if REST is off."""
 
-    entry = runtime.coordinator.config_entry
-    if entry is None or not entry.options.get(CONF_REST_ENABLED, False):
+    if runtime.rest_coordinator is None:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
-    rest_client = runtime.coordinator.rest_client
-    if rest_client is None:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
-    return rest_client
+    return runtime.rest_coordinator
 
 
 async def _async_service_set_led_brightness(call: ServiceCall) -> None:
     """Handle service to set LED brightness via REST API."""
 
     runtime = _resolve_runtime(call.hass, call)
-    rest_client = _require_rest_client(runtime)
+    rest = _require_rest(runtime)
     try:
-        await rest_client.set_led_brightness(int(call.data["brightness"]))
+        await rest.client.set_led_brightness(int(call.data["brightness"]))
     except RestClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="set_led_brightness_failed",
             translation_placeholders={"error": str(err)},
         ) from err
-    await runtime.coordinator.async_refresh_rest_data()
+    await rest.async_refresh_after_write()
 
 
 async def _async_service_set_free_charging(call: ServiceCall) -> None:
     """Handle service to enable/disable free charging via REST API."""
 
     runtime = _resolve_runtime(call.hass, call)
-    rest_client = _require_rest_client(runtime)
+    rest = _require_rest(runtime)
     try:
-        await rest_client.set_free_charging(bool(call.data["enabled"]))
+        await rest.client.set_free_charging(bool(call.data["enabled"]))
     except RestClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="set_free_charging_failed",
             translation_placeholders={"error": str(err)},
         ) from err
-    await runtime.coordinator.async_refresh_rest_data()
+    await rest.async_refresh_after_write()
 
 
 async def _async_service_restart_wallbox(call: ServiceCall) -> None:
     """Handle service to restart the wallbox via REST API."""
 
     runtime = _resolve_runtime(call.hass, call)
-    rest_client = _require_rest_client(runtime)
+    rest = _require_rest(runtime)
     try:
-        await rest_client.restart_system()
+        await rest.client.restart_system()
     except RestClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,

@@ -2,28 +2,20 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
-    CONF_REST_ENABLED,
-    CONF_REST_PASSWORD,
-    CONF_REST_USERNAME,
-    DEFAULT_REST_USERNAME,
     DOMAIN,
     FAILURE_ISSUE_THRESHOLD,
     MODEL,
     MODEL_NEXT,
-    REST_SCAN_INTERVAL,
-    REST_SETUP_RETRY_INTERVAL,
 )
 from .device_trigger import (
     TRIGGER_CABLE_CONNECTED,
@@ -36,9 +28,6 @@ from .device_trigger import (
     async_fire_device_trigger,
 )
 from .hub import ModbusBridge, WebastoModbusError
-
-if TYPE_CHECKING:
-    from .rest_client import RestClient, RestData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,17 +64,6 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._connection_online = True
         self._issue_id = connection_issue_id(entry_id)
 
-        # REST API client (optional)
-        self._rest_client: RestClient | None = None
-        self._rest_data: RestData | None = None
-        self._rest_last_update: datetime | None = None
-        self._rest_update_interval = timedelta(seconds=REST_SCAN_INTERVAL)
-        # When the initial REST connect fails (e.g. the wallbox was still
-        # booting), retry it from the data poll once this time has passed.
-        self._rest_setup_retry_at: datetime | None = None
-        self._rest_setup_retry_interval = timedelta(seconds=REST_SETUP_RETRY_INTERVAL)
-        self._rest_fetch_warned = False
-
         super().__init__(
             hass,
             _LOGGER,
@@ -93,76 +71,6 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config_entry=config_entry,
             update_interval=update_interval,
         )
-
-    async def async_setup_rest_client(self) -> None:
-        """Initialize REST client if configured."""
-        if self.config_entry is None:
-            return
-
-        options = self.config_entry.options
-        if not options.get(CONF_REST_ENABLED, False):
-            _LOGGER.debug("REST API not enabled")
-            return
-
-        username = options.get(CONF_REST_USERNAME, DEFAULT_REST_USERNAME)
-        password = options.get(CONF_REST_PASSWORD)
-        if not password:
-            _LOGGER.warning("REST API enabled but no password configured")
-            return
-
-        # Import here to avoid circular imports
-        from .rest_client import AuthenticationError, RestClient
-
-        host = self._bridge.endpoint.split(":")[0]
-        # Use Home Assistant's shared aiohttp session. The wallbox has a
-        # self-signed certificate, so SSL verification must be disabled.
-        session = async_get_clientsession(self.hass, verify_ssl=False)
-        self._rest_client = RestClient(host, username, password, session, model=self._model)
-
-        try:
-            await self._rest_client.connect()
-            _LOGGER.info("REST API client connected successfully")
-            self._rest_setup_retry_at = None
-        except AuthenticationError as err:
-            _LOGGER.warning("REST API authentication failed: %s", err)
-            with contextlib.suppress(Exception):
-                await self._rest_client.disconnect()
-            self._rest_client = None
-            # Wrong credentials won't fix themselves by retrying — start a
-            # reauth flow so the user can enter new ones. The Modbus side keeps
-            # working regardless.
-            self._rest_setup_retry_at = None
-            if self.config_entry is not None:
-                self.config_entry.async_start_reauth(self.hass)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Failed to connect REST API client: %s", err)
-            with contextlib.suppress(Exception):
-                await self._rest_client.disconnect()
-            self._rest_client = None
-            # The wallbox may just be booting; retry later from the data poll.
-            self._rest_setup_retry_at = datetime.now(UTC) + self._rest_setup_retry_interval
-
-    async def async_shutdown_rest_client(self) -> None:
-        """Disconnect the REST client."""
-        if self._rest_client is not None:
-            await self._rest_client.disconnect()
-            self._rest_client = None
-            self._rest_data = None
-
-    @property
-    def rest_client(self) -> RestClient | None:
-        """Return the REST client instance."""
-        return self._rest_client
-
-    @property
-    def rest_enabled(self) -> bool:
-        """Return True if REST client is active."""
-        return self._rest_client is not None
-
-    @property
-    def rest_data(self) -> RestData | None:
-        """Return cached REST data."""
-        return self._rest_data
 
     async def _async_update_data(self) -> dict[str, Any]:
         previous_data: dict[str, Any] | None = self.data if isinstance(self.data, dict) else None
@@ -206,60 +114,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._emit_cable_triggers(previous_data, data)
             self._emit_fault_trigger(previous_data, data)
 
-            # The Modbus side is up, so the wallbox is reachable: if a previous
-            # REST setup failed, retry it now (throttled).
-            if (
-                self._rest_client is None
-                and self._rest_setup_retry_at is not None
-                and datetime.now(UTC) >= self._rest_setup_retry_at
-            ):
-                await self.async_setup_rest_client()
-
-            # Fetch REST data if client is connected and interval elapsed
-            await self._async_update_rest_data()
-
             return data
-
-    async def async_refresh_rest_data(self) -> None:
-        """Force an immediate REST data re-fetch (e.g. after a REST write).
-
-        Regular REST polling is throttled to ``REST_SCAN_INTERVAL``; after we
-        change something via REST we want the new value reflected right away
-        instead of bouncing back to the stale cached value on the next Modbus
-        poll.
-        """
-        if self._rest_client is None:
-            return
-        await self._async_update_rest_data(force=True)
-        self.async_update_listeners()
-
-    async def _async_update_rest_data(self, force: bool = False) -> None:
-        """Fetch REST API data if enabled and the interval has passed."""
-        if self._rest_client is None:
-            return
-
-        now = datetime.now(UTC)
-        if (
-            not force
-            and self._rest_last_update is not None
-            and now - self._rest_last_update < self._rest_update_interval
-        ):
-            return
-
-        try:
-            self._rest_data = await self._rest_client.get_data()
-            self._rest_last_update = now
-            _LOGGER.debug("REST data updated: %s", self._rest_data)
-            if self._rest_fetch_warned:
-                _LOGGER.info("REST data fetch recovered")
-                self._rest_fetch_warned = False
-        except Exception as err:  # noqa: BLE001
-            # Keep stale data, don't clear it. Log once, then at debug.
-            if not self._rest_fetch_warned:
-                _LOGGER.warning("Failed to fetch REST data (will keep retrying): %s", err)
-                self._rest_fetch_warned = True
-            else:
-                _LOGGER.debug("Still failing to fetch REST data: %s", err)
 
     def _emit_charging_triggers(
         self,

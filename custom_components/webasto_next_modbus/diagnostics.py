@@ -49,7 +49,8 @@ async def async_get_config_entry_diagnostics(
     coordinator = runtime.coordinator
     host = str(entry.data.get(CONF_HOST, ""))
 
-    rest_data = coordinator.rest_data
+    rest = runtime.rest_coordinator
+    rest_data = rest.data if rest is not None else None
 
     return {
         "config_entry": {
@@ -68,7 +69,8 @@ async def async_get_config_entry_diagnostics(
         },
         "registers": async_redact_data(dict(coordinator.data or {}), TO_REDACT),
         "rest": {
-            "enabled": coordinator.rest_enabled,
+            "enabled": rest is not None,
+            "last_update_success": rest.last_update_success if rest is not None else None,
             "data": (
                 async_redact_data(asdict(rest_data), TO_REDACT) if rest_data is not None else None
             ),

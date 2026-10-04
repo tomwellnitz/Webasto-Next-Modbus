@@ -309,7 +309,8 @@
       "invalid_interval": "Intervall liegt außerhalb des unterstützten Bereichs.",
       "rest_password_required": "REST API ist aktiviert, aber es wurde kein Passwort hinterlegt.",
       "rest_cannot_connect": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen.",
-      "rest_connection_failed": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen."
+      "rest_connection_failed": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen.",
+      "invalid_auth": "Benutzername oder Passwort wurden von der Wallbox abgelehnt."
     }
   },
   "exceptions": {
@@ -360,6 +361,12 @@
     },
     "current_below_minimum": {
       "message": "Ladeströme zwischen 0 und {minimum} A sind nicht erlaubt. Nutze 0 A zum Pausieren oder mindestens {minimum} A."
+    },
+    "rest_auth_failed": {
+      "message": "Die Weboberfläche der Wallbox hat die gespeicherten REST-API-Zugangsdaten abgelehnt. Bitte neu eingeben."
+    },
+    "rest_update_failed": {
+      "message": "Daten konnten nicht von der Weboberfläche der Wallbox gelesen werden: {error}"
     }
   },
   "device_automation": {

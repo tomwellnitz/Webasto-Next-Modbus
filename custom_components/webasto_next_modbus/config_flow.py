@@ -9,9 +9,10 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_MODEL,
@@ -36,6 +37,7 @@ from .const import (
     get_readable_registers,
 )
 from .hub import ModbusBridge, WebastoModbusError
+from .rest_client import AuthenticationError, RestClient, RestClientError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -250,8 +252,6 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Ask the user for new REST API credentials and validate them."""
 
-        from .rest_client import AuthenticationError
-
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
         current_username = entry.options.get(
@@ -262,10 +262,16 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             username = str(user_input.get(CONF_REST_USERNAME, current_username)).strip()
             password = str(user_input.get(CONF_REST_PASSWORD, ""))
             try:
-                await self._async_validate_rest(entry.data[CONF_HOST], username, password)
+                await _async_validate_rest(
+                    self.hass,
+                    entry.data[CONF_HOST],
+                    username,
+                    password,
+                    entry.options.get(CONF_MODEL, entry.data.get(CONF_MODEL, DEFAULT_MODEL)),
+                )
             except AuthenticationError:
                 errors["base"] = "invalid_auth"
-            except Exception as err:  # noqa: BLE001
+            except RestClientError as err:
                 _LOGGER.warning("REST API validation failed during reauth: %s", err)
                 errors["base"] = "rest_cannot_connect"
             else:
@@ -295,24 +301,6 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"host": entry.data.get(CONF_HOST, "")},
         )
-
-    async def _async_validate_rest(self, host: str, username: str, password: str) -> None:
-        """Confirm the REST credentials by authenticating against the wallbox.
-
-        Uses Home Assistant's shared aiohttp session; ``disconnect()`` only
-        clears the token and never closes that session.
-        """
-
-        from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-        from .rest_client import RestClient
-
-        session = async_get_clientsession(self.hass, verify_ssl=False)
-        client = RestClient(host, username, password, session)
-        try:
-            await client.connect()
-        finally:
-            await client.disconnect()
 
     async def _async_validate_and_connect(self, data: Mapping[str, Any]) -> None:
         """Validate user input by performing a Modbus test read."""
@@ -434,12 +422,16 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 # Validate REST connection if enabled
                 if rest_enabled and rest_password:
                     try:
-                        await self._validate_rest_connection(
+                        await _async_validate_rest(
+                            self.hass,
                             config_entry.data[CONF_HOST],
                             rest_username,
                             rest_password,
+                            model,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except AuthenticationError:
+                        errors["base"] = "invalid_auth"
+                    except RestClientError as err:
                         _LOGGER.warning("REST API validation failed: %s", err)
                         errors["base"] = "rest_cannot_connect"
 
@@ -503,20 +495,23 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(step_id="init", data_schema=data_schema, errors=errors)
 
-    async def _validate_rest_connection(self, host: str, username: str, password: str) -> None:
-        """Validate REST API connection."""
-        from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-        from .rest_client import RestClient, RestClientError
+async def _async_validate_rest(
+    hass: HomeAssistant, host: str, username: str, password: str, model: str
+) -> None:
+    """Confirm REST credentials by logging in to the wallbox web interface.
 
-        session = async_get_clientsession(self.hass, verify_ssl=False)
-        client = RestClient(host, username, password, session)
-        try:
-            if not await client.test_connection():
-                msg = "REST API connection test failed"
-                raise RestClientError(msg)
-        finally:
-            await client.disconnect()
+    Raises ``AuthenticationError`` for rejected credentials and another
+    ``RestClientError`` if the wallbox can't be reached. Uses Home Assistant's
+    shared aiohttp session; ``disconnect()`` only clears the token.
+    """
+
+    session = async_get_clientsession(hass, verify_ssl=False)
+    client = RestClient(host, username, password, session, model=model)
+    try:
+        await client.connect()
+    finally:
+        await client.disconnect()
 
 
 def _build_unique_id(host: str, unit_id: int) -> str:

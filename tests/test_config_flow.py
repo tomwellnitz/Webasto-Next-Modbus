@@ -330,7 +330,9 @@ async def test_reauth_updates_credentials() -> None:
 
     with (
         patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry),
-        patch.object(WebastoConfigFlow, "_async_validate_rest", AsyncMock()) as validate,
+        patch(
+            "custom_components.webasto_next_modbus.config_flow._async_validate_rest", AsyncMock()
+        ) as validate,
     ):
         result = await flow.async_step_reauth_confirm(
             {CONF_REST_USERNAME: "admin", CONF_REST_PASSWORD: "newpass"}
@@ -362,9 +364,8 @@ async def test_reauth_invalid_auth() -> None:
 
     with (
         patch.object(WebastoConfigFlow, "_get_reauth_entry", return_value=entry),
-        patch.object(
-            WebastoConfigFlow,
-            "_async_validate_rest",
+        patch(
+            "custom_components.webasto_next_modbus.config_flow._async_validate_rest",
             AsyncMock(side_effect=AuthenticationError("bad creds")),
         ),
     ):

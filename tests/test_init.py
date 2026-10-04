@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -33,63 +33,14 @@ from custom_components.webasto_next_modbus.const import (
     SESSION_COMMAND_START_VALUE,
     VARIANT_22_KW,
 )
-from virtual_wallbox.simulator import (
-    FakeAsyncModbusTcpClient,
-    FakeModbusException,
-    VirtualWallboxState,
-    build_default_scenario,
-    register_virtual_wallbox,
-)
+from tests.conftest import HA_HOST, HA_PORT, HA_UNIT_ID
+from virtual_wallbox.simulator import VirtualWallboxState
 
-HOST = "192.0.2.10"
-PORT = 502
-UNIT_ID = 255
+HOST = HA_HOST
+PORT = HA_PORT
+UNIT_ID = HA_UNIT_ID
 
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
-    """Load the integration from custom_components."""
-
-
-@pytest.fixture(autouse=True)
-def fake_pymodbus() -> Generator[None]:
-    """Route the bridge's Modbus client to the virtual wallbox."""
-
-    with patch.object(
-        hub_module,
-        "_ensure_pymodbus",
-        return_value=(FakeAsyncModbusTcpClient, FakeModbusException),
-    ):
-        yield
-
-
-@pytest.fixture
-def wallbox() -> Generator[VirtualWallboxState]:
-    """Provide a virtual Webasto Next at HOST:PORT."""
-
-    with register_virtual_wallbox(
-        host=HOST, port=PORT, scenario=build_default_scenario(unit_id=UNIT_ID)
-    ) as state:
-        yield state
-
-
-@pytest.fixture
-def config_entry() -> MockConfigEntry:
-    return MockConfigEntry(
-        domain=DOMAIN,
-        title="Wallbox",
-        unique_id=f"{HOST}-{UNIT_ID}",
-        version=1,
-        minor_version=CONFIG_ENTRY_MINOR_VERSION,
-        data={
-            CONF_HOST: HOST,
-            CONF_PORT: PORT,
-            CONF_UNIT_ID: UNIT_ID,
-            CONF_SCAN_INTERVAL: 10,
-            CONF_VARIANT: VARIANT_22_KW,
-            CONF_MODEL: MODEL_NEXT,
-        },
-    )
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")
 
 
 @pytest.fixture
@@ -272,7 +223,7 @@ async def test_diagnostics_are_redacted(
     assert diagnostics["registers"]["session_user_id"] == "**REDACTED**"
     assert HOST not in str(diagnostics)
     assert "TAG-1234" not in str(diagnostics)
-    assert diagnostics["rest"] == {"enabled": False, "data": None}
+    assert diagnostics["rest"] == {"enabled": False, "last_update_success": None, "data": None}
 
 
 async def test_options_change_reloads_once(

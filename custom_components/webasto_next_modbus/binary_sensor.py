@@ -57,7 +57,9 @@ class WebastoConnectivitySensor(CoordinatorEntity[WebastoDataCoordinator], Binar
         self._unique_prefix = prefix
         self._device_name = device_name
         self._attr_unique_id = f"{prefix}-connected"
-        self._attr_device_info = build_device_info(prefix, device_name, coordinator)
+        self._attr_device_info = build_device_info(
+            prefix, device_name, coordinator.device_model_name, host
+        )
 
     @property
     def available(self) -> bool:
@@ -69,12 +71,6 @@ class WebastoConnectivitySensor(CoordinatorEntity[WebastoDataCoordinator], Binar
     @property
     def is_on(self) -> bool:
         return self.coordinator.last_update_success
-
-    def _handle_coordinator_update(self) -> None:
-        self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
-        )
-        super()._handle_coordinator_update()
 
 
 class WebastoChargingSensor(CoordinatorEntity[WebastoDataCoordinator], BinarySensorEntity):
@@ -96,7 +92,9 @@ class WebastoChargingSensor(CoordinatorEntity[WebastoDataCoordinator], BinarySen
         self._unique_prefix = prefix
         self._device_name = device_name
         self._attr_unique_id = f"{prefix}-charging"
-        self._attr_device_info = build_device_info(prefix, device_name, coordinator)
+        self._attr_device_info = build_device_info(
+            prefix, device_name, coordinator.device_model_name, host
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -110,9 +108,3 @@ class WebastoChargingSensor(CoordinatorEntity[WebastoDataCoordinator], BinarySen
             return int(value) == 1
         except TypeError, ValueError:
             return None
-
-    def _handle_coordinator_update(self) -> None:
-        self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
-        )
-        super()._handle_coordinator_update()
