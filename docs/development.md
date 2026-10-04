@@ -83,7 +83,7 @@ uv run pytest tests/test_snapshots.py --snapshot-update
 
    - Bump `version` in `custom_components/webasto_next_modbus/manifest.json`.
    - Bump `version` in `pyproject.toml` (keep it in sync with the manifest).
-   - Move the `## [Unreleased]` section in `CHANGELOG.md` to the new `## [X.Y.Z] - YYYY-MM-DD` (the release notes are generated from this section).
+   - Move the `## [Unreleased]` section in `CHANGELOG.md` to the new `## [X.Y.Z] - YYYY-MM-DD - Short title` and start a fresh `## [Unreleased]` above it. The release notes are generated from this section, and the title becomes the release name (`vX.Y.Z - Short title`, shown by HACS); a heading without a title stops the release. For a pre-release, give the `## [Unreleased] - Short title` heading the title instead.
 
 1. **Verify**:
 
