@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from dataclasses import dataclass
-from typing import Any, Final, TypeVar, cast
+from typing import Any, Final, TypeVar
+
+from modbus_connection import (
+    ModbusError,
+    ModbusExceptionError,
+    ModbusTimeoutError,
+    ModbusUnit,
+)
 
 from .const import (
     REGISTER_TYPE,
@@ -18,29 +25,23 @@ from .const import (
     get_register,
 )
 
-try:  # pragma: no cover - optional dependency import
-    from pymodbus.client import AsyncModbusTcpClient as _AsyncModbusTcpClient
-    from pymodbus.exceptions import ModbusException as _ModbusException
-except ImportError:  # pragma: no cover - handled at runtime
-    _AsyncModbusTcpClient = None  # type: ignore[assignment, misc]
-    _ModbusException = None  # type: ignore[assignment, misc]
-
 _LOGGER = logging.getLogger(__name__)
 
 MAX_REGISTERS_PER_REQUEST: Final = 110
 
 # Retry policy of a single bridge operation (read, bulk read, write). Each
-# attempt is one Modbus request with the bridge's request timeout; pymodbus'
-# own per-request retries are disabled so this is the only retry layer, and
-# the whole operation is bounded by OPERATION_TIMEOUT.
+# attempt is one request on the shared connection (which does not retry by
+# itself), and the whole operation is bounded by OPERATION_TIMEOUT.
 READ_ATTEMPTS: Final = 3
 WRITE_ATTEMPTS: Final = 2
 RETRY_BACKOFF: Final = 1.0  # seconds, multiplied by the attempt number
 OPERATION_TIMEOUT: Final = 30.0  # seconds
 
-# Waiting for the lock before a forced close on unload (seconds).
-CLOSE_LOCK_TIMEOUT: Final = 2.0
-CLIENT_CLOSE_TIMEOUT: Final = 3.0
+# Per-request timeout the bridge asks the shared connection for. Only honoured
+# from modbus-connection 4.11 on (``ModbusUnit.require_timeout``); older Home
+# Assistant cores keep the connection's 10 s default, which OPERATION_TIMEOUT
+# still bounds.
+REQUEST_TIMEOUT: Final = 5.0  # seconds
 
 # Life bit ("keep-alive"): the spec says the energy manager "writes 1 every
 # 1/2 of comTimeout" (register 2002) and the wallbox clears it. A Next on
@@ -91,16 +92,14 @@ _MODBUS_EXCEPTION_NAMES: Final[dict[int, str]] = {
 }
 
 
-def _describe_modbus_response(response: Any) -> str:
-    """Return a human-readable description of an error response."""
+def _describe_modbus_exception(err: ModbusExceptionError) -> str:
+    """Return a human-readable description of a Modbus exception response."""
 
-    code = getattr(response, "exception_code", None)
-    if isinstance(code, int):
+    code = err.exception_code
+    if code is not None:
+        code = int(code)
         return f"exception code {code} ({_MODBUS_EXCEPTION_NAMES.get(code, 'unknown')})"
-    text = str(response)
-    if text and "object at 0x" not in text:
-        return text
-    return repr(response)
+    return str(err) or repr(err)
 
 
 @dataclass(slots=True, frozen=True)
@@ -189,18 +188,6 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
     return tuple(requests)
 
 
-def _ensure_pymodbus() -> tuple[type[Any], type[Exception]]:
-    """Ensure pymodbus is imported and return the relevant classes."""
-
-    if _AsyncModbusTcpClient is None or _ModbusException is None:
-        raise RuntimeError(
-            "pymodbus is required for the Webasto Next Modbus integration. "
-            "Install it by adding 'pymodbus' to your environment."
-        )
-
-    return cast(type[Any], _AsyncModbusTcpClient), cast(type[Exception], _ModbusException)
-
-
 T = TypeVar("T")
 
 
@@ -212,54 +199,34 @@ def life_bit_interval(com_timeout: object) -> float:
     return float(min(max(com_timeout / 2, LIFE_BIT_MIN_INTERVAL), LIFE_BIT_MAX_INTERVAL))
 
 
-async def _async_close_client(client: Any) -> None:
-    """Close a pymodbus client, whether its ``close`` is sync or async."""
-
-    try:
-        result = client.close()
-        if inspect.isawaitable(result):
-            await asyncio.wait_for(result, timeout=CLIENT_CLOSE_TIMEOUT)
-    except Exception as err:  # noqa: BLE001 - closing must never raise
-        _LOGGER.debug("Error closing Modbus client: %s", err)
-
-
-def _raise_if_cancelled(err: BaseException) -> None:
-    """Re-raise a cancellation that pymodbus converted into a ModbusIOException.
-
-    pymodbus catches ``CancelledError`` inside a pending request and raises
-    ``ModbusIOException("Request cancelled outside library")`` instead. If we
-    treated that as a transport error, unload, ``asyncio.timeout`` and
-    ``asyncio.wait_for`` around a bridge call would be swallowed and retried.
-    """
-
-    task = asyncio.current_task()
-    if isinstance(err.__cause__, asyncio.CancelledError) or (
-        task is not None and task.cancelling()
-    ):
-        raise asyncio.CancelledError from err
-
-
 class ModbusBridge:
-    """Handle Modbus TCP communication with the wallbox."""
+    """Read and write wallbox registers over a Modbus unit.
+
+    The unit comes from Home Assistant's ``modbus`` integration
+    (``async_get_unit`` / ``async_get_temporary_unit``), which owns the TCP
+    connection: it connects on the first request, reconnects on the next
+    request after the link dropped, serialises the requests of every
+    integration talking to the same wallbox, and closes the socket when the
+    last holder lets go. The bridge adds the register map, decoding, bounded
+    retries and the life-bit loop on top.
+    """
 
     def __init__(
         self,
+        unit: ModbusUnit,
+        *,
         host: str,
         port: int,
         unit_id: int,
-        read_timeout: float = 5.0,
         registers: tuple[RegisterDefinition, ...] | None = None,
     ) -> None:
-        client_cls, exception_cls = _ensure_pymodbus()
-
+        self._unit = unit
         self._host = host
         self._port = port
         self._unit_id = unit_id
-        self._timeout = read_timeout
-        self._client_cls = client_cls
-        self._modbus_exception = exception_cls
-        self._client: Any | None = None
-        self._lock = asyncio.Lock()
+        require_timeout = getattr(unit, "require_timeout", None)
+        if callable(require_timeout):
+            require_timeout(REQUEST_TIMEOUT)
         self._readable_registers: tuple[RegisterDefinition, ...] = (
             tuple(registers) if registers is not None else get_readable_registers()
         )
@@ -268,8 +235,9 @@ class ModbusBridge:
         # Set by the coordinator after a successful poll; wakes the life-bit
         # loop out of its error backoff.
         self._reachable = asyncio.Event()
-        # Set by async_close(): the bridge is being torn down and must not
-        # reconnect, not even from a retry of a request that was in flight.
+        # Set by async_close(): the entry is unloading and releases its hold
+        # on the shared connection, so no request (not even a retry of one
+        # that was in flight) may use the unit afterwards.
         self._closed = False
 
     # ------------------------------------------------------------------ #
@@ -374,174 +342,73 @@ class ModbusBridge:
             pass
 
     # ------------------------------------------------------------------ #
-    # pymodbus call helpers
+    # Requests
     # ------------------------------------------------------------------ #
 
-    async def _invoke_with_unit(
-        self,
-        method: Callable[..., Awaitable[Any]],
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        """Call a pymodbus coroutine, handling differing device_id keyword names."""
+    async def _request(self, func: Callable[[], Awaitable[T]], description: str) -> T:
+        """Run one unit request, mapping transport failures to WebastoModbusError.
 
-        base_kwargs = dict(kwargs)
-        for keyword in ("device_id", "unit", "slave"):
-            current_kwargs = dict(base_kwargs)
-            if keyword in current_kwargs:
-                continue
-            current_kwargs[keyword] = self._unit_id
-            try:
-                return await method(*args, **current_kwargs)
-            except TypeError as err_keyword:
-                if self._is_keyword_unsupported(err_keyword, keyword):
-                    continue
-                raise WebastoModbusError(str(err_keyword)) from err_keyword
-
-        if not base_kwargs:
-            try:
-                return await method(*args, self._unit_id)
-            except TypeError as err_positional:
-                if self._is_positional_only_error(err_positional):
-                    raise WebastoModbusError(
-                        "Modbus client does not support device_id/unit/slave parameter"
-                    ) from err_positional
-                raise WebastoModbusError(str(err_positional)) from err_positional
-
-        raise WebastoModbusError("Modbus client does not support device_id/unit/slave parameter")
-
-    @staticmethod
-    def _is_keyword_unsupported(err: TypeError, keyword: str) -> bool:
-        """Return True if TypeError indicates an unexpected keyword argument."""
-
-        message = str(err)
-        return ("unexpected keyword argument" in message and f"'{keyword}'" in message) or (
-            "multiple values for argument" in message and f"'{keyword}'" in message
-        )
-
-    @staticmethod
-    def _is_positional_only_error(err: TypeError) -> bool:
-        """Detect positional argument mismatches when falling back."""
-
-        message = str(err)
-        return "positional argument" in message and "given" in message
-
-    # ------------------------------------------------------------------ #
-    # Connection handling
-    # ------------------------------------------------------------------ #
-
-    async def async_connect(self) -> None:
-        """Open the Modbus connection (no-op if it is already open)."""
-
-        async with self._lock:
-            await self._async_ensure_connected()
-
-    async def _async_ensure_connected(self) -> Any:
-        """Return a connected client, (re)connecting if needed. Caller holds the lock."""
+        Modbus exception responses (``ModbusExceptionError``) are left to the
+        caller, which knows whether a rejected register is fatal.
+        """
 
         if self._closed:
             raise WebastoModbusError(f"Connection to {self._host} has been closed")
-
-        client = self._client
-        if client is not None and getattr(client, "connected", False):
-            return client
-
-        if client is not None:
-            # A client that lost its connection still owns a socket (and, on
-            # older setups, a reconnect task): close it before replacing it,
-            # the wallbox only accepts a single Modbus TCP connection.
-            _LOGGER.debug("Closing stale client before reconnect to %s", self._host)
-            self._client = None
-            await _async_close_client(client)
-
         try:
-            # The bridge does its own reconnecting and retrying: disable the
-            # pymodbus equivalents, which would otherwise keep orphaned
-            # reconnect tasks alive and multiply every timeout.
-            client = self._client_cls(
-                self._host,
-                port=self._port,
-                timeout=self._timeout,
-                reconnect_delay=0,
-                retries=0,
+            return await func()
+        except ModbusExceptionError:
+            raise
+        except ModbusTimeoutError as err:
+            # The link is up but the wallbox stopped answering (e.g. it lost
+            # power without closing the socket). Drop the link so the next
+            # attempt opens a fresh one instead of waiting on a dead peer.
+            with contextlib.suppress(ModbusError, OSError):
+                await self._unit.disconnect()
+            raise WebastoModbusError(f"{description} timed out ({self.endpoint})") from err
+        except (ModbusError, OSError) as err:
+            # Connection refused or lost (another client may hold the
+            # wallbox's only Modbus TCP slot), or a protocol error. The
+            # connection reconnects by itself on the next request.
+            raise WebastoModbusError(f"{description} failed ({self.endpoint}): {err}") from err
+
+    async def _read_block(
+        self, register_type: REGISTER_TYPE, address: int, count: int
+    ) -> list[int]:
+        if register_type == "input":
+            return await self._request(
+                lambda: self._unit.read_input_registers(address, count),
+                f"reading input registers @{address}",
             )
-        except TypeError:
-            # Fallback for clients without those keywords (test doubles).
-            client = self._client_cls(
-                self._host,
-                port=self._port,
-                timeout=self._timeout,
-            )
-        try:
-            await asyncio.wait_for(client.connect(), timeout=self._timeout)
-        except TimeoutError as err:
-            await _async_close_client(client)
-            raise WebastoModbusError(f"Connection to {self._host}:{self._port} timed out") from err
-        except (OSError, self._modbus_exception) as err:
-            await _async_close_client(client)
-            raise WebastoModbusError(
-                f"Failed to connect to {self._host}:{self._port}: {err}"
-            ) from err
-
-        if not client.connected:
-            await _async_close_client(client)
-            raise WebastoModbusError(
-                f"Unable to connect to {self._host}:{self._port} (device_id {self._unit_id})"
-            )
-        self._client = client
-        _LOGGER.debug("Modbus connection established to %s:%s", self._host, self._port)
-        return client
-
-    async def _async_execute(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Run one Modbus request on a connected client. Caller holds the lock.
-
-        On a transport error the client is closed right away (not just
-        dropped), so its socket is released before the next attempt connects.
-        """
-
-        client = await self._async_ensure_connected()
-        try:
-            return await self._invoke_with_unit(getattr(client, method_name), *args, **kwargs)
-        except (self._modbus_exception, OSError, ConnectionError) as err:
-            if self._client is client:
-                self._client = None
-            await _async_close_client(client)
-            _raise_if_cancelled(err)
-            raise WebastoModbusError(str(err)) from err
+        return await self._request(
+            lambda: self._unit.read_holding_registers(address, count),
+            f"reading holding registers @{address}",
+        )
 
     async def async_close(self) -> None:
-        """Close the Modbus connection.
+        """Stop using the unit; the bridge does not send requests afterwards.
 
-        Final: the bridge does not reconnect afterwards, including retries of
-        requests that were still running. Waits briefly for a running request
-        to finish. If the lock can't be taken (a request is stuck), the client
-        is closed anyway: requests work on their own reference to the client,
-        so the holder just sees a connection error instead of crashing.
+        The connection itself belongs to Home Assistant's ``modbus``
+        integration and is released with the config entry, so it is not
+        closed here (another integration may share it).
         """
-        _LOGGER.debug("Closing Modbus connection to %s...", self._host)
-        self._closed = True
-        try:
-            async with asyncio.timeout(CLOSE_LOCK_TIMEOUT):
-                async with self._lock:
-                    client, self._client = self._client, None
-        except TimeoutError:
-            _LOGGER.warning("Could not acquire lock for close, forcing close for %s", self._host)
-            client, self._client = self._client, None
 
-        if client is not None:
-            await _async_close_client(client)
-            _LOGGER.debug("Modbus connection to %s closed", self._host)
+        _LOGGER.debug("Closing the Modbus bridge for %s", self.endpoint)
+        self._closed = True
 
     # ------------------------------------------------------------------ #
     # Public operations
     # ------------------------------------------------------------------ #
 
     async def async_test_connection(self) -> None:
-        """Perform a lightweight read to validate the connection."""
+        """Read one register once to validate the connection.
+
+        No retries, so a config flow gets a quick answer for an unreachable or
+        occupied wallbox.
+        """
 
         if not self._readable_registers:
             return
-        await self.async_read_register(self._readable_registers[0])
+        await self._async_read_register_once(self._readable_registers[0])
 
     async def async_read_register(self, register: RegisterDefinition) -> int | float | str | None:
         """Read a single register definition and return the decoded value."""
@@ -622,104 +489,94 @@ class ModbusBridge:
         self,
         register: RegisterDefinition,
     ) -> int | float | str | None:
-        method = (
-            "read_input_registers"
-            if register.register_type == "input"
-            else ("read_holding_registers")
-        )
-        async with self._lock:
-            response = await self._async_execute(method, register.address, count=register.count)
-
-        if not hasattr(response, "isError") or response.isError():
+        try:
+            registers = await self._read_block(
+                register.register_type, register.address, register.count
+            )
+        except ModbusExceptionError as err:
             raise WebastoModbusDeviceError(
                 f"reading {register.key} (@{register.address}) failed: "
-                f"{_describe_modbus_response(response)}"
-            )
+                f"{_describe_modbus_exception(err)}"
+            ) from err
 
-        return _decode_register(register, response.registers)
+        return _decode_register(register, registers)
 
     async def _async_read_data_once(self) -> dict[str, float | int | str | None]:
         data: dict[str, float | int | str | None] = {}
 
-        async with self._lock:
-            read_any = False
-            for request in self._read_plan:
-                method = (
-                    "read_input_registers"
-                    if request.register_type == "input"
-                    else "read_holding_registers"
+        read_any = False
+        for request in self._read_plan:
+            try:
+                registers = await self._read_block(
+                    request.register_type, request.start_address, request.count
                 )
-                response = await self._async_execute(
-                    method, request.start_address, count=request.count
-                )
-
-                if response.isError():
-                    detail = _describe_modbus_response(response)
-                    optional_block = all(reg.optional for reg in request.registers)
-                    if not read_any and not optional_block:
-                        # The first (core) block came back as an error: the
-                        # wallbox is offline or still booting. Don't bother with
-                        # the remaining blocks (they'll fail too) and let the
-                        # coordinator emit a single "not responding" log line.
-                        raise WebastoModbusDeviceError(
-                            f"wallbox not responding (read @{request.start_address} "
-                            f"returned {detail})"
-                        )
-                    code = getattr(response, "exception_code", None)
-                    if optional_block and code in _UNSUPPORTED_REGISTER_CODES:
-                        # This firmware doesn't implement the register.
-                        _LOGGER.info(
-                            "Removing optional register block @%s from read plan "
-                            "(not supported by this wallbox: %s)",
-                            request.start_address,
-                            detail,
-                        )
-                        self._read_plan = tuple(r for r in self._read_plan if r is not request)
-                    elif optional_block:
-                        _LOGGER.debug(
-                            "Optional register block @%s temporarily failed: %s",
-                            request.start_address,
-                            detail,
-                        )
-                    else:
-                        _LOGGER.warning(
-                            "Modbus error reading block @%s (%s): %s",
-                            request.start_address,
-                            request.count,
-                            detail,
-                        )
-                    for definition in request.registers:
-                        data[definition.key] = None
-                    continue
-
-                read_any = True
-                registers = response.registers
+            except ModbusExceptionError as err:
+                detail = _describe_modbus_exception(err)
+                optional_block = all(reg.optional for reg in request.registers)
+                if not read_any and not optional_block:
+                    # The first (core) block came back as an error: the
+                    # wallbox is offline or still booting. Don't bother with
+                    # the remaining blocks (they'll fail too) and let the
+                    # coordinator emit a single "not responding" log line.
+                    raise WebastoModbusDeviceError(
+                        f"wallbox not responding (read @{request.start_address} returned {detail})"
+                    ) from err
+                code = err.exception_code
+                if optional_block and code is not None and int(code) in _UNSUPPORTED_REGISTER_CODES:
+                    # This firmware doesn't implement the register.
+                    _LOGGER.info(
+                        "Removing optional register block @%s from read plan "
+                        "(not supported by this wallbox: %s)",
+                        request.start_address,
+                        detail,
+                    )
+                    self._read_plan = tuple(r for r in self._read_plan if r is not request)
+                elif optional_block:
+                    _LOGGER.debug(
+                        "Optional register block @%s temporarily failed: %s",
+                        request.start_address,
+                        detail,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Modbus error reading block @%s (%s): %s",
+                        request.start_address,
+                        request.count,
+                        detail,
+                    )
                 for definition in request.registers:
-                    offset = definition.address - request.start_address
-                    slice_end = offset + definition.count
-                    register_values = registers[offset:slice_end]
-                    if len(register_values) != definition.count:
-                        _LOGGER.warning(
-                            "Received %s values for %s, expected %s",
-                            len(register_values),
-                            definition.key,
-                            definition.count,
-                        )
-                        data[definition.key] = None
-                        continue
-                    data[definition.key] = _decode_register(definition, register_values)
+                    data[definition.key] = None
+                continue
+
+            read_any = True
+            for definition in request.registers:
+                offset = definition.address - request.start_address
+                slice_end = offset + definition.count
+                register_values = registers[offset:slice_end]
+                if len(register_values) != definition.count:
+                    _LOGGER.warning(
+                        "Received %s values for %s, expected %s",
+                        len(register_values),
+                        definition.key,
+                        definition.count,
+                    )
+                    data[definition.key] = None
+                    continue
+                data[definition.key] = _decode_register(definition, register_values)
 
         return data
 
     async def _async_write_register_once(self, register: RegisterDefinition, value: int) -> None:
-        async with self._lock:
-            response = await self._async_execute("write_register", register.address, value)
-
-        if response.isError():
+        try:
+            await self._request(
+                lambda: self._unit.write_register(register.address, value),
+                f"writing {register.key} (@{register.address})",
+            )
+        except ModbusExceptionError as err:
             raise WebastoModbusDeviceError(
                 f"writing {register.key} (@{register.address}) failed: "
-                f"{_describe_modbus_response(response)}"
-            )
+                f"{_describe_modbus_exception(err)}"
+            ) from err
 
     @property
     def host(self) -> str:

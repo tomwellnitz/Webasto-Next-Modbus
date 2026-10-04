@@ -182,6 +182,7 @@ async def test_reconfigure_updates_connection() -> None:
     with (
         patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
         patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry]),
+        patch.object(WebastoConfigFlow, "_async_validate_and_connect") as validate,
     ):
         result = await flow.async_step_reconfigure(
             {
@@ -191,6 +192,9 @@ async def test_reconfigure_updates_connection() -> None:
             }
         )
 
+    # The new settings are tested before they are saved.
+    validate.assert_awaited_once()
+    assert validate.await_args.args[0][CONF_HOST] == "192.0.2.99"
     update = flow.hass.config_entries.async_update_entry
     update.assert_called_once()
     _, kwargs = update.call_args
@@ -201,6 +205,38 @@ async def test_reconfigure_updates_connection() -> None:
     assert kwargs["title"] == "192.0.2.99 (unit 10)"
     assert result.get("type") == FlowResultType.ABORT
     assert result.get("reason") == "reconfigure_successful"
+
+
+async def test_reconfigure_keeps_entry_when_new_settings_fail() -> None:
+    """Unreachable new settings show an error instead of breaking the entry."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={
+            CONF_HOST: "192.0.2.3",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_UNIT_ID: DEFAULT_UNIT_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+            CONF_MODEL: DEFAULT_MODEL,
+        },
+        unique_id="192.0.2.3-255",
+    )
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
+        patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry]),
+        patch.object(WebastoConfigFlow, "_async_validate_and_connect", side_effect=CannotConnect),
+    ):
+        result = await flow.async_step_reconfigure(
+            {CONF_HOST: "192.0.2.99", CONF_PORT: 1502, CONF_UNIT_ID: 10}
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("errors") == {"base": "cannot_connect"}
+    flow.hass.config_entries.async_update_entry.assert_not_called()
 
 
 async def test_reconfigure_aborts_on_identity_collision() -> None:
