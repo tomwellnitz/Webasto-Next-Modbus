@@ -20,7 +20,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
-    CONF_UNIT_ID,
     DOMAIN,
     MIN_CHARGING_CURRENT,
     MODEL_NEXT,
@@ -52,7 +51,6 @@ async def async_setup_entry(
     runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
 
     max_current = runtime.max_current
     entities: list[NumberEntity] = [
@@ -60,7 +58,6 @@ async def async_setup_entry(
             runtime.coordinator,
             runtime.bridge,
             host,
-            unit_id,
             register,
             runtime.device_name,
             max_current,
@@ -74,13 +71,9 @@ async def async_setup_entry(
     if (rest := runtime.rest_coordinator) is not None:
         model_name = runtime.coordinator.device_model_name
         if runtime.model == MODEL_NEXT:
-            entities.append(
-                WebastoLedBrightness(rest, host, unit_id, runtime.device_name, model_name)
-            )
+            entities.append(WebastoLedBrightness(rest, host, runtime.device_name, model_name))
         elif runtime.model == MODEL_UNITE:
-            entities.append(
-                WebastoRandomisedDelay(rest, host, unit_id, runtime.device_name, model_name)
-            )
+            entities.append(WebastoRandomisedDelay(rest, host, runtime.device_name, model_name))
 
     async_add_entities(entities)
 
@@ -96,12 +89,11 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
         coordinator: WebastoDataCoordinator,
         bridge: ModbusBridge,
         host: str,
-        unit_id: int,
         register: RegisterDefinition,
         device_name: str,
         variant_max_current: int | None = None,
     ) -> None:
-        super().__init__(coordinator, bridge, host, unit_id, register, device_name)
+        super().__init__(coordinator, bridge, host, register, device_name)
 
         if register.min_value is not None:
             self._attr_native_min_value = register.min_value
@@ -308,11 +300,10 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
         model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, "led_brightness", device_name, model_name)
+        super().__init__(coordinator, host, "led_brightness", device_name, model_name)
         self._pending_value: int | None = None
         self._update_from_rest()
 
@@ -385,11 +376,10 @@ class WebastoRandomisedDelay(WebastoRestEntity, NumberEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
         model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, "randomised_delay", device_name, model_name)
+        super().__init__(coordinator, host, "randomised_delay", device_name, model_name)
         self._pending_value: int | None = None
         self._update_from_rest()
 

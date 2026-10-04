@@ -272,3 +272,125 @@ async def test_repair_issue_removed_when_entry_unloaded_or_deleted(
     await hass.async_block_till_done()
 
     assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_migration_keeps_entities_and_device_but_drops_host_from_ids(
+    hass: HomeAssistant, wallbox: VirtualWallboxState
+) -> None:
+    """1.2 entries move to entry-ID based identities without new entities or devices."""
+
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Wallbox",
+        unique_id=f"{HOST}-{UNIT_ID}",
+        version=1,
+        minor_version=2,
+        data={
+            CONF_HOST: HOST,
+            CONF_PORT: PORT,
+            CONF_UNIT_ID: UNIT_ID,
+            CONF_SCAN_INTERVAL: 10,
+            CONF_VARIANT: VARIANT_22_KW,
+            CONF_MODEL: MODEL_NEXT,
+        },
+    )
+    entry.add_to_hass(hass)
+    old_slug = f"{HOST}-{UNIT_ID}"
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, old_slug)}, name="Wallbox"
+    )
+    sensor = entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{old_slug}-charge_point_state",
+        config_entry=entry,
+        device_id=device.id,
+        suggested_object_id="wallbox_charge_point_state",
+    )
+    legacy_tag = entity_registry.async_get_or_create(
+        "text",
+        DOMAIN,
+        f"{HOST}_{UNIT_ID}_free_charging_tag_id",
+        config_entry=entry,
+        device_id=device.id,
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.minor_version == CONFIG_ENTRY_MINOR_VERSION
+    migrated = entity_registry.async_get(sensor.entity_id)
+    assert migrated is not None
+    assert migrated.unique_id == f"{entry.entry_id}-charge_point_state"
+    assert entity_registry.async_get(legacy_tag.entity_id).unique_id == (
+        f"{entry.entry_id}-rest-free_charging_tag_id"
+    )
+    devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+    assert [d.id for d in devices] == [device.id]
+    assert devices[0].identifiers == {(DOMAIN, entry.entry_id)}
+    # The entity keeps its entity_id and is backed by live data again.
+    assert hass.states.get(sensor.entity_id).state == "available"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_reconfigure_to_new_host_keeps_entities(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    """Changing the IP keeps the same device, entity IDs and history."""
+
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    from virtual_wallbox.simulator import register_virtual_wallbox
+
+    entity_registry = er.async_get(hass)
+    before = {
+        e.entity_id: e.unique_id
+        for e in er.async_entries_for_config_entry(entity_registry, loaded_entry.entry_id)
+    }
+
+    with register_virtual_wallbox(host="192.0.2.99", port=PORT):
+        result = await loaded_entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: "192.0.2.99", CONF_PORT: PORT, CONF_UNIT_ID: UNIT_ID, CONF_NAME: ""},
+        )
+        await hass.async_block_till_done()
+        assert result["reason"] == "reconfigure_successful"
+        assert loaded_entry.data[CONF_HOST] == "192.0.2.99"
+
+        after = {
+            e.entity_id: e.unique_id
+            for e in er.async_entries_for_config_entry(entity_registry, loaded_entry.entry_id)
+        }
+        assert after == before
+        devices = dr.async_entries_for_config_entry(dr.async_get(hass), loaded_entry.entry_id)
+        assert len(devices) == 1
+        assert hass.states.get("sensor.wallbox_charge_point_state").state == "available"
+
+        assert await hass.config_entries.async_unload(loaded_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_only_stale_devices_can_be_removed(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    from homeassistant.helpers import device_registry as dr
+
+    from custom_components.webasto_next_modbus import async_remove_config_entry_device
+
+    device_registry = dr.async_get(hass)
+    current = dr.async_entries_for_config_entry(device_registry, loaded_entry.entry_id)[0]
+    stale = device_registry.async_get_or_create(
+        config_entry_id=loaded_entry.entry_id, identifiers={(DOMAIN, "198.51.100.1-255")}
+    )
+
+    assert not await async_remove_config_entry_device(hass, loaded_entry, current)
+    assert await async_remove_config_entry_device(hass, loaded_entry, stale)

@@ -66,11 +66,7 @@ rules:
   icon-translations: done
   reconfiguration-flow: done
   repair-issues: done
-  stale-devices:
-    status: exempt
-    comment: >-
-      One device per config entry, removed together with the entry; no stale
-      devices can accumulate.
+  stale-devices: done
 
   # Platinum
   async-dependency: done

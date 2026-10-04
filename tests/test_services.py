@@ -28,7 +28,6 @@ from custom_components.webasto_next_modbus.const import (
     SIGNAL_REGISTER_WRITTEN,
     VARIANT_11_KW,
     VARIANT_22_KW,
-    build_device_slug,
     get_max_current_for_variant,
     get_register,
 )
@@ -78,7 +77,7 @@ def _make_runtime(variant: str = VARIANT_22_KW) -> RuntimeData:
         coordinator=coordinator,
         variant=variant,
         max_current=get_max_current_for_variant(variant),
-        device_slug=build_device_slug("192.0.2.1", 255),
+        device_slug="test-entry",
         device_name="Test Wallbox",
     )
 

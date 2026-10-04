@@ -74,7 +74,7 @@ Modbus TCP is **disabled by default** on the Webasto Next / Unite. Enable it fir
 
 > The wallboxes do not advertise themselves on the network, so they are added manually by IP address; there is no auto-discovery.
 
-The host, port, unit ID and entry name can be changed later without removing the integration via *Settings → Devices & Services → Webasto Next / Unite → ⋮ → **Reconfigure***. Model, variant, scan interval and REST settings live under *⋮ → **Configure***.
+The host, port, unit ID and entry name can be changed later without removing the integration via *Settings → Devices & Services → Webasto Next / Unite → ⋮ → **Reconfigure***. Model, variant, scan interval and REST settings live under *⋮ → **Configure***. Entities and the device keep their IDs, history and automations when the host changes.
 
 ### Optional: REST API
 

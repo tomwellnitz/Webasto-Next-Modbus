@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- **Changing the wallbox's IP address no longer creates new entities.** Device and entity IDs were derived from the host, so *Reconfigure* after an IP change created a second device and `_2` entities, and history, dashboards, automations and device triggers lost their link. IDs are now based on the config entry; existing installations are migrated automatically (same entity IDs, same device). Devices left over from earlier IP changes can now be deleted from their device page.
 - **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes (3 endpoints × 3 attempts × 30 s). REST now has its own coordinator (60 s, 10 s per request, 45 s per poll).
 - **A failed REST poll keeps the last good values** instead of replacing them with empty ones, and *Active errors* shows *unknown* instead of *ok* when the errors couldn't be read.
 - **REST entities are created even if the web interface is down at startup** (typical after a power cut) and recover on their own; before, they only appeared after a manual reload.

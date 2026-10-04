@@ -14,7 +14,6 @@ from .const import (
     MANUFACTURER,
     MODEL,
     RegisterDefinition,
-    build_device_slug,
 )
 from .coordinator import WebastoDataCoordinator
 from .hub import ModbusBridge, WebastoModbusError
@@ -51,16 +50,13 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         coordinator: WebastoDataCoordinator,
         bridge: ModbusBridge,
         host: str,
-        unit_id: int,
         register: RegisterDefinition,
         device_name: str,
     ) -> None:
         super().__init__(coordinator)
         self._bridge = bridge
-        self._host = host
-        self._unit_id = unit_id
         self._register = register
-        self._unique_prefix = build_device_slug(host, unit_id)
+        self._unique_prefix = coordinator.device_slug
         self._device_name = device_name
 
         self._attr_has_entity_name = True
@@ -108,16 +104,13 @@ class WebastoRestEntity(CoordinatorEntity[WebastoRestCoordinator]):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         entity_key: str,
         device_name: str,
         model_name: str,
     ) -> None:
         super().__init__(coordinator)
-        self._host = host
-        self._unit_id = unit_id
         self._entity_key = entity_key
-        self._unique_prefix = build_device_slug(host, unit_id)
+        self._unique_prefix = coordinator.device_slug
         self._device_name = device_name
 
         self._attr_has_entity_name = True

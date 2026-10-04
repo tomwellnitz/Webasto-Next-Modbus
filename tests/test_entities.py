@@ -48,6 +48,7 @@ def coordinator_fixture():
         def __init__(self) -> None:
             self.data: dict[str, object] = {}
             self.device_model_name = "Next"
+            self.device_slug = "test-entry"
             self.async_request_refresh = AsyncMock()
             self.hass = MagicMock()
             self.config_entry = DummyConfigEntry()
@@ -74,9 +75,9 @@ async def test_sensor_maps_enum_value(coordinator_fixture) -> None:
     register = get_register("charge_point_state")
     coordinator.data = {register.key: 3}
 
-    sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", 7, register, DEVICE_NAME)
+    sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", register, DEVICE_NAME)
 
-    assert sensor.unique_id == "192.0.2.10-7-charge_point_state"
+    assert sensor.unique_id == "test-entry-charge_point_state"
     assert sensor.native_value == "charging"
 
 
@@ -84,9 +85,9 @@ async def test_charging_binary_sensor_reflects_state(coordinator_fixture) -> Non
     """The charging binary sensor is on only while charging_state == 1."""
 
     coordinator, _bridge = coordinator_fixture
-    sensor = WebastoChargingSensor(coordinator, "192.0.2.10", 7, DEVICE_NAME)
+    sensor = WebastoChargingSensor(coordinator, "192.0.2.10", DEVICE_NAME)
 
-    assert sensor.unique_id == "192.0.2.10-7-charging"
+    assert sensor.unique_id == "test-entry-charging"
     assert sensor.translation_key == "charging"
 
     coordinator.data = {"charging_state": 1}
@@ -104,7 +105,7 @@ async def test_entity_has_correct_translation_attributes(coordinator_fixture) ->
     coordinator, bridge = coordinator_fixture
     register = get_register("charge_point_state")
 
-    sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", 7, register, DEVICE_NAME)
+    sensor = WebastoSensor(coordinator, bridge, "192.0.2.10", register, DEVICE_NAME)
 
     assert sensor.has_entity_name is True
     assert sensor.translation_key == "charge_point_state"
@@ -127,7 +128,6 @@ async def test_number_clamps_and_writes(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "192.0.2.11",
-        9,
         register,
         DEVICE_NAME,
         32,
@@ -151,7 +151,6 @@ async def test_number_respects_variant_limit(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "192.0.2.11",
-        9,
         register,
         DEVICE_NAME,
         16,
@@ -175,7 +174,6 @@ async def test_number_write_failure_raises_homeassistant_error(coordinator_fixtu
         coordinator,
         bridge,
         "192.0.2.11",
-        9,
         register,
         DEVICE_NAME,
         32,
@@ -199,7 +197,6 @@ async def test_write_only_number_persists_last_value(coordinator_fixture) -> Non
         coordinator,
         bridge,
         "192.0.2.15",
-        11,
         register,
         DEVICE_NAME,
         32,
@@ -232,7 +229,6 @@ async def test_button_triggers_keepalive(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "192.0.2.12",
-        5,
         register,
         DEVICE_NAME,
     )
@@ -244,7 +240,7 @@ async def test_button_triggers_keepalive(coordinator_fixture) -> None:
     coordinator.async_request_refresh.assert_awaited()
     fire.assert_called_once()
     args, _ = fire.call_args
-    assert args[1] == "192.0.2.12-5"
+    assert args[1] == "test-entry"
     assert args[2] == TRIGGER_KEEPALIVE_SENT
 
 
@@ -258,7 +254,6 @@ async def test_button_start_session(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "192.0.2.12",
-        5,
         register,
         DEVICE_NAME,
     )
@@ -279,7 +274,6 @@ async def test_button_stop_session(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "192.0.2.12",
-        5,
         register,
         DEVICE_NAME,
     )
@@ -299,7 +293,6 @@ async def test_write_only_number_updates_from_dispatcher(coordinator_fixture) ->
         coordinator,
         bridge,
         "192.0.2.15",
-        11,
         register,
         DEVICE_NAME,
         32,
@@ -324,7 +317,7 @@ async def test_write_only_number_updates_from_dispatcher(coordinator_fixture) ->
 
     assert captured
     callback = captured[0]
-    callback("192.0.2.15-11", "set_current_a", 24)
+    callback("test-entry", "set_current_a", 24)
 
     assert number.native_value == 24
     assert number._last_written_value == 24
@@ -333,7 +326,7 @@ async def test_write_only_number_updates_from_dispatcher(coordinator_fixture) ->
     callback("other-slug", "set_current_a", 30)
     assert number.native_value == 24
 
-    callback("192.0.2.15-11", "set_current_a", None)
+    callback("test-entry", "set_current_a", None)
     assert number.native_value is None
     assert number._last_written_value is None
 
@@ -355,7 +348,6 @@ async def test_session_sensors_expose_values(coordinator_fixture) -> None:
         coordinator,
         bridge,
         "198.51.100.5",
-        3,
         energy_register,
         DEVICE_NAME,
     )
@@ -371,7 +363,7 @@ async def test_ev_max_current_sensor_available(coordinator_fixture) -> None:
     register = get_register("ev_max_current_a")
     coordinator.data = {register.key: 26}
 
-    sensor = WebastoSensor(coordinator, bridge, "198.51.100.6", 3, register, DEVICE_NAME)
+    sensor = WebastoSensor(coordinator, bridge, "198.51.100.6", register, DEVICE_NAME)
 
     assert sensor.native_value == 26
     # device_class-Assertion entfernt
@@ -384,7 +376,7 @@ async def test_fault_code_sensor_maps_and_uses_translation_key(coordinator_fixtu
     register = get_register("fault_code")
     coordinator.data = {register.key: 1}
 
-    sensor = WebastoSensor(coordinator, bridge, "203.0.113.20", 4, register, DEVICE_NAME)
+    sensor = WebastoSensor(coordinator, bridge, "203.0.113.20", register, DEVICE_NAME)
 
     assert sensor.native_value == "power_switch_failure"
     assert sensor.translation_key == "fault_code"
@@ -400,7 +392,6 @@ async def test_write_only_number_restores_last_value(coordinator_fixture) -> Non
         coordinator,
         bridge,
         "192.0.2.25",
-        17,
         register,
         DEVICE_NAME,
         32,
@@ -432,7 +423,7 @@ async def test_write_only_number_seeds_from_wallbox(coordinator_fixture) -> None
     register = get_register("set_current_a")
     bridge.async_read_register = AsyncMock(return_value=16)
 
-    number = WebastoNumber(coordinator, bridge, "192.0.2.30", 9, register, DEVICE_NAME, 32)
+    number = WebastoNumber(coordinator, bridge, "192.0.2.30", register, DEVICE_NAME, 32)
     number.hass = MagicMock()
     number.async_write_ha_state = MagicMock()
     number.async_get_last_number_data = AsyncMock(return_value=MagicMock(native_value=24))
@@ -459,9 +450,9 @@ async def test_connectivity_binary_sensor(coordinator_fixture) -> None:
     coordinator, _bridge = coordinator_fixture
     coordinator.last_update_success = True
 
-    sensor = WebastoConnectivitySensor(coordinator, "192.0.2.40", 3, DEVICE_NAME)
+    sensor = WebastoConnectivitySensor(coordinator, "192.0.2.40", DEVICE_NAME)
 
-    assert sensor.unique_id == "192.0.2.40-3-connected"
+    assert sensor.unique_id == "test-entry-connected"
     assert sensor.translation_key == "connected"
     assert sensor.available is True
     assert sensor.is_on is True
@@ -476,6 +467,7 @@ class _DummyRestCoordinator:
 
     def __init__(self, data: object) -> None:
         self.data = data
+        self.device_slug = "test-entry"
         self.client = MagicMock()
         self.last_update_success = True
         self.async_refresh_after_write = AsyncMock()
@@ -492,7 +484,7 @@ async def test_led_brightness_does_not_revert_to_stale_value() -> None:
     rest = _DummyRestCoordinator(MagicMock(led_brightness=19))
     rest.client.set_led_brightness = AsyncMock()
 
-    led = WebastoLedBrightness(rest, "192.0.2.50", 3, DEVICE_NAME, "Next")  # type: ignore[arg-type]
+    led = WebastoLedBrightness(rest, "192.0.2.50", DEVICE_NAME, "Next")  # type: ignore[arg-type]
     led.hass = MagicMock()
     led.async_write_ha_state = MagicMock()
 
@@ -521,7 +513,7 @@ async def test_free_charging_switch_does_not_revert_to_stale_value() -> None:
     rest = _DummyRestCoordinator(MagicMock(free_charging_enabled=False))
     rest.client.set_free_charging = AsyncMock()
 
-    switch = WebastoFreeChargingSwitch(rest, "192.0.2.51", 3, DEVICE_NAME, "Next")  # type: ignore[arg-type]
+    switch = WebastoFreeChargingSwitch(rest, "192.0.2.51", DEVICE_NAME, "Next")  # type: ignore[arg-type]
     switch.hass = MagicMock()
     switch.async_write_ha_state = MagicMock()
 
@@ -550,7 +542,7 @@ async def test_phase_switch_writes_and_reads_back(coordinator_fixture) -> None:
     coordinator.data = {"number_of_phases": 0}
 
     switch = WebastoPhaseSwitch(
-        coordinator, bridge, "192.0.2.60", 255, UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
+        coordinator, bridge, "192.0.2.60", UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
     )
     switch.hass = MagicMock()
     switch.async_write_ha_state = MagicMock()
@@ -588,7 +580,7 @@ async def test_phase_switch_rolls_back_when_write_fails(coordinator_fixture) -> 
     bridge.async_write_register.side_effect = WebastoModbusError("boom")
 
     switch = WebastoPhaseSwitch(
-        coordinator, bridge, "192.0.2.61", 255, UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
+        coordinator, bridge, "192.0.2.61", UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
     )
     switch.hass = MagicMock()
     switch.async_write_ha_state = MagicMock()
@@ -611,7 +603,7 @@ async def test_enum_sensor_reports_unknown_for_undocumented_code(coordinator_fix
     register = get_register("fault_code")
     coordinator.data = {register.key: 99}
 
-    sensor = WebastoSensor(coordinator, bridge, "203.0.113.21", 4, register, DEVICE_NAME)
+    sensor = WebastoSensor(coordinator, bridge, "203.0.113.21", register, DEVICE_NAME)
     sensor.hass = MagicMock()
     sensor.async_write_ha_state = MagicMock()
 

@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, MODEL_NEXT, RegisterDefinition, get_sensor_registers
+from .const import MODEL_NEXT, RegisterDefinition, get_sensor_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
@@ -108,14 +108,12 @@ async def async_setup_entry(
     runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
 
     entities: list[SensorEntity] = [
         WebastoSensor(
             runtime.coordinator,
             runtime.bridge,
             host,
-            unit_id,
             definition,
             runtime.device_name,
         )
@@ -129,7 +127,6 @@ async def async_setup_entry(
             WebastoRestSensor(
                 rest,
                 host,
-                unit_id,
                 definition,
                 runtime.device_name,
                 runtime.coordinator.device_model_name,
@@ -150,11 +147,10 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):
         coordinator: WebastoDataCoordinator,
         bridge: ModbusBridge,
         host: str,
-        unit_id: int,
         register: RegisterDefinition,
         device_name: str,
     ) -> None:
-        super().__init__(coordinator, bridge, host, unit_id, register, device_name)
+        super().__init__(coordinator, bridge, host, register, device_name)
 
         if register.device_class:
             try:
@@ -240,12 +236,11 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         definition: RestSensorDefinition,
         device_name: str,
         model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, definition.key, device_name, model_name)
+        super().__init__(coordinator, host, definition.key, device_name, model_name)
         self._definition = definition
 
         if definition.device_class:

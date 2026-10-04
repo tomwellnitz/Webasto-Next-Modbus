@@ -9,7 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
-from .const import CONF_UNIT_ID, DOMAIN, RegisterDefinition, get_switch_registers
+from .const import DOMAIN, RegisterDefinition, get_switch_registers
 from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
@@ -28,14 +28,12 @@ async def async_setup_entry(
     runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
 
     entities: list[SwitchEntity] = [
         WebastoPhaseSwitch(
             runtime.coordinator,
             runtime.bridge,
             host,
-            unit_id,
             register,
             runtime.device_name,
         )
@@ -48,7 +46,6 @@ async def async_setup_entry(
             WebastoFreeChargingSwitch(
                 rest,
                 host,
-                unit_id,
                 runtime.device_name,
                 runtime.coordinator.device_model_name,
             )
@@ -77,11 +74,10 @@ class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):
         coordinator: WebastoDataCoordinator,
         bridge: ModbusBridge,
         host: str,
-        unit_id: int,
         register: RegisterDefinition,
         device_name: str,
     ) -> None:
-        super().__init__(coordinator, bridge, host, unit_id, register, device_name)
+        super().__init__(coordinator, bridge, host, register, device_name)
         self._pending_state: bool | None = None
         self._attr_is_on = self._readback_is_three_phase()
 
@@ -144,12 +140,11 @@ class WebastoFreeChargingSwitch(WebastoRestEntity, SwitchEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
         model_name: str,
     ) -> None:
         """Initialize the Free Charging switch."""
-        super().__init__(coordinator, host, unit_id, "free_charging", device_name, model_name)
+        super().__init__(coordinator, host, "free_charging", device_name, model_name)
         self._pending_state: bool | None = None
         self._attr_is_on: bool | None = None
         self._update_from_rest()

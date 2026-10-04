@@ -54,6 +54,9 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         self._bridge = bridge
         self._device_slug = device_slug
+        # Stable identity of the wallbox (the config entry ID): device registry
+        # identifier, entity unique-ID prefix and device-trigger signal.
+        self.device_slug = device_slug
         self.device_model_name = device_model_name
         self._model = model
         self.entry_id = entry_id

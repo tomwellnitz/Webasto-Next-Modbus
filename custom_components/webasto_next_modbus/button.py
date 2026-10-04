@@ -10,7 +10,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
-    CONF_UNIT_ID,
     DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
     SESSION_COMMAND_START_VALUE,
@@ -36,14 +35,12 @@ async def async_setup_entry(
     runtime = entry.runtime_data
 
     host = entry.data[CONF_HOST]
-    unit_id = entry.data[CONF_UNIT_ID]
 
     entities: list[ButtonEntity] = [
         WebastoButton(
             runtime.coordinator,
             runtime.bridge,
             host,
-            unit_id,
             register,
             runtime.device_name,
         )
@@ -56,7 +53,6 @@ async def async_setup_entry(
             WebastoRestartButton(
                 rest,
                 host,
-                unit_id,
                 runtime.device_name,
                 runtime.coordinator.device_model_name,
             )
@@ -110,11 +106,10 @@ class WebastoRestartButton(WebastoRestEntity, ButtonEntity):
         self,
         coordinator: WebastoRestCoordinator,
         host: str,
-        unit_id: int,
         device_name: str,
         model_name: str,
     ) -> None:
-        super().__init__(coordinator, host, unit_id, "restart_system", device_name, model_name)
+        super().__init__(coordinator, host, "restart_system", device_name, model_name)
 
     async def async_press(self) -> None:
         """Restart the wallbox via REST API."""
