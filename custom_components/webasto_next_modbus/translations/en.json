@@ -136,7 +136,7 @@
         "name": "EVSE Fault Code",
         "state": {
           "ok": "No error",
-          "power_switch_failure_closed": "Power switch failure (relay welded closed)",
+          "power_switch_failure": "Power switch failure (relay welded closed)",
           "internal_error_aux_voltage": "Internal error (auxiliary voltage)",
           "ev_communication_error_control_pilot": "EV communication error (control pilot)",
           "over_voltage": "Over voltage",
@@ -348,6 +348,18 @@
     },
     "set_randomised_delay_failed": {
       "message": "Failed to set randomised delay: {error}"
+    },
+    "cannot_connect": {
+      "message": "Could not connect to the wallbox: {error}"
+    },
+    "update_failed": {
+      "message": "Reading data from the wallbox failed: {error}"
+    },
+    "entry_not_found": {
+      "message": "No loaded Webasto Next / Unite wallbox has the config entry ID {entry_id}."
+    },
+    "current_below_minimum": {
+      "message": "Charging currents between 0 and {minimum} A are not allowed. Use 0 A to pause charging or at least {minimum} A."
     }
   },
   "device_automation": {
@@ -360,6 +372,114 @@
       "cable_connected": "Cable connected",
       "cable_disconnected": "Cable disconnected",
       "fault_occurred": "Fault occurred"
+    }
+  },
+  "issues": {
+    "connection_failed": {
+      "title": "{name} is not reachable",
+      "description": "Home Assistant repeatedly failed to read data from the wallbox {name}. Check that it is powered, connected to the network and that Modbus TCP is enabled in its settings. Only one Modbus client can be connected at a time, so make sure no other system (for example another energy manager) holds the connection.\n\nLast error: {error}\n\nThis message disappears as soon as the wallbox responds again."
+    }
+  },
+  "services": {
+    "set_current": {
+      "name": "Set charging current",
+      "description": "Updates the dynamic charging current limit. 0 A pauses charging; other values must be at least 6 A and are capped at the wallbox variant's maximum.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        },
+        "amps": {
+          "name": "Current",
+          "description": "Charging current in ampere: 0 to pause, otherwise 6 to 32."
+        }
+      }
+    },
+    "set_failsafe": {
+      "name": "Configure fail-safe",
+      "description": "Sets the fallback charging current and the timeout used when the energy manager stops sending keep-alives.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        },
+        "amps": {
+          "name": "Fallback current",
+          "description": "Charging current enforced during fail-safe operation."
+        },
+        "timeout_s": {
+          "name": "Timeout",
+          "description": "Seconds without a keep-alive before fail-safe mode activates."
+        }
+      }
+    },
+    "send_keepalive": {
+      "name": "Send keep-alive",
+      "description": "Writes the life bit once to tell the wallbox that the energy manager is still present. The integration already does this automatically.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        }
+      }
+    },
+    "start_session": {
+      "name": "Start charging session",
+      "description": "Starts a charging session (Webasto Next only).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        }
+      }
+    },
+    "stop_session": {
+      "name": "Stop charging session",
+      "description": "Cancels the active charging session (Webasto Next only).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        }
+      }
+    },
+    "set_led_brightness": {
+      "name": "Set LED brightness",
+      "description": "Sets the LED brightness of the wallbox (requires the REST API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "LED brightness from 0 (off) to 100 (full)."
+        }
+      }
+    },
+    "set_free_charging": {
+      "name": "Set free charging",
+      "description": "Enables or disables free charging without RFID authorization (requires the REST API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether free charging is enabled."
+        }
+      }
+    },
+    "restart_wallbox": {
+      "name": "Restart wallbox",
+      "description": "Restarts the wallbox (requires the REST API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Config entry of the wallbox. Optional when only one wallbox is configured."
+        }
+      }
     }
   }
 }

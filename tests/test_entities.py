@@ -265,10 +265,7 @@ async def test_button_start_session(coordinator_fixture) -> None:
 
     await button.async_press()
 
-    bridge.async_write_register.assert_awaited_with(
-        register,
-        SESSION_COMMAND_START_VALUE,
-    )
+    bridge.async_send_session_command.assert_awaited_once_with(SESSION_COMMAND_START_VALUE)
     coordinator.async_request_refresh.assert_awaited()
 
 
@@ -289,10 +286,7 @@ async def test_button_stop_session(coordinator_fixture) -> None:
 
     await button.async_press()
 
-    bridge.async_write_register.assert_awaited_with(
-        register,
-        SESSION_COMMAND_STOP_VALUE,
-    )
+    bridge.async_send_session_command.assert_awaited_once_with(SESSION_COMMAND_STOP_VALUE)
     coordinator.async_request_refresh.assert_awaited()
 
 
@@ -595,6 +589,59 @@ async def test_phase_switch_writes_and_reads_back(coordinator_fixture) -> None:
     coordinator.data = {"number_of_phases": 0}
     switch._handle_coordinator_update()
     assert switch.is_on is False
+
+
+async def test_phase_switch_rolls_back_when_write_fails(coordinator_fixture) -> None:
+    """A failed write must not leave the optimistic phase mode displayed."""
+
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.webasto_next_modbus.const import UNITE_PHASE_SWITCH_REGISTER
+    from custom_components.webasto_next_modbus.hub import WebastoModbusError
+    from custom_components.webasto_next_modbus.switch import WebastoPhaseSwitch
+
+    coordinator, bridge = coordinator_fixture
+    coordinator.data = {"number_of_phases": 0}
+    bridge.async_write_register.side_effect = WebastoModbusError("boom")
+
+    switch = WebastoPhaseSwitch(
+        coordinator, bridge, "192.0.2.61", 255, UNITE_PHASE_SWITCH_REGISTER, DEVICE_NAME
+    )
+    switch.hass = MagicMock()
+    switch.async_write_ha_state = MagicMock()
+
+    with pytest.raises(HomeAssistantError):
+        await switch.async_turn_on()
+
+    assert switch.is_on is False
+    assert switch._pending_state is None
+    coordinator.async_request_refresh.assert_not_awaited()
+    # A later poll still reflects the wallbox, not the failed request.
+    switch._handle_coordinator_update()
+    assert switch.is_on is False
+
+
+async def test_enum_sensor_reports_unknown_for_undocumented_code(coordinator_fixture) -> None:
+    """An unmapped enum code becomes None instead of a value outside the options."""
+
+    coordinator, bridge = coordinator_fixture
+    register = get_register("fault_code")
+    coordinator.data = {register.key: 99}
+
+    sensor = WebastoSensor(coordinator, bridge, "203.0.113.21", 4, register, DEVICE_NAME)
+    sensor.hass = MagicMock()
+    sensor.async_write_ha_state = MagicMock()
+
+    assert sensor.native_value is None
+    # Repeated polls with the same and with other unknown values stay safe.
+    sensor._handle_coordinator_update()
+    coordinator.data = {register.key: "not-a-number"}
+    sensor._handle_coordinator_update()
+    assert sensor.native_value is None
+    # A documented value afterwards maps normally again.
+    coordinator.data = {register.key: 0}
+    sensor._handle_coordinator_update()
+    assert sensor.native_value == "ok"
 
 
 async def test_phase_switch_only_on_unite_model() -> None:

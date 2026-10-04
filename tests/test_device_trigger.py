@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,6 +26,7 @@ def _make_hass() -> MagicMock:
     hass = MagicMock()
     hass.loop = loop
     hass.async_create_task = loop.create_task
+    hass.async_run_hass_job = lambda job, *args: loop.create_task(job.target(*args))
     hass.data = {}
     return hass
 
@@ -71,7 +71,12 @@ async def test_async_attach_trigger_invokes_action_on_dispatch() -> None:
         return lambda: None
 
     action = AsyncMock()
-    trigger_info = cast(TriggerInfo, SimpleNamespace(context=None))
+    trigger_info: TriggerInfo = {
+        "domain": "automation",
+        "name": "test automation",
+        "variables": {},
+        "trigger_data": {"id": "charging", "idx": "0", "alias": None},
+    }
 
     with (
         patch(
@@ -104,10 +109,14 @@ async def test_async_attach_trigger_invokes_action_on_dispatch() -> None:
     action.assert_awaited_once()
     await_args = action.await_args
     assert await_args is not None
-    payload, context = await_args.args
+    (run_variables,) = await_args.args
+    payload = run_variables["trigger"]
     assert payload[CONF_TYPE] == TRIGGER_CHARGING_STARTED
+    assert payload[CONF_PLATFORM] == "device"
+    assert payload[CONF_DEVICE_ID] == "device-id"
+    assert payload["id"] == "charging"
+    assert payload["idx"] == "0"
     assert payload["foo"] == "bar"
-    assert context is None
 
 
 async def test_async_fire_device_trigger_emits_dispatch() -> None:

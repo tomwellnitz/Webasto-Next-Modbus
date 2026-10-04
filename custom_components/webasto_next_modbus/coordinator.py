@@ -7,9 +7,9 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -19,8 +19,7 @@ from .const import (
     CONF_REST_USERNAME,
     DEFAULT_REST_USERNAME,
     DOMAIN,
-    FAILURE_NOTIFICATION_THRESHOLD,
-    FAILURE_NOTIFICATION_TITLE,
+    FAILURE_ISSUE_THRESHOLD,
     MODEL,
     MODEL_NEXT,
     REST_SCAN_INTERVAL,
@@ -42,6 +41,12 @@ if TYPE_CHECKING:
     from .rest_client import RestClient, RestData
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def connection_issue_id(entry_id: str) -> str:
+    """Return the repair issue id used for a config entry's connection problems."""
+
+    return f"connection_failed_{entry_id}"
 
 
 class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -68,7 +73,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_failure: datetime | None = None
         self.last_error: str | None = None
         self._connection_online = True
-        self._notification_id = f"{DOMAIN}_connection_{entry_id}"
+        self._issue_id = connection_issue_id(entry_id)
 
         # REST API client (optional)
         self._rest_client: RestClient | None = None
@@ -175,15 +180,19 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     TRIGGER_CONNECTION_LOST,
                     {"error": str(err)},
                 )
-            if self.consecutive_failures >= FAILURE_NOTIFICATION_THRESHOLD:
-                self._ensure_failure_notification()
-            raise UpdateFailed(str(err)) from err
+            if self.consecutive_failures >= FAILURE_ISSUE_THRESHOLD:
+                self._create_connection_issue()
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         else:
             restored = not self._connection_online
             self.consecutive_failures = 0
             self.last_success = datetime.now(UTC)
             self.last_error = None
-            self._dismiss_failure_notification()
+            self._delete_connection_issue()
             if restored:
                 self._connection_online = True
                 async_fire_device_trigger(
@@ -348,20 +357,23 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {"fault_code": current_code},
             )
 
-    def _ensure_failure_notification(self) -> None:
-        message = (
-            "Home Assistant konnte die Verbindung zur Webasto Next Wallbox "
-            f"({self._bridge.endpoint}) wiederholt nicht herstellen. Prüfe Netzwerk, "
-            "Stromversorgung und Zugangsdaten."
-        )
-        if self.last_error:
-            message += f"\nLetzte Fehlermeldung: {self.last_error}"
-        persistent_notification.async_create(
+    def _create_connection_issue(self) -> None:
+        """Surface a lasting connection problem as a repair issue.
+
+        The issue resolves itself: it is deleted on the next successful poll.
+        """
+        ir.async_create_issue(
             self.hass,
-            message,
-            FAILURE_NOTIFICATION_TITLE,
-            self._notification_id,
+            DOMAIN,
+            self._issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="connection_failed",
+            translation_placeholders={
+                "name": self.config_entry.title if self.config_entry else self.name,
+                "error": self.last_error or "",
+            },
         )
 
-    def _dismiss_failure_notification(self) -> None:
-        persistent_notification.async_dismiss(self.hass, self._notification_id)
+    def _delete_connection_issue(self) -> None:
+        ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)

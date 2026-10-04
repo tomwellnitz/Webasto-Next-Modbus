@@ -6,7 +6,7 @@ from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import CONF_UNIT_ID, DOMAIN, RegisterDefinition, get_switch_registers
@@ -20,7 +20,7 @@ PARALLEL_UPDATES = 0
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: WebastoConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Webasto switch entities."""
     runtime = entry.runtime_data
@@ -110,11 +110,23 @@ class WebastoPhaseSwitch(WebastoRegisterEntity, SwitchEntity):
         await self._async_set_phase(three_phase=False)
 
     async def _async_set_phase(self, three_phase: bool) -> None:
+        previous_pending = self._pending_state
+        previous_is_on = self._attr_is_on
         self._pending_state = three_phase
         self._attr_is_on = three_phase
         if self.hass is not None:
             self.async_write_ha_state()
-        await self._async_write_register(self._THREE_PHASE if three_phase else self._SINGLE_PHASE)
+        try:
+            await self._async_write_register(
+                self._THREE_PHASE if three_phase else self._SINGLE_PHASE
+            )
+        except HomeAssistantError:
+            # The mode was never applied: drop the optimistic state again.
+            self._pending_state = previous_pending
+            self._attr_is_on = previous_is_on
+            if self.hass is not None:
+                self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
 

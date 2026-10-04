@@ -148,5 +148,31 @@
         "default": "mdi:brightness-6"
       }
     }
+  },
+  "services": {
+    "set_current": {
+      "service": "mdi:current-ac"
+    },
+    "set_failsafe": {
+      "service": "mdi:shield-alert"
+    },
+    "send_keepalive": {
+      "service": "mdi:heart-pulse"
+    },
+    "start_session": {
+      "service": "mdi:play"
+    },
+    "stop_session": {
+      "service": "mdi:stop"
+    },
+    "set_led_brightness": {
+      "service": "mdi:brightness-6"
+    },
+    "set_free_charging": {
+      "service": "mdi:lock-open-variant"
+    },
+    "restart_wallbox": {
+      "service": "mdi:restart"
+    }
   }
 }

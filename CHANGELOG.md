@@ -4,10 +4,25 @@
 
 ### Changed
 
+- **Setup** makes one connection attempt and leaves retrying to Home Assistant, instead of blocking startup for up to ~90 s with five attempts. The untranslated (German-only) persistent notifications are gone: a translated error explains a failed setup, and a lasting connection problem raises a **repair issue** that clears itself on recovery.
+- Service names and descriptions are translated (English, German) and have icons; numeric sensors have a suggested display precision; current/duration numbers get their device class and the fail-safe numbers the *configuration* category.
+- Niche diagnostic entities start disabled (see README).
+- Config entries are migrated to version 1.2 instead of being rewritten on every setup.
 - **`pymodbus` runtime constraint no longer pins an upper bound** — `>=3.11.2` in both `manifest.json` and `pyproject.toml [project].dependencies` (previously `>=3.11.2,<4`). Home Assistant core dictates the installed version via its bundled `modbus` integration, and every fixed ceiling automatically blocks the integration at load time when HA-Core moves past it — see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88) for the 2026.7 incident. Our production code is defensive against pymodbus API churn, so removing the ceiling is safer than repeating the block for every user on the next HA release. The dev group still pins `pymodbus<3.12` for the `virtual_wallbox` simulator.
 
 ### Fixed
 
+- **Device triggers now pass their data to automations.** The trigger variables were handed over in the wrong shape, so `trigger.id`, `trigger.fault_code`, `trigger.charging_state` etc. were empty. This also broke the bundled *event notifications* blueprint, which filters on `trigger.id`.
+- **Unite firmwares without register 405 are polled again.** The optional phase-mode register was read first, and an unsupported first register made every poll report the wallbox as offline. Optional registers are now read after the core telemetry.
+- **Repeated start/stop commands take effect.** Register 5006 only reacts to a change, so a second *Start charging* after an earlier one was ignored. The command is now preceded by `0`, as the Modbus specification requires.
+- **Enum sensors no longer break on undocumented values** (for example a fault code above 16): they report *unknown* instead of raising on every poll. Fault code 1 now shows its translated name.
+- **Session energy statistics**: *Charged energy* resets every session and now uses `state_class: total_increasing`, so long-term statistics and the energy dashboard no longer count the reset as negative consumption.
+- **Charging current 1–5 A is rejected** by the number entity and the `set_current` service (IEC 61851 minimum is 6 A; `0` still pauses).
+- **Service calls accept rendered templates** such as `amps: "{{ states('input_number.x') }}"` (`16.0`) and normal booleans for `enabled`; an unknown `config_entry_id` is reported instead of silently ignored.
+- **A failed phase switch no longer leaves the switch showing a mode that was never applied.**
+- **Writing the charging current via a service updated the number entity from a worker thread**, which Home Assistant flags as unsafe. Found by the new end-to-end tests.
+- **Diagnostics no longer contain the wallbox address** (it was part of the last error message) **or the RFID tag of the last session**; a REST section with redacted network identifiers was added.
+- **Changing options reloads the entry once instead of twice** (two Modbus reconnects on a single-connection device).
 - **Unite REST writes now send only the payload verified on hardware.** The Unite write path additionally sent `configurationFieldUpdateType: simple-configuration-field-update`. Follow-up testing on FW 3.187 in [#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97) established that the Unite needs **only** `{fieldKey, value}` and that the update type is not required, so the extra property is dropped — a write can no longer be rejected over a property we were never able to confirm. The Next path keeps its per-type payloads unchanged.
 
 ### Added

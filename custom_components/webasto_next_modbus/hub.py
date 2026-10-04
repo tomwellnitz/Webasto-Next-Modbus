@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import logging
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from dataclasses import dataclass
 from typing import Any, Final, TypeVar, cast
 
@@ -14,6 +14,8 @@ from .const import (
     MAX_RETRY_ATTEMPTS,
     REGISTER_TYPE,
     RETRY_BACKOFF_SECONDS,
+    SESSION_COMMAND_IDLE_VALUE,
+    SESSION_COMMAND_RESET_DELAY,
     RegisterDefinition,
     get_readable_registers,
     get_register,
@@ -151,7 +153,16 @@ def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadReq
                 )
             )
 
-    requests.sort(key=lambda request: (request.register_type, request.start_address))
+    # Blocks made only of optional registers go last: the first block decides
+    # whether the wallbox is reachable at all, so it must be one every firmware
+    # implements (see _async_read_data_once).
+    requests.sort(
+        key=lambda request: (
+            all(reg.optional for reg in request.registers),
+            request.register_type,
+            request.start_address,
+        )
+    )
     return tuple(requests)
 
 
@@ -197,11 +208,20 @@ class ModbusBridge:
         self._read_plan: tuple[ReadRequest, ...] = _build_read_plan(self._readable_registers)
         self._life_bit_task: asyncio.Task[None] | None = None
 
-    async def start_life_bit_loop(self) -> None:
-        """Start the background life bit loop."""
+    async def start_life_bit_loop(
+        self,
+        create_task: Callable[[Coroutine[Any, Any, None]], asyncio.Task[None]] | None = None,
+    ) -> None:
+        """Start the background life bit loop.
+
+        ``create_task`` lets the caller own the task (Home Assistant passes
+        ``entry.async_create_background_task`` so the loop is tracked with the
+        config entry and cancelled on unload even if setup fails half-way).
+        """
         if self._life_bit_task and not self._life_bit_task.done():
             return
-        self._life_bit_task = asyncio.create_task(self._life_bit_loop())
+        factory = create_task or asyncio.create_task
+        self._life_bit_task = factory(self._life_bit_loop())
 
     async def stop_life_bit_loop(self) -> None:
         """Stop the background life bit loop."""
@@ -459,6 +479,19 @@ class ModbusBridge:
             f"write register {register.key}",
         )
 
+    async def async_send_session_command(self, value: int) -> None:
+        """Start (1) or cancel (2) a charging session via register 5006.
+
+        The wallbox only acts when the register value changes, so a second
+        start after an earlier one would be ignored if we wrote 1 again. Write
+        the idle value first so every command produces the required edge.
+        """
+
+        register = get_register("session_command")
+        await self.async_write_register(register, SESSION_COMMAND_IDLE_VALUE)
+        await asyncio.sleep(SESSION_COMMAND_RESET_DELAY)
+        await self.async_write_register(register, value)
+
     async def _call_with_retry(
         self,
         func: Callable[[], Awaitable[T]],
@@ -559,7 +592,8 @@ class ModbusBridge:
 
                 if response.isError():
                     detail = _describe_modbus_response(response)
-                    if not read_any:
+                    optional_block = all(reg.optional for reg in request.registers)
+                    if not read_any and not optional_block:
                         # The first (core) block came back as an error: the
                         # wallbox is offline or still booting. Don't bother with
                         # the remaining blocks (they'll fail too) and let the
@@ -570,16 +604,14 @@ class ModbusBridge:
                         )
                     # A later block failed while others worked -> likely a
                     # register this firmware doesn't implement.
-                    if all(reg.optional for reg in request.registers):
+                    if optional_block:
                         _LOGGER.info(
                             "Removing optional register block @%s from read plan "
                             "(not supported by this wallbox: %s)",
                             request.start_address,
                             detail,
                         )
-                        self._read_plan = tuple(
-                            r for r in self._read_plan if r.start_address != request.start_address
-                        )
+                        self._read_plan = tuple(r for r in self._read_plan if r is not request)
                     else:
                         _LOGGER.warning(
                             "Modbus error reading block @%s (%s): %s",

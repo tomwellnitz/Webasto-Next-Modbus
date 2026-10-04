@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import CONF_HOST, EntityCategory, UnitOfElectricPotential
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import WebastoConfigEntry
@@ -17,6 +19,8 @@ from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRegisterEntity, WebastoRestEntity
 from .hub import ModbusBridge
 from .rest_client import RestData
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -90,7 +94,7 @@ PARALLEL_UPDATES = 0
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: WebastoConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Webasto sensors from a config entry."""
 
@@ -156,7 +160,11 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):
         if register.unit:
             self._attr_native_unit_of_measurement = register.unit
 
+        if register.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = register.suggested_display_precision
+
         self._options_map = register.options
+        self._unknown_options_logged: set[str] = set()
         if register.options:
             self._attr_options = list(register.options.values())
         if register.translation_key:
@@ -190,12 +198,28 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):
                 pass
 
         if self._options_map:
-            try:
-                self._attr_native_value = self._options_map.get(int(value), str(value))
-            except ValueError, TypeError:
-                self._attr_native_value = value
+            self._attr_native_value = self._map_option(value)
         else:
             self._attr_native_value = value
+
+    def _map_option(self, value: Any) -> str | None:
+        """Map a raw enum code to its option, or ``None`` if it is undocumented.
+
+        An enum sensor's state must be one of its options; Home Assistant
+        rejects anything else, so an unknown code (e.g. a new fault code from a
+        firmware update) is reported as unknown instead of breaking the entity.
+        """
+        assert self._options_map is not None
+        try:
+            option = self._options_map.get(int(value))
+        except ValueError, TypeError:
+            option = None
+        if option is None:
+            raw = str(value)
+            if raw not in self._unknown_options_logged:
+                self._unknown_options_logged.add(raw)
+                _LOGGER.debug("Undocumented value %s for %s", raw, self._register.key)
+        return option
 
 
 class WebastoRestSensor(WebastoRestEntity, SensorEntity):
