@@ -60,6 +60,20 @@ class WebastoRestCoordinator(DataUpdateCoordinator[RestData]):
         self._system_fetched_at: datetime | None = None
         self._force_system = False
         self._pushed_device_info: tuple[object, ...] | None = None
+        self.initial_refresh: asyncio.Task[None] | None = None
+
+    @callback
+    def async_start_initial_refresh(self) -> None:
+        """Fetch the REST data once in the background.
+
+        Not a first refresh: the web interface must not delay the Modbus side.
+        Until it answers the REST entities are unavailable; rejected
+        credentials start the reauth flow.
+        """
+        assert self.config_entry is not None
+        self.initial_refresh = self.config_entry.async_create_background_task(
+            self.hass, self.async_refresh(), name=f"{DOMAIN} REST refresh"
+        )
 
     async def _async_update_data(self) -> RestData:
         now = datetime.now(UTC)

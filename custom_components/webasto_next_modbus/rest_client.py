@@ -37,6 +37,9 @@ DEFAULT_TOKEN_LIFETIME: Final = timedelta(hours=1)
 # are never retried, a duplicate restart or write is worse than a failure.
 GET_ATTEMPTS: Final = 2
 RETRY_BACKOFF_SECONDS: Final = 1.0
+# After a failed login, callers within this many seconds get the same error
+# instead of sending another login.
+LOGIN_FAILURE_COOLDOWN: Final = 10.0
 # Error bodies are kept on the exception, but only this much ends up in the
 # message shown to users.
 ERROR_BODY_PREVIEW: Final = 200
@@ -105,6 +108,19 @@ class RestData:
     # Unite-only settings (served via /api/configuration-fields/)
     led_dimming_level: str | None = None
     randomised_delay: int | None = None
+
+
+def _expect_list(result: Any, path: str) -> list[Any]:
+    """Return ``result`` if it is a JSON list, otherwise raise.
+
+    An unexpected shape must not be read as "empty" (no errors, no fields):
+    raising lets ``get_data`` keep the previous values instead.
+    """
+
+    if not isinstance(result, list):
+        msg = f"Unexpected response from {path}: {type(result).__name__}"
+        raise RestClientError(msg)
+    return result
 
 
 def _token_lifetime(token: str) -> timedelta:
@@ -182,6 +198,8 @@ class RestClient:
         # each log in (the wallbox web UI is single-user, a second login can
         # invalidate the first token).
         self._login_lock = asyncio.Lock()
+        self._last_login_error: AuthenticationError | None = None
+        self._last_login_failed_at = 0.0
 
     @property
     def _is_unite(self) -> bool:
@@ -202,8 +220,7 @@ class RestClient:
             AuthenticationError: If the credentials are rejected.
             ConnectionError: If the wallbox can't be reached.
         """
-        async with self._login_lock:
-            await self._login()
+        await self._async_login_once(lambda: True)
 
     async def disconnect(self) -> None:
         """Forget the auth token.
@@ -446,20 +463,46 @@ class RestClient:
         token = self._token
         if token is not None and self.is_connected:
             return token
-        async with self._login_lock:
-            # Another caller may have logged in while we waited.
-            if self._token is None or not self.is_connected:
-                await self._login()
-            assert self._token is not None  # noqa: S101
-            return self._token
+        return await self._async_login_once(lambda: self._token is None or not self.is_connected)
 
     async def _relogin_after_401(self, rejected_token: str) -> str:
-        """Log in again unless another caller already replaced the rejected token."""
+        """Log in again unless another caller already replaced the rejected token.
+
+        A failed re-login by another caller is shared (see _async_login_once).
+        """
+        return await self._async_login_once(lambda: self._token in (rejected_token, None))
+
+    async def _async_login_once(self, needs_login: Callable[[], bool]) -> str:
+        """Log in under the lock, sharing a recent rejection instead of repeating it.
+
+        Requests that queued behind a login get its token. If the login was
+        just rejected, every caller in the next LOGIN_FAILURE_COOLDOWN seconds
+        gets that same error, so a burst of requests with a wrong password
+        doesn't become a burst of rejected logins (the web interface can lock
+        the account after repeated failures).
+        """
+        loop = asyncio.get_running_loop()
         async with self._login_lock:
-            if self._token == rejected_token:
+            if (
+                self._token is None
+                and self._last_login_error is not None
+                and loop.time() - self._last_login_failed_at < LOGIN_FAILURE_COOLDOWN
+            ):
+                raise self._last_login_error
+            if needs_login():
                 self._token = None
-                await self._login()
-            assert self._token is not None  # noqa: S101
+                try:
+                    await self._login()
+                except AuthenticationError as err:
+                    # Only rejected credentials are shared; an unreachable web
+                    # interface may be back for the very next caller.
+                    self._last_login_error = err
+                    self._last_login_failed_at = loop.time()
+                    raise
+                self._last_login_error = None
+            if self._token is None:  # pragma: no cover - _login sets it or raises
+                msg = "Not logged in"
+                raise RestClientError(msg)
             return self._token
 
     async def _login(self) -> None:
@@ -488,8 +531,10 @@ class RestClient:
 
         token = data.get("access_token") if isinstance(data, dict) else None
         if not isinstance(token, str) or not token:
+            # A 200 without a token is a malformed answer (e.g. the web server
+            # is still starting), not a rejected password: retry later.
             msg = "No access_token in login response"
-            raise AuthenticationError(msg)
+            raise RestClientError(msg)
         self._token = token
         self._token_expires = datetime.now(UTC) + _token_lifetime(token)
         _LOGGER.debug("Authenticated to REST API (token valid until %s)", self._token_expires)
@@ -564,16 +609,11 @@ class RestClient:
 
     async def _get_section(self, section: str) -> list[dict[str, Any]]:
         """Get configuration fields for a section."""
-        result = await self._get(f"/sections/{section}")
-        if not isinstance(result, list):
-            return []
-        return result
+        return _expect_list(await self._get(f"/sections/{section}"), f"/sections/{section}")
 
     async def _get_current_errors(self) -> list[str]:
         """Get list of current active errors."""
-        result = await self._get("/current-errors")
-        if not isinstance(result, list):
-            return []
+        result = _expect_list(await self._get("/current-errors"), "/current-errors")
         # Extract error descriptions or codes
         errors = []
         for error in result:
@@ -586,10 +626,7 @@ class RestClient:
 
     async def _get_configuration_fields(self) -> list[dict[str, Any]]:
         """Get the Unite's flat list of configuration fields."""
-        result = await self._get("/configuration-fields/")
-        if not isinstance(result, list):
-            return []
-        return result
+        return _expect_list(await self._get("/configuration-fields/"), "/configuration-fields/")
 
     async def _update_config(self, updates: list[dict[str, Any]]) -> None:
         """Update configuration fields."""

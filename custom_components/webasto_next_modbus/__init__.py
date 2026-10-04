@@ -183,10 +183,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         rest_coordinator: WebastoRestCoordinator | None = None
         if (rest_client := build_rest_client(hass, entry, model)) is not None:
             rest_coordinator = WebastoRestCoordinator(hass, entry, rest_client, device_slug, model)
-            # Not a first refresh: an unreachable web interface must not block
-            # the Modbus side. Failures leave the REST entities unavailable
-            # until a later poll succeeds; rejected credentials start reauth.
-            await rest_coordinator.async_refresh()
 
         # Start the Life Bit loop after coordinator is ready
         await bridge.start_life_bit_loop(_create_background_task)
@@ -203,6 +199,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         )
 
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        if rest_coordinator is not None:
+            rest_coordinator.async_start_initial_refresh()
     except BaseException:
         # Don't leave the Modbus socket open on a failed setup: these wallboxes
         # typically accept only one Modbus TCP connection, so a stale socket

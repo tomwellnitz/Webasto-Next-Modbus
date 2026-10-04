@@ -90,6 +90,11 @@ async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    # The initial REST fetch runs as a background task.
+    rest = entry.runtime_data.rest_coordinator
+    if rest is not None and rest.initial_refresh is not None:
+        await rest.initial_refresh
+        await hass.async_block_till_done()
 
 
 @pytest.fixture
@@ -358,3 +363,75 @@ def test_active_errors_unknown_until_fetched() -> None:
     assert definition.value_fn(RestData()) is None
     assert definition.value_fn(RestData(active_errors=[])) == "ok"
     assert definition.value_fn(RestData(active_errors=["E1", "E2"])) == "E1, E2"
+
+
+async def test_slow_rest_does_not_delay_modbus_setup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, rest_entry: MockConfigEntry
+) -> None:
+    """Setup finishes and Modbus entities work while the web interface hangs."""
+
+    never = asyncio.Event()
+
+    async def _hang(method: str, url: Any, data: Any) -> Any:
+        await never.wait()
+
+    aioclient_mock.post(f"{BASE}/login", side_effect=_hang)
+    rest_entry.add_to_hass(hass)
+    async with asyncio.timeout(5):
+        assert await hass.config_entries.async_setup(rest_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert rest_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("sensor.wallbox_charge_point_state").state == "available"
+    assert hass.states.get("switch.wallbox_free_charging").state == STATE_UNAVAILABLE
+
+
+async def test_invalid_error_list_keeps_previous_errors(
+    client: RestClient, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.post(f"{BASE}/login", json={"access_token": "t"}, headers=JSON)
+    aioclient_mock.get(f"{BASE}/sections/auth", json=[], headers=JSON)
+    aioclient_mock.get(f"{BASE}/current-errors", json={"oops": True}, headers=JSON)
+
+    data = await client.get_data(RestData(active_errors=["E7"]), include_system=False)
+
+    assert data.active_errors == ["E7"]
+
+
+async def test_login_without_token_is_not_an_auth_error(
+    client: RestClient, aioclient_mock: AiohttpClientMocker
+) -> None:
+    from custom_components.webasto_next_modbus.rest_client import RestClientError
+
+    aioclient_mock.post(f"{BASE}/login", json={"status": "starting"}, headers=JSON)
+
+    with pytest.raises(RestClientError) as exc_info:
+        await client.connect()
+    assert not isinstance(exc_info.value, AuthenticationError)
+
+
+async def test_concurrent_401s_share_one_failed_relogin(
+    client: RestClient, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Every waiter gets the auth error; no extra rejected logins are sent."""
+
+    logins = 0
+
+    async def _login(method: str, url: Any, data: Any) -> Any:
+        nonlocal logins
+        logins += 1
+        await asyncio.sleep(0.01)
+        if logins == 1:
+            return AiohttpClientMockResponse(method, url, json={"access_token": "t"}, headers=JSON)
+        return AiohttpClientMockResponse(method, url, status=401)
+
+    aioclient_mock.post(f"{BASE}/login", side_effect=_login)
+    aioclient_mock.get(f"{BASE}/sections/auth", status=401)
+    await client.connect()
+
+    results = await asyncio.gather(
+        *(client._get("/sections/auth") for _ in range(4)), return_exceptions=True
+    )
+
+    assert all(isinstance(result, AuthenticationError) for result in results)
+    assert logins == 2
