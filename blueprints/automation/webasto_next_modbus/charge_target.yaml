@@ -19,11 +19,11 @@ blueprint:
     target_kwh_helper:
       name: Target Energy Helper (kWh)
       description: >-
-        Input Number helper to set the desired energy amount (e.g., 0-100 kWh).
+        Input Number helper to set the desired energy amount in kWh
+        (e.g., 0-100 kWh).
       selector:
         entity:
           domain: input_number
-          unit_of_measurement: kWh
     active_switch_helper:
       name: Activation Switch
       description: Input Boolean helper to start/stop the target charging logic.

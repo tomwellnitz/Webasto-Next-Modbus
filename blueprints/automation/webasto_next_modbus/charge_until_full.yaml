@@ -25,7 +25,6 @@ blueprint:
         entity:
           domain: sensor
           device_class: power
-          unit_of_measurement: W
     power_threshold:
       name: Power Threshold (Watts)
       description: Stop charging if power drops below this value.

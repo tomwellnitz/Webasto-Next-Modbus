@@ -12,8 +12,10 @@ or the non-existent ``i(...)`` shorthand -- is valid Jinja syntax (so the schema
 accepts it) but raises "... is undefined" at runtime. Both anti-patterns are
 independent of the Home Assistant version.
 
-The checks are intentionally text-based (standard library only) so they add no
-dependency and stay decoupled from Home Assistant internals.
+Every blueprint is also validated against Home Assistant's own blueprint
+schema, which rejects the whole blueprint on a single invalid key. What the
+solar optimizer actually does is tested by running it as an automation in
+``tests/test_solar_blueprint.py``.
 """
 
 from __future__ import annotations
@@ -63,3 +65,18 @@ def test_templates_do_not_reference_inputs_directly(path: Path) -> None:
             f"{path.name}: template uses i(...), which is not a Home Assistant "
             f"template function -> {template!r}"
         )
+
+
+@pytest.mark.parametrize("path", BLUEPRINT_PATHS, ids=lambda p: p.name)
+def test_blueprint_passes_home_assistant_schema(path: Path) -> None:
+    """Home Assistant rejects the whole blueprint on a single invalid key.
+
+    For example ``unit_of_measurement`` is not an option of the entity
+    selector; three blueprints shipped with it and could not be used at all.
+    """
+
+    from homeassistant.components.blueprint.models import Blueprint
+    from homeassistant.components.blueprint.schemas import BLUEPRINT_SCHEMA
+    from homeassistant.util.yaml import load_yaml_dict
+
+    Blueprint(load_yaml_dict(path), expected_domain="automation", schema=BLUEPRINT_SCHEMA)

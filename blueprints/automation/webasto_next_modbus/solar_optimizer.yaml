@@ -5,6 +5,13 @@ blueprint:
     Adjusts the charging current based on grid export/import to maximize solar
     self-consumption. Requires a grid power sensor (negative = export, positive
     = import).
+
+
+    The charging current is set per phase, and 6 A per phase is the lowest
+    current a car charges with (IEC 61851). With a phase sensor the conversion
+    from watts to amps follows the active phase mode. On a Webasto / Ampure
+    Unite the blueprint can also switch between single- and three-phase
+    charging, so charging can start from ~1.4 kW instead of ~4.1 kW of surplus.
   domain: automation
   input:
     current_entity:
@@ -19,15 +26,15 @@ blueprint:
     grid_sensor:
       name: Grid Power Sensor (Watts)
       description: >-
-        Sensor measuring grid power. Negative value must mean export (surplus).
+        Sensor measuring grid power in watts. Negative value must mean export
+        (surplus).
       selector:
         entity:
           domain: sensor
           device_class: power
-          unit_of_measurement: W
     min_current:
       name: Minimum Current (A)
-      description: Minimum charging current (usually 6A).
+      description: Minimum charging current per phase (usually 6A).
       default: 6
       selector:
         number:
@@ -36,26 +43,88 @@ blueprint:
           unit_of_measurement: A
     max_current:
       name: Maximum Current (A)
-      description: Maximum charging current allowed.
+      description: Maximum charging current per phase allowed.
       default: 16
       selector:
         number:
           min: 6
           max: 32
           unit_of_measurement: A
-    watts_per_amp:
-      name: Watts per Ampere
+    below_minimum:
+      name: Below the minimum current
       description: >-
-        Conversion factor. For 3-phase charging at 230V: ~690 W/A.
-        For 1-phase: ~230 W/A.
+        What to do when the surplus is too small even for the minimum current.
+        "Keep charging" charges at the minimum (some grid import) and leaves
+        a current of 0 A set by hand alone. "Pause" sets the current to 0 A
+        and resumes once the surplus is large enough.
+      default: keep
+      selector:
+        select:
+          options:
+            - label: Keep charging at the minimum current
+              value: keep
+            - label: Pause charging (0 A)
+              value: pause
+    watts_per_amp:
+      name: Watts per Ampere (without a phase sensor)
+      description: >-
+        Conversion factor used when no phase sensor is selected. For 3-phase
+        charging at 230V: ~690 W/A. For 1-phase: ~230 W/A.
       default: 690
       selector:
         number:
           min: 200
           max: 22000
           unit_of_measurement: W/A
+    phase_sensor:
+      name: Phase mode sensor (optional)
+      description: >-
+        The wallbox's "Number of phases" sensor (Webasto / Ampure Unite). With
+        it, watts per ampere follow the active phase mode (1 × or 3 × the
+        voltage below) instead of the fixed factor above.
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+          integration: webasto_next_modbus
+    voltage:
+      name: Phase voltage (V)
+      description: Voltage per phase, used together with the phase sensor.
+      default: 230
+      selector:
+        number:
+          min: 100
+          max: 260
+          unit_of_measurement: V
+    phase_switch:
+      name: Phase switch (optional)
+      description: >-
+        The wallbox's "Three-phase charging" switch (Webasto / Ampure Unite).
+        Requires the phase sensor. Switches to single-phase when the surplus
+        can't carry the minimum current on three phases, and back to
+        three-phase when it can. Some cars briefly interrupt charging while
+        the phases change.
+      default: ""
+      selector:
+        entity:
+          domain: switch
+          integration: webasto_next_modbus
+    phase_switch_interval:
+      name: Minimum time between phase changes (minutes)
+      description: >-
+        Phase changes are hard on the contactors and the car, so the
+        blueprint waits at least this long after a change before the next.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
 
-mode: restart
+# single: a phase change and its current write must not be cut apart by the
+# next grid update (restart could leave 16 A on three phases); updates that
+# arrive while a run is in progress are dropped, the next one is handled.
+mode: single
 max_exceeded: silent
 
 triggers:
@@ -67,11 +136,27 @@ variables:
   current_entity: !input current_entity
   min_amp: !input min_current
   max_amp: !input max_current
-  w_per_amp: !input watts_per_amp
+  below_minimum: !input below_minimum
+  fixed_w_per_amp: !input watts_per_amp
+  phase_sensor: !input phase_sensor
+  volts: !input voltage
+  phase_switch: !input phase_switch
+  phase_switch_minutes: !input phase_switch_interval
 
   # Get current values
   grid_power: "{{ states(grid_sensor) | float(0) }}"
   current_setpoint: "{{ states(current_entity) | float(min_amp) }}"
+
+  # Active phase count from the phase sensor; 0 while it is unknown or
+  # unavailable (or none is selected): then the fixed conversion factor is
+  # used and the phases are never switched.
+  phases: >-
+    {{ {'single_phase': 1, 'three_phase': 3}.get(states(phase_sensor), 0)
+       if phase_sensor else 0 }}
+  w_per_amp: "{{ volts * phases if phases > 0 else fixed_w_per_amp }}"
+  # In "keep" mode the blueprint never sets 0 A itself, so a current of 0 A
+  # was set by hand or by another automation: leave it alone.
+  paused_elsewhere: "{{ current_setpoint == 0 and below_minimum != 'pause' }}"
 
   # Calculate surplus (Export is negative, so Surplus = -Grid)
   # If Grid is -2000W (Export), Surplus is 2000W.
@@ -83,20 +168,71 @@ variables:
   current_load_watts: "{{ current_setpoint * w_per_amp }}"
   available_watts: "{{ current_load_watts + surplus }}"
 
-  # Calculate new target amps
-  target_amps_raw: "{{ available_watts / w_per_amp }}"
+  # Calculate new target amps, rounded down to be safe (avoid importing)
+  target_amps: "{{ (available_watts / w_per_amp) | int }}"
 
-  # Round down to be safe (avoid importing)
-  target_amps: "{{ target_amps_raw | int }}"
+  # Phase switching (needs both the switch and the phase sensor).
+  can_switch_phases: >-
+    {{ phase_switch != '' and phases > 0 and not paused_elsewhere
+       and states(phase_switch) in ['on', 'off']
+       and (now() - states[phase_switch].last_changed).total_seconds()
+           >= phase_switch_minutes * 60 }}
+  # Three phases need min_amp on each phase; switch down when the surplus
+  # can't carry that, and back up only once it can (with 10 % headroom, so
+  # a fluctuating surplus doesn't flip the phases back and forth).
+  switch_to_single: >-
+    {{ can_switch_phases and phases == 3
+       and available_watts < min_amp * volts * 3
+       and available_watts >= min_amp * volts }}
+  switch_to_three: >-
+    {{ can_switch_phases and phases == 1
+       and available_watts >= min_amp * volts * 3 * 1.1 }}
 
 actions:
   # Only writes when the computed current actually changes, so a noisy grid
   # sensor does not produce redundant Modbus writes.
   - choose:
+      # Too little surplus for three phases but enough for one: go
+      # single-phase first, then raise the current to what the surplus
+      # carries (raising it first would draw it on all three phases).
+      - conditions:
+          - condition: template
+            value_template: "{{ switch_to_single }}"
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: "{{ phase_switch }}"
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: >-
+                {{ [[(available_watts / volts) | int, min_amp] | max,
+                    max_amp] | min }}
+
+      # Enough surplus for the minimum on all three phases: go three-phase.
+      # Lower the per-phase current first, so the wallbox never draws the
+      # single-phase current on all three phases.
+      - conditions:
+          - condition: template
+            value_template: "{{ switch_to_three }}"
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: >-
+                {{ [[(available_watts / (volts * 3)) | int, min_amp] | max,
+                    max_amp] | min }}
+          - action: switch.turn_on
+            target:
+              entity_id: "{{ phase_switch }}"
+
       - conditions:
           - condition: template
             value_template: >-
-              {{ target_amps >= min_amp and target_amps <= max_amp }}
+              {{ target_amps >= min_amp and target_amps <= max_amp
+                 and not paused_elsewhere }}
           - condition: template
             value_template: "{{ target_amps != current_setpoint }}"
         sequence:
@@ -106,13 +242,39 @@ actions:
             data:
               value: "{{ target_amps }}"
 
-      # If calculated amps < min_amp, we might want to stop charging or set to
-      # min. For this simple blueprint, we just set to min if we are currently
-      # above min.
+      # More surplus than the maximum: charge at the maximum.
       - conditions:
           - condition: template
             value_template: >-
-              {{ target_amps < min_amp and current_setpoint > min_amp }}
+              {{ target_amps > max_amp and current_setpoint != max_amp
+                 and not paused_elsewhere }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: "{{ max_amp }}"
+
+      # Below the minimum (1-5 A is not a valid charging current): pause, or
+      # keep charging at the minimum, depending on the "below_minimum" input.
+      # "Keep" only lowers a higher current; it never restarts charging that
+      # is paused (0 A).
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ target_amps < min_amp and below_minimum == 'pause'
+                 and current_setpoint != 0 }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: !input current_entity
+            data:
+              value: 0
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ target_amps < min_amp and below_minimum != 'pause'
+                 and current_setpoint > min_amp }}
         sequence:
           - action: number.set_value
             target:
