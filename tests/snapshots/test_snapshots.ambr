@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_diagnostics
+# name: test_diagnostics[next]
   dict({
     'config_entry': dict({
       'data': dict({
@@ -81,6 +81,94 @@
       'last_success': '<timestamp>',
       'max_current': 32,
       'model': 'next',
+      'variant': '22kw',
+    }),
+  })
+# ---
+# name: test_diagnostics[unite]
+  dict({
+    'config_entry': dict({
+      'data': dict({
+        'host': '**REDACTED**',
+        'model': 'unite',
+        'port': 502,
+        'scan_interval': 10,
+        'unit_id': 255,
+        'variant': '22kw',
+      }),
+      'options': dict({
+        'model': 'unite',
+        'rest_enabled': True,
+        'rest_password': '**REDACTED**',
+        'rest_username': '**REDACTED**',
+        'scan_interval': 10,
+        'variant': '22kw',
+      }),
+      'version': '1.3',
+    }),
+    'registers': dict({
+      'active_power_l1_w': 0,
+      'active_power_l2_w': 0,
+      'active_power_l3_w': 0,
+      'active_power_total_w': 0,
+      'cable_max_current_a': 32,
+      'cable_state': 2,
+      'charge_point_state': 0,
+      'charged_energy_wh': 0,
+      'chargepoint_power_w': 0,
+      'charging_state': 0,
+      'current_l1_a': 0.0,
+      'current_l2_a': 0.0,
+      'current_l3_a': 0.0,
+      'energy_total_kwh': 123456.70000000001,
+      'equipment_state': 1,
+      'ev_max_current_a': 32,
+      'evse_max_current_a': 32,
+      'evse_min_current_a': 6,
+      'failsafe_current_a': 16,
+      'failsafe_timeout_s': 60,
+      'fault_code': 0,
+      'number_of_phases': 0,
+      'session_duration_s': 0,
+      'session_end_time': 0,
+      'session_max_current_a': 32,
+      'session_start_time': 0,
+      'voltage_l1': 0,
+      'voltage_l2': 0,
+      'voltage_l3': 0,
+    }),
+    'rest': dict({
+      'data': dict({
+        'active_errors': None,
+        'comboard_hw_version': None,
+        'comboard_sw_version': None,
+        'error_counter': None,
+        'free_charging_enabled': True,
+        'free_charging_tag_id': '**REDACTED**',
+        'ip_address': None,
+        'led_brightness': None,
+        'led_dimming_level': 'mid',
+        'mac_address_ethernet': None,
+        'mac_address_wifi': None,
+        'plug_cycles': None,
+        'powerboard_hw_version': None,
+        'powerboard_sw_version': None,
+        'randomised_delay': 600,
+        'signal_voltage_l1': None,
+        'signal_voltage_l2': None,
+        'signal_voltage_l3': None,
+        'total_charging_sessions': None,
+      }),
+      'enabled': True,
+      'last_update_success': True,
+    }),
+    'runtime': dict({
+      'consecutive_failures': 0,
+      'last_error': None,
+      'last_failure': None,
+      'last_success': '<timestamp>',
+      'max_current': 32,
+      'model': 'unite',
       'variant': '22kw',
     }),
   })

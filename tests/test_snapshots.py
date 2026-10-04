@@ -162,15 +162,17 @@ async def test_entities(
     await _unload(hass, entry)
 
 
+@pytest.mark.parametrize("model", [MODEL_NEXT, MODEL_UNITE])
 async def test_diagnostics(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     hass_client: ClientSessionGenerator,
     snapshot: SnapshotAssertion,
+    model: str,
 ) -> None:
     """The diagnostics download matches the snapshot (and stays redacted)."""
 
-    entry = await _setup(hass, aioclient_mock, MODEL_NEXT)
+    entry = await _setup(hass, aioclient_mock, model)
     assert await async_setup_component(hass, "diagnostics", {})
 
     diagnostics = await get_diagnostics_for_config_entry(hass, hass_client, entry)

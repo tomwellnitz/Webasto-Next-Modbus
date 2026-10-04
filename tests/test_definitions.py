@@ -57,6 +57,7 @@ def test_register_keys_are_unique_per_model() -> None:
                 *const.get_number_registers(model),
                 *const.get_button_registers(model),
                 *const.get_switch_registers(model),
+                *const.get_control_registers(model),
             )
         ]
         assert len(keys) == len(set(keys)), model

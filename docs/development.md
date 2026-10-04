@@ -71,7 +71,7 @@ The same tools are available as optional [pre-commit](https://pre-commit.com) ho
 
 ### Snapshot tests
 
-`tests/test_snapshots.py` records every entity (registry entry and state), the device and the diagnostics download for both models in `tests/snapshots/`. When a change is intended, regenerate the snapshots and review the diff:
+`tests/test_snapshots.py` records every entity (registry entry and state), the device and the diagnostics download, each for both models in `tests/snapshots/`. When a change is intended, regenerate the snapshots and review the diff:
 
 ```bash
 uv run pytest tests/test_snapshots.py --snapshot-update
