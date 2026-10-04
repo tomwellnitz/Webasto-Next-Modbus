@@ -130,7 +130,8 @@ This script executes:
 - **`custom_components/webasto_next_modbus/const.py`**: Contains the `RegisterDefinition` dataclasses and all register addresses. **Edit this file to add new sensors.**
 - **`custom_components/webasto_next_modbus/hub.py`**: Handles the low-level Modbus TCP connection, reading/writing registers, and the background Life Bit loop.
 - **`custom_components/webasto_next_modbus/rest_client.py`**: Async REST API client for optional features (LED brightness, firmware info, diagnostics). Uses JWT authentication.
-- **`custom_components/webasto_next_modbus/coordinator.py`**: Manages the polling interval and data distribution to entities. Combines Modbus and REST data.
+- **`custom_components/webasto_next_modbus/coordinator.py`**: Modbus `DataUpdateCoordinator`: polling, device triggers, the connection repair issue.
+- **`custom_components/webasto_next_modbus/rest_coordinator.py`**: Separate `DataUpdateCoordinator` for the optional REST API (60 s). Raises `ConfigEntryAuthFailed` on rejected credentials (reauth, polling stops) and pushes firmware/MACs to the device registry. REST entities subclass `WebastoRestEntity` on this coordinator; it exists whenever REST is *configured*, reachable or not.
 - **`custom_components/webasto_next_modbus/__init__.py`**: Component setup/teardown, service registration, connection retries.
 - **`custom_components/webasto_next_modbus/config_flow.py`**: UI configuration and options flow. Handles optional REST API credentials.
 
@@ -181,16 +182,17 @@ The integration supports an **optional** REST API connection for features not av
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Coordinator                              │
-│  ┌─────────────────────┐    ┌─────────────────────┐         │
-│  │      hub.py         │    │   rest_client.py    │         │
-│  │   (Modbus TCP)      │    │   (REST API)        │         │
-│  │   - Charging data   │    │   - LED brightness  │         │
-│  │   - Energy meters   │    │   - Firmware info   │         │
-│  │   - Current control │    │   - Diagnostics     │         │
-│  └─────────────────────┘    └─────────────────────┘         │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────┐    ┌───────────────────────────┐
+│  coordinator.py (Modbus)  │    │  rest_coordinator.py      │
+│  10 s, device triggers    │    │  60 s, reauth, dev. info  │
+│  ┌─────────────────────┐  │    │  ┌─────────────────────┐  │
+│  │      hub.py         │  │    │  │   rest_client.py    │  │
+│  │   (Modbus TCP)      │  │    │  │   (REST API)        │  │
+│  │   - Charging data   │  │    │  │   - LED brightness  │  │
+│  │   - Energy meters   │  │    │  │   - Firmware info   │  │
+│  │   - Current control │  │    │  │   - Diagnostics     │  │
+│  └─────────────────────┘  │    │  └─────────────────────┘  │
+└───────────────────────────┘    └───────────────────────────┘
 ```
 
 ### REST API Authentication

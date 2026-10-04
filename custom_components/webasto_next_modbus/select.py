@@ -16,8 +16,9 @@ from .const import (
     UNITE_LED_DIMMING_API_TO_OPTION,
     UNITE_LED_DIMMING_OPTION_TO_API,
 )
-from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRestEntity
+from .rest_client import RestClientError
+from .rest_coordinator import WebastoRestCoordinator
 
 PARALLEL_UPDATES = 0
 
@@ -37,13 +38,14 @@ async def async_setup_entry(
 
     # The Unite's LED dimming level is an enum via REST (the Next uses a 0-100
     # brightness number instead, handled by the number platform).
-    if runtime.coordinator.rest_enabled and runtime.model == MODEL_UNITE:
+    if (rest := runtime.rest_coordinator) is not None and runtime.model == MODEL_UNITE:
         entities.append(
             WebastoLedDimming(
-                runtime.coordinator,
+                rest,
                 host,
                 unit_id,
                 runtime.device_name,
+                runtime.coordinator.device_model_name,
             )
         )
 
@@ -61,20 +63,20 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         device_name: str,
+        model_name: str,
     ) -> None:
-        super().__init__(
-            coordinator, host, unit_id, "led_dimming", device_name, coordinator.rest_client
-        )
+        super().__init__(coordinator, host, unit_id, "led_dimming", device_name, model_name)
         self._pending_option: str | None = None
+        self._update_from_rest()
 
-    def _handle_coordinator_update(self) -> None:
-        """Update the current option from coordinator REST data."""
+    def _update_from_rest(self) -> None:
+        """Derive the state from the latest REST data."""
 
-        rest_data = self.coordinator.rest_data
+        rest_data = self.rest_data
         api_value = None if rest_data is None else rest_data.led_dimming_level
         current = UNITE_LED_DIMMING_API_TO_OPTION.get(api_value) if api_value else None
         # Drop the optimistic value once the wallbox confirms it via REST.
@@ -85,14 +87,13 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
             self._attr_current_option = self._pending_option
         else:
             self._attr_current_option = current
+
+    def _handle_coordinator_update(self) -> None:
+        self._update_from_rest()
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
         """Set the LED dimming level via REST API."""
-        if self._rest_client is None:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="rest_not_connected"
-            )
 
         self._pending_option = option
         self._attr_current_option = option
@@ -100,11 +101,12 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
             self.async_write_ha_state()
 
         try:
-            await self._rest_client.set_led_dimming_level(UNITE_LED_DIMMING_OPTION_TO_API[option])
-        except Exception as err:
+            await self.rest_client.set_led_dimming_level(UNITE_LED_DIMMING_OPTION_TO_API[option])
+        except (RestClientError, ValueError) as err:
             self._pending_option = None
+            self._update_from_rest()
             if self.hass is not None:
-                self._handle_coordinator_update()
+                self.async_write_ha_state()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="set_led_dimming_failed",
@@ -113,4 +115,4 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
 
         # Re-fetch the REST data now (regular polling is throttled) so the UI
         # shows the level the wallbox actually has.
-        await self.coordinator.async_refresh_rest_data()
+        await self.coordinator.async_refresh_after_write()

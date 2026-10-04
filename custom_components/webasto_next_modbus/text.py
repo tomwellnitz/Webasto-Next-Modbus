@@ -11,8 +11,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import CONF_UNIT_ID, DOMAIN, build_device_slug
-from .coordinator import WebastoDataCoordinator
 from .entity import WebastoRestEntity
+from .rest_client import RestClientError
+from .rest_coordinator import WebastoRestCoordinator
 
 _TAG_ID_KEY = "free_charging_tag_id"
 
@@ -33,15 +34,16 @@ async def async_setup_entry(
 
     entities: list[TextEntity] = []
 
-    # Add Free Charging Tag ID text entity if REST API is enabled
-    if runtime.coordinator.rest_enabled:
+    # The free-charging tag is a REST setting (Next and Unite).
+    if (rest := runtime.rest_coordinator) is not None:
         _migrate_tag_id_unique_id(hass, host, unit_id)
         entities.append(
             WebastoFreeChargingTagIdText(
-                runtime.coordinator,
+                rest,
                 host,
                 unit_id,
                 runtime.device_name,
+                runtime.coordinator.device_model_name,
             )
         )
 
@@ -70,31 +72,28 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         device_name: str,
+        model_name: str,
     ) -> None:
         """Initialize the text entity."""
-        super().__init__(coordinator, host, unit_id, _TAG_ID_KEY, device_name)
+        super().__init__(coordinator, host, unit_id, _TAG_ID_KEY, device_name, model_name)
 
     @property
     def native_value(self) -> str | None:
         """Return the current value."""
-        if not self.coordinator.rest_data:
+        if not self.rest_data:
             return None
-        return self.coordinator.rest_data.free_charging_tag_id
+        return self.rest_data.free_charging_tag_id
 
     async def async_set_value(self, value: str) -> None:
         """Set the text value."""
-        if not self.coordinator.rest_client:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="rest_not_connected"
-            )
 
         try:
-            await self.coordinator.rest_client.set_free_charging_tag_id(value)
-        except Exception as err:
+            await self.rest_client.set_free_charging_tag_id(value)
+        except (RestClientError, ValueError) as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="set_tag_id_failed",
@@ -102,4 +101,4 @@ class WebastoFreeChargingTagIdText(WebastoRestEntity, TextEntity):
             ) from err
         # Regular REST polling is throttled; re-fetch now so the entity reflects
         # what the wallbox actually stored instead of the stale cached value.
-        await self.coordinator.async_refresh_rest_data()
+        await self.coordinator.async_refresh_after_write()

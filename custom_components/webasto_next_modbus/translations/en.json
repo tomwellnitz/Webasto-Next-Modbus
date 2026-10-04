@@ -70,7 +70,8 @@
       "invalid_interval": "Interval is outside the supported range.",
       "rest_password_required": "REST API is enabled but no password is stored.",
       "rest_cannot_connect": "Could not connect to REST API. Check credentials and network.",
-      "rest_connection_failed": "Could not connect to REST API. Check credentials and network."
+      "rest_connection_failed": "Could not connect to REST API. Check credentials and network.",
+      "invalid_auth": "The username or password was rejected by the wallbox."
     }
   },
   "entity": {
@@ -360,6 +361,12 @@
     },
     "current_below_minimum": {
       "message": "Charging currents between 0 and {minimum} A are not allowed. Use 0 A to pause charging or at least {minimum} A."
+    },
+    "rest_auth_failed": {
+      "message": "The wallbox web interface rejected the stored REST API credentials. Re-enter them to continue."
+    },
+    "rest_update_failed": {
+      "message": "Reading data from the wallbox web interface failed: {error}"
     }
   },
   "device_automation": {

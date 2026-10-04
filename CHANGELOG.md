@@ -12,6 +12,17 @@
 
 ### Fixed
 
+- **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes (3 endpoints × 3 attempts × 30 s). REST now has its own coordinator (60 s, 10 s per request, 45 s per poll).
+- **A failed REST poll keeps the last good values** instead of replacing them with empty ones, and *Active errors* shows *unknown* instead of *ok* when the errors couldn't be read.
+- **REST entities are created even if the web interface is down at startup** (typical after a power cut) and recover on their own; before, they only appeared after a manual reload.
+- **A changed web-interface password starts the reauth flow** at runtime too (HTTP 401 and 403), and polling stops until new credentials are entered instead of retrying the login every few seconds.
+- Concurrent REST calls with an expired token log in only once; the token lifetime comes from the token itself.
+- *Restart wallbox* is sent once (it was retried up to 3×, often after the restart had already started), and a dropped connection while the wallbox goes down counts as success. Configuration writes are not retried either.
+- The options flow reports a wrong REST password as such instead of "cannot connect", and REST timeouts surface as translated errors.
+- Free charging on the Next is parsed strictly (a `"false"` string read as on).
+- Firmware, hardware versions and MAC addresses now actually appear on the device page.
+- The Next-only REST diagnostic sensors are no longer created (permanently unknown) on the Unite.
+- IPv6 hosts work for the REST API.
 - **No more leaked Modbus connections after a network hiccup.** A client that failed mid-request was dropped without being closed, and pymodbus kept reconnecting it in the background, so one Wi-Fi drop could leave several sockets open and lock Home Assistant (or evcc) out of the wallbox's single Modbus TCP slot. Failed clients are now closed right away and pymodbus' auto-reconnect is disabled.
 - **Service calls and number changes no longer hang for up to ~2 minutes** when the wallbox stops answering: pymodbus' hidden per-request retries are off, writes are attempted twice and reads three times, and every operation is bounded to 30 s.
 - **Unload and timeouts are no longer swallowed** while a Modbus request is in flight (pymodbus turns the cancellation into an I/O error, which the bridge used to retry).

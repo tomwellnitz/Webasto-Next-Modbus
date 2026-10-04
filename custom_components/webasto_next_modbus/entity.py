@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
@@ -18,43 +18,29 @@ from .const import (
 )
 from .coordinator import WebastoDataCoordinator
 from .hub import ModbusBridge, WebastoModbusError
-
-if TYPE_CHECKING:
-    from .rest_client import RestClient
+from .rest_client import RestClient, RestData
+from .rest_coordinator import WebastoRestCoordinator
 
 
 def build_device_info(
     unique_prefix: str,
     device_name: str,
-    coordinator: WebastoDataCoordinator,
+    model_name: str,
+    host: str,
 ) -> DeviceInfo:
-    """Build DeviceInfo with optional REST data."""
-    device_info = DeviceInfo(
+    """Build the DeviceInfo shared by all entities of a wallbox.
+
+    Firmware/hardware versions and MAC addresses come from the REST API and
+    are pushed to the device registry by the REST coordinator once known.
+    """
+    url_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    return DeviceInfo(
         identifiers={(DOMAIN, unique_prefix)},
         manufacturer=MANUFACTURER,
-        model=getattr(coordinator, "device_model_name", None) or MODEL,
+        model=model_name or MODEL,
         name=device_name,
+        configuration_url=f"https://{url_host}",
     )
-
-    # Add REST data if available
-    rest_data = coordinator.rest_data
-    if rest_data is not None:
-        if rest_data.comboard_sw_version:
-            device_info["sw_version"] = rest_data.comboard_sw_version
-        if rest_data.comboard_hw_version:
-            device_info["hw_version"] = rest_data.comboard_hw_version
-        if rest_data.ip_address:
-            device_info["configuration_url"] = f"https://{rest_data.ip_address}"
-        # MAC addresses stored in connections
-        connections: set[tuple[str, str]] = set()
-        if rest_data.mac_address_ethernet:
-            connections.add(("mac", rest_data.mac_address_ethernet.lower()))
-        if rest_data.mac_address_wifi:
-            connections.add(("mac", rest_data.mac_address_wifi.lower()))
-        if connections:
-            device_info["connections"] = connections
-
-    return device_info
 
 
 class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
@@ -81,7 +67,7 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._attr_translation_key = register.translation_key or register.key
         self._attr_unique_id = f"{self._unique_prefix}-{register.key}"
         self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
+            self._unique_prefix, self._device_name, coordinator.device_model_name, host
         )
 
         if register.entity_category:
@@ -90,13 +76,6 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
             except ValueError:
                 pass
         self._attr_entity_registry_enabled_default = register.entity_registry_enabled_default
-
-    def _handle_coordinator_update(self) -> None:
-        """Update cached device info and write updated coordinator data."""
-        self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
-        )
-        super()._handle_coordinator_update()
 
     @property
     def register(self) -> RegisterDefinition:
@@ -122,17 +101,17 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         return self.coordinator.data.get(self._register.key)
 
 
-class WebastoRestEntity(CoordinatorEntity[WebastoDataCoordinator]):
-    """Base entity for REST API data."""
+class WebastoRestEntity(CoordinatorEntity[WebastoRestCoordinator]):
+    """Base entity for data from the optional REST API."""
 
     def __init__(
         self,
-        coordinator: WebastoDataCoordinator,
+        coordinator: WebastoRestCoordinator,
         host: str,
         unit_id: int,
         entity_key: str,
         device_name: str,
-        rest_client: RestClient | None = None,
+        model_name: str,
     ) -> None:
         super().__init__(coordinator)
         self._host = host
@@ -140,23 +119,25 @@ class WebastoRestEntity(CoordinatorEntity[WebastoDataCoordinator]):
         self._entity_key = entity_key
         self._unique_prefix = build_device_slug(host, unit_id)
         self._device_name = device_name
-        self._rest_client = rest_client
 
         self._attr_has_entity_name = True
         self._attr_translation_key = entity_key
         self._attr_unique_id = f"{self._unique_prefix}-rest-{entity_key}"
         self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
+            self._unique_prefix, self._device_name, model_name, host
         )
 
-    def _handle_coordinator_update(self) -> None:
-        """Update cached device info and write updated coordinator data."""
-        self._attr_device_info = build_device_info(
-            self._unique_prefix, self._device_name, self.coordinator
-        )
-        super()._handle_coordinator_update()
+    @property
+    def rest_data(self) -> RestData | None:
+        """Return the latest REST data, if any was fetched yet."""
+        return self.coordinator.data
+
+    @property
+    def rest_client(self) -> RestClient:
+        """Return the REST client used for writes."""
+        return self.coordinator.client
 
     @property
     def available(self) -> bool:
-        """Return True if REST data is available."""
-        return self.coordinator.rest_enabled and self.coordinator.rest_data is not None
+        """Available while the last REST poll succeeded and data exists."""
+        return super().available and self.coordinator.data is not None

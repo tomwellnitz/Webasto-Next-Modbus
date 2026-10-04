@@ -95,7 +95,8 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 - `const.py` – Constants, register descriptions (including the Unite-specific layout), and enum mappings. The integration version lives in `manifest.json` / `pyproject.toml`, not here.
 - `hub.py` – `ModbusBridge` abstraction that wraps the async client, handles reconnect logic, exposes read/write helpers, and manages the background "Life Bit" loop.
 - `rest_client.py` – `RestClient` for optional REST API communication. Handles JWT authentication, token refresh, and API calls for features not available via Modbus; uses Home Assistant's shared aiohttp session.
-- `coordinator.py` – `DataUpdateCoordinator` implementation that schedules read cycles, normalises raw register values, optionally fetches REST API data, and emits the dispatcher-based device triggers when relevant state changes are detected. On REST `401` it starts the reauth flow via `config_entry.async_start_reauth`.
+- `coordinator.py` – Modbus `DataUpdateCoordinator`: schedules read cycles, emits the dispatcher-based device triggers when relevant state changes are detected, and raises/clears the connection repair issue.
+- `rest_coordinator.py` – Separate `DataUpdateCoordinator` for the optional REST API, so the web interface never delays Modbus. Keeps the last good data when a poll fails, raises `ConfigEntryAuthFailed` on rejected credentials (reauth flow, polling stops), and pushes firmware/hardware versions and MACs to the device registry.
 - `config_flow.py` – User, options, **reconfigure** and **reauth** flows with validation and duplicate protection. Includes optional REST API credential configuration.
 - `device_trigger.py` – Device-trigger registry and helpers used by `coordinator.py` to fire triggers (`async_fire_device_trigger`) for charging / connection / cable / fault events.
 - `diagnostics.py` – Config-entry diagnostics download (REST username and password are redacted).

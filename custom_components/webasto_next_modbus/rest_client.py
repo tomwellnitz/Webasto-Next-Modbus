@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import json
 import logging
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final
 
@@ -23,10 +27,22 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 # API Configuration
-DEFAULT_TIMEOUT: Final = 30
+# Per-request timeout. The wallbox web server answers within a second or two
+# when it is up; a longer timeout only stretches outages.
+DEFAULT_TIMEOUT: Final = 10
 TOKEN_REFRESH_MARGIN: Final = timedelta(minutes=5)
-MAX_RETRY_ATTEMPTS: Final = 3
+# Used when the access token carries no readable ``exp`` claim.
+DEFAULT_TOKEN_LIFETIME: Final = timedelta(hours=1)
+# Idempotent GETs are retried once; POSTs (configuration updates, restart)
+# are never retried, a duplicate restart or write is worse than a failure.
+GET_ATTEMPTS: Final = 2
 RETRY_BACKOFF_SECONDS: Final = 1.0
+# After a failed login, callers within this many seconds get the same error
+# instead of sending another login.
+LOGIN_FAILURE_COOLDOWN: Final = 10.0
+# Error bodies are kept on the exception, but only this much ends up in the
+# message shown to users.
+ERROR_BODY_PREVIEW: Final = 200
 
 
 class RestClientError(Exception):
@@ -45,10 +61,15 @@ class HttpRequestError(RestClientError):
     """Raised when the REST API returns an HTTP error status."""
 
     def __init__(self, status: int, path: str, body: str) -> None:
-        super().__init__(f"Request failed: {status} - {body}")
+        preview = " ".join(body.split())[:ERROR_BODY_PREVIEW]
+        super().__init__(f"Request to {path} failed with HTTP {status}: {preview}")
         self.status = status
         self.path = path
         self.body = body
+
+
+class EndpointNotFoundError(RestClientError):
+    """Raised when an endpoint does not exist on this firmware (HTTP 404)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +110,40 @@ class RestData:
     randomised_delay: int | None = None
 
 
+def _expect_list(result: Any, path: str) -> list[Any]:
+    """Return ``result`` if it is a JSON list, otherwise raise.
+
+    An unexpected shape must not be read as "empty" (no errors, no fields):
+    raising lets ``get_data`` keep the previous values instead.
+    """
+
+    if not isinstance(result, list):
+        msg = f"Unexpected response from {path}: {type(result).__name__}"
+        raise RestClientError(msg)
+    return result
+
+
+def _token_lifetime(token: str) -> timedelta:
+    """Return how long a JWT stays valid, from its own ``iat``/``exp`` claims.
+
+    The difference of the two claims is used rather than ``exp`` itself, so a
+    wallbox clock that is off (no NTP) doesn't make the token look expired or
+    valid forever. Falls back to DEFAULT_TOKEN_LIFETIME.
+    """
+
+    try:
+        payload_b64 = token.split(".")[1]
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)))
+    except IndexError, ValueError, binascii.Error, UnicodeDecodeError:
+        return DEFAULT_TOKEN_LIFETIME
+    if not isinstance(payload, dict):
+        return DEFAULT_TOKEN_LIFETIME
+    issued, expires = payload.get("iat"), payload.get("exp")
+    if isinstance(issued, (int, float)) and isinstance(expires, (int, float)) and expires > issued:
+        return timedelta(seconds=expires - issued)
+    return DEFAULT_TOKEN_LIFETIME
+
+
 class RestClient:
     """Async REST API client for Webasto Next / Ampure Unite wallboxes.
 
@@ -114,7 +169,8 @@ class RestClient:
         """Initialize the REST client.
 
         Args:
-            host: Wallbox IP address or hostname.
+            host: Wallbox IP address or hostname (an IPv6 literal is bracketed
+                automatically).
             username: Web interface username (usually "admin").
             password: Web interface password.
             session: Shared aiohttp session (from
@@ -130,13 +186,20 @@ class RestClient:
         self._host = host
         self._username = username
         self._password = password
-        self._base_url = f"https://{host}/api"
+        url_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        self._base_url = f"https://{url_host}/api"
         self._model = model
 
         self._session = session
         self._request_timeout = aiohttp.ClientTimeout(total=timeout)
         self._token: str | None = None
         self._token_expires: datetime | None = None
+        # Serialises logins: concurrent callers with an expired token must not
+        # each log in (the wallbox web UI is single-user, a second login can
+        # invalidate the first token).
+        self._login_lock = asyncio.Lock()
+        self._last_login_error: AuthenticationError | None = None
+        self._last_login_failed_at = 0.0
 
     @property
     def _is_unite(self) -> bool:
@@ -154,10 +217,10 @@ class RestClient:
         """Authenticate against the wallbox REST API.
 
         Raises:
-            AuthenticationError: If login fails.
-            ConnectionError: If connection to wallbox fails.
+            AuthenticationError: If the credentials are rejected.
+            ConnectionError: If the wallbox can't be reached.
         """
-        await self._login()
+        await self._async_login_once(lambda: True)
 
     async def disconnect(self) -> None:
         """Forget the auth token.
@@ -168,61 +231,74 @@ class RestClient:
         self._token = None
         self._token_expires = None
 
-    async def get_data(self) -> RestData:
-        """Fetch all REST API data.
+    async def get_data(
+        self,
+        previous: RestData | None = None,
+        *,
+        include_system: bool = True,
+    ) -> RestData:
+        """Fetch the REST data, keeping ``previous`` values for what wasn't fetched.
 
-        Returns:
-            RestData with firmware versions, network info, and statistics.
+        Each endpoint is fetched separately. An endpoint this firmware doesn't
+        have (404) or can't be parsed keeps its previous values; a rejected
+        login or an unreachable wallbox raises, so the caller keeps its last
+        good data instead of replacing it with empty fields.
+
+        Args:
+            previous: Last successfully fetched data.
+            include_system: Next only: also fetch the slow ``system`` section
+                (firmware, MACs, counters, LED brightness).
 
         Raises:
-            RestClientError: If fetching data fails.
+            AuthenticationError: If the credentials are rejected.
+            ConnectionError: If the wallbox can't be reached.
+            RestClientError: If no endpoint returned usable data.
         """
-        await self._ensure_token()
+        values: dict[str, Any] = asdict(previous) if previous is not None else {}
         if self._is_unite:
-            return await self._get_data_unite()
-        return await self._get_data_next()
+            fetchers: list[tuple[str, Callable[[], Awaitable[None]]]] = [
+                ("configuration fields", lambda: self._fetch_unite(values)),
+            ]
+        else:
+            fetchers = [
+                ("auth section", lambda: self._fetch_section("auth", values)),
+                ("current errors", lambda: self._fetch_current_errors(values)),
+            ]
+            if include_system or previous is None:
+                fetchers.insert(
+                    0, ("system section", lambda: self._fetch_section("system", values))
+                )
 
-    async def _get_data_next(self) -> RestData:
-        """Fetch REST data for the Webasto Next (per-section endpoints)."""
-        values: dict[str, Any] = {}
+        last_error: RestClientError | None = None
+        fetched_any = False
+        for name, fetch in fetchers:
+            try:
+                await fetch()
+            except AuthenticationError, ConnectionError:
+                raise
+            except RestClientError as err:
+                _LOGGER.debug("Failed to fetch %s: %s", name, err)
+                last_error = err
+            else:
+                fetched_any = True
 
-        # Fetch system section
-        try:
-            system_fields = await self._get_section("system")
-            self._parse_system_fields(system_fields, values)
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch system section: %r", err)
-
-        # Fetch auth section for free charging
-        try:
-            auth_fields = await self._get_section("auth")
-            self._parse_auth_fields(auth_fields, values)
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch auth section: %r", err)
-
-        # Fetch current errors
-        try:
-            errors = await self._get_current_errors()
-            values["active_errors"] = errors
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch current errors: %r", err)
-
+        if not fetched_any:
+            assert last_error is not None
+            raise last_error
         return RestData(**values)
 
-    async def _get_data_unite(self) -> RestData:
-        """Fetch REST data for the Unite (flat configuration-fields endpoint).
+    async def _fetch_section(self, section: str, values: dict[str, Any]) -> None:
+        fields = await self._get_section(section)
+        if section == "system":
+            self._parse_system_fields(fields, values)
+        else:
+            self._parse_auth_fields(fields, values)
 
-        The Unite has no equivalent for the Next's firmware / diagnostic
-        sensors — its REST surface is configuration only — so only the mappable
-        settings (free charging, LED dimming, randomised delay) are returned.
-        """
-        values: dict[str, Any] = {}
-        try:
-            fields = await self._get_configuration_fields()
-            self._parse_unite_fields(fields, values)
-        except Exception as err:
-            _LOGGER.debug("Failed to fetch Unite configuration fields: %r", err)
-        return RestData(**values)
+    async def _fetch_current_errors(self, values: dict[str, Any]) -> None:
+        values["active_errors"] = await self._get_current_errors()
+
+    async def _fetch_unite(self, values: dict[str, Any]) -> None:
+        self._parse_unite_fields(await self._get_configuration_fields(), values)
 
     async def set_led_brightness(self, brightness: int) -> None:
         """Set LED brightness.
@@ -244,7 +320,6 @@ class RestClient:
             msg = f"Brightness must be 0-100, got {brightness}"
             raise ValueError(msg)
 
-        await self._ensure_token()
         await self._update_config(
             [
                 {
@@ -272,7 +347,6 @@ class RestClient:
             msg = f"Unknown LED dimming level {level!r}"
             raise ValueError(msg)
 
-        await self._ensure_token()
         await self._update_config([self._unite_update("generalSettings.ledDimmingLevel", level)])
 
     async def set_randomised_delay(self, seconds: int) -> None:
@@ -292,7 +366,6 @@ class RestClient:
             msg = f"Randomised delay must be 0-{UNITE_RANDOMISED_DELAY_MAX}, got {seconds}"
             raise ValueError(msg)
 
-        await self._ensure_token()
         await self._update_config(
             [self._unite_update("generalSettings.randomisedDelayMaximumDuration", str(seconds))]
         )
@@ -306,7 +379,6 @@ class RestClient:
         Raises:
             RestClientError: If the request fails.
         """
-        await self._ensure_token()
         if self._is_unite:
             await self._update_config(
                 [
@@ -335,7 +407,6 @@ class RestClient:
         Raises:
             RestClientError: If the request fails.
         """
-        await self._ensure_token()
         if self._is_unite:
             await self._update_config(
                 [self._unite_update("ocppConfigurations.freeModeRfid", tag_id)]
@@ -368,87 +439,117 @@ class RestClient:
     async def restart_system(self) -> None:
         """Trigger a system restart.
 
+        Sent once, never retried. The wallbox often drops the connection while
+        it goes down, so a disconnect or timeout after the request was sent is
+        treated as success.
+
         Raises:
-            RestClientError: If the request fails.
-        """
-        await self._ensure_token()
-        await self._post("/custom-actions/restart-system")
-
-    async def test_connection(self) -> bool:
-        """Test if connection and authentication work.
-
-        Returns:
-            True if connection is successful.
+            RestClientError: If the request is rejected.
         """
         try:
-            await self.connect()
-            return True
-        except RestClientError:
-            return False
-        finally:
-            # Don't disconnect - keep session for later use
-            pass
+            await self._request("POST", "/custom-actions/restart-system", attempts=1)
+        except ConnectionError as err:
+            if isinstance(err.__cause__, (aiohttp.ServerDisconnectedError, TimeoutError)):
+                _LOGGER.debug("Wallbox dropped the connection while restarting: %s", err)
+                return
+            raise
 
     # -------------------------------------------------------------------------
     # Private methods
     # -------------------------------------------------------------------------
 
-    async def _ensure_token(self) -> None:
-        """Ensure we have a valid token, refresh if needed."""
-        if not self.is_connected:
-            await self._login()
+    async def _ensure_token(self) -> str:
+        """Return a valid token, logging in first if needed."""
+        token = self._token
+        if token is not None and self.is_connected:
+            return token
+        return await self._async_login_once(lambda: self._token is None or not self.is_connected)
+
+    async def _relogin_after_401(self, rejected_token: str) -> str:
+        """Log in again unless another caller already replaced the rejected token.
+
+        A failed re-login by another caller is shared (see _async_login_once).
+        """
+        return await self._async_login_once(lambda: self._token in (rejected_token, None))
+
+    async def _async_login_once(self, needs_login: Callable[[], bool]) -> str:
+        """Log in under the lock, sharing a recent rejection instead of repeating it.
+
+        Requests that queued behind a login get its token. If the login was
+        just rejected, every caller in the next LOGIN_FAILURE_COOLDOWN seconds
+        gets that same error, so a burst of requests with a wrong password
+        doesn't become a burst of rejected logins (the web interface can lock
+        the account after repeated failures).
+        """
+        loop = asyncio.get_running_loop()
+        async with self._login_lock:
+            if (
+                self._token is None
+                and self._last_login_error is not None
+                and loop.time() - self._last_login_failed_at < LOGIN_FAILURE_COOLDOWN
+            ):
+                raise self._last_login_error
+            if needs_login():
+                self._token = None
+                try:
+                    await self._login()
+                except AuthenticationError as err:
+                    # Only rejected credentials are shared; an unreachable web
+                    # interface may be back for the very next caller.
+                    self._last_login_error = err
+                    self._last_login_failed_at = loop.time()
+                    raise
+                self._last_login_error = None
+            if self._token is None:  # pragma: no cover - _login sets it or raises
+                msg = "Not logged in"
+                raise RestClientError(msg)
+            return self._token
 
     async def _login(self) -> None:
-        """Authenticate and obtain JWT token."""
+        """Authenticate and obtain a JWT token. Caller holds the login lock."""
         url = f"{self._base_url}/login"
         payload = {"username": self._username, "password": self._password}
 
         try:
             async with self._session.post(url, json=payload, timeout=self._request_timeout) as resp:
-                if resp.status == 401:
-                    msg = "Invalid username or password"
+                if resp.status in (401, 403):
+                    msg = "The wallbox rejected the username or password"
                     raise AuthenticationError(msg)
                 if resp.status != 200:
                     # Not a credentials problem (e.g. the wallbox web server is
                     # still coming up) — treat it as a connection error so the
                     # caller retries instead of flagging the credentials.
-                    msg = f"Login failed with status {resp.status}"
+                    msg = f"Login failed with HTTP {resp.status}"
                     raise ConnectionError(msg)
-
-                data = await resp.json()
-                self._token = data.get("access_token")
-                if not self._token:
-                    msg = "No access_token in response"
-                    raise AuthenticationError(msg)
-
-                # JWT tokens typically expire after some time
-                # We'll assume 1 hour if not specified
-                self._token_expires = datetime.now(UTC) + timedelta(hours=1)
-                _LOGGER.debug("Successfully authenticated to REST API")
-
-        except aiohttp.ClientError as err:
-            msg = f"Connection to {self._host} failed: {err}"
+                data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError) as err:
+            msg = f"Connection to {self._host} failed: {err!r}"
             raise ConnectionError(msg) from err
+        except ValueError as err:
+            msg = "Login returned an invalid response"
+            raise RestClientError(msg) from err
+
+        token = data.get("access_token") if isinstance(data, dict) else None
+        if not isinstance(token, str) or not token:
+            # A 200 without a token is a malformed answer (e.g. the web server
+            # is still starting), not a rejected password: retry later.
+            msg = "No access_token in login response"
+            raise RestClientError(msg)
+        self._token = token
+        self._token_expires = datetime.now(UTC) + _token_lifetime(token)
+        _LOGGER.debug("Authenticated to REST API (token valid until %s)", self._token_expires)
 
     async def _get(self, path: str) -> Any:
         """Make authenticated GET request."""
-        return await self._request("GET", path)
+        return await self._request("GET", path, attempts=GET_ATTEMPTS)
 
     async def _post(
         self,
         path: str,
         json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
     ) -> Any:
-        """Make authenticated POST request."""
-        return await self._request("POST", path, json=json)
-
-    async def _put(
-        self,
-        path: str,
-        json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
-    ) -> Any:
-        """Make authenticated PUT request."""
-        return await self._request("PUT", path, json=json)
+        """Make authenticated POST request (sent once)."""
+        return await self._request("POST", path, json=json, attempts=1)
 
     async def _request(
         self,
@@ -456,75 +557,63 @@ class RestClient:
         path: str,
         *,
         json: Mapping[str, Any] | list[dict[str, Any]] | None = None,
+        attempts: int,
     ) -> Any:
-        """Make authenticated request with retry logic."""
-        await self._ensure_token()
+        """Make an authenticated request.
 
-        assert self._token is not None  # noqa: S101
-
+        A 401 triggers one re-login and one more try (not counted as an
+        attempt). A second 401 right after a fresh login means the
+        credentials no longer work and raises ``AuthenticationError``.
+        Transport errors are retried up to ``attempts`` times in total.
+        """
+        token = await self._ensure_token()
         url = f"{self._base_url}{path}"
-        headers = {
-            "Authorization": f"Bearer {self._token}",
-            "Accept": "application/json",
-        }
+        relogged_in = False
+        attempt = 0
 
-        last_error: Exception | None = None
-        for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
+        while True:
+            attempt += 1
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
             try:
                 async with self._session.request(
                     method, url, headers=headers, json=json, timeout=self._request_timeout
                 ) as resp:
                     if resp.status == 401:
-                        # Token expired, re-authenticate
-                        _LOGGER.debug("Token expired (401), re-authenticating...")
-                        await self._login()
-                        headers["Authorization"] = f"Bearer {self._token}"
+                        if relogged_in:
+                            msg = f"Request to {path} was rejected after a fresh login"
+                            raise AuthenticationError(msg)
+                        _LOGGER.debug("Token rejected (401), re-authenticating")
+                        token = await self._relogin_after_401(token)
+                        relogged_in = True
+                        attempt -= 1
                         continue
                     if resp.status == 404:
                         msg = f"Endpoint not found: {path}"
-                        raise RestClientError(msg)
+                        raise EndpointNotFoundError(msg)
                     if resp.status >= 400:
-                        text = await resp.text()
-                        raise HttpRequestError(resp.status, path, text)
-
+                        raise HttpRequestError(resp.status, path, await resp.text())
                     if resp.content_type == "application/json":
                         return await resp.json()
                     return await resp.text()
-
-            except asyncio.CancelledError:
-                raise
             except (aiohttp.ClientError, TimeoutError) as err:
-                last_error = err
                 _LOGGER.debug(
-                    "Attempt %s/%s to %s failed: %r",
-                    attempt,
-                    MAX_RETRY_ATTEMPTS,
-                    f"{method} {path}",
-                    err,
+                    "Attempt %s/%s to %s %s failed: %r", attempt, attempts, method, path, err
                 )
-
-                if attempt == MAX_RETRY_ATTEMPTS:
-                    break
-
+                if attempt >= attempts:
+                    msg = f"{method} {path} failed: {err!r}"
+                    raise ConnectionError(msg) from err
                 await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
-
-        msg = f"Request to {path} failed after {MAX_RETRY_ATTEMPTS} attempts"
-        if last_error:
-            raise RestClientError(msg) from last_error
-        raise RestClientError(msg)
+            except ValueError as err:
+                msg = f"{method} {path} returned an invalid response"
+                raise RestClientError(msg) from err
 
     async def _get_section(self, section: str) -> list[dict[str, Any]]:
         """Get configuration fields for a section."""
-        result = await self._get(f"/sections/{section}")
-        if not isinstance(result, list):
-            return []
-        return result
+        return _expect_list(await self._get(f"/sections/{section}"), f"/sections/{section}")
 
     async def _get_current_errors(self) -> list[str]:
         """Get list of current active errors."""
-        result = await self._get("/current-errors")
-        if not isinstance(result, list):
-            return []
+        result = _expect_list(await self._get("/current-errors"), "/current-errors")
         # Extract error descriptions or codes
         errors = []
         for error in result:
@@ -537,10 +626,7 @@ class RestClient:
 
     async def _get_configuration_fields(self) -> list[dict[str, Any]]:
         """Get the Unite's flat list of configuration fields."""
-        result = await self._get("/configuration-fields/")
-        if not isinstance(result, list):
-            return []
-        return result
+        return _expect_list(await self._get("/configuration-fields/"), "/configuration-fields/")
 
     async def _update_config(self, updates: list[dict[str, Any]]) -> None:
         """Update configuration fields."""
@@ -622,7 +708,7 @@ class RestClient:
             value = field.get("value")
 
             if key == "free-charging":
-                values["free_charging_enabled"] = bool(value)
+                values["free_charging_enabled"] = self._parse_bool(value)
             elif key in ("free-charging-alais", "free-charging-alias"):
                 values["free_charging_tag_id"] = value
 

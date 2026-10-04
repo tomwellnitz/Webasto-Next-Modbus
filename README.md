@@ -88,7 +88,8 @@ Credentials are stored in the Home Assistant config entry and redacted from down
 ## Data updates
 
 - **Modbus telemetry** is polled every **10 seconds** by default. The interval is configurable via *⋮ → **Configure** → Scan interval*.
-- **REST API data** (firmware info, LED brightness, free charging, diagnostics, active errors) is fetched every **60 seconds**. If the wallbox's web interface is unreachable at startup, the integration retries the REST connection every **5 minutes** until it succeeds; the Modbus side is independent and keeps working.
+- **REST API data** (free charging, active errors, Unite settings) is fetched every **60 seconds**, independently of Modbus: a slow or unreachable web interface never delays the Modbus values. On the Next, the slower *system* section (firmware, MAC addresses, counters, LED brightness) is re-read every 5 minutes and right after a change. While the web interface is unreachable the REST entities show *unavailable* and recover on their own. If the wallbox rejects the stored credentials, Home Assistant asks you to re-enter them and stops trying until you do (repeated failed logins can lock the web-interface account).
+- Firmware and hardware versions and the MAC addresses from the REST API appear on the **device page**.
 - The **"Life Bit" keep-alive** runs continuously in the background: as the Modbus specification requires, the integration writes `1` to the keep-alive register every half of the configured **fail-safe timeout** (at most every 30 s, at least every 2 s), so the wallbox never drops into fail-safe mode while Home Assistant is running. While the wallbox is unreachable it backs off and resumes as soon as a poll succeeds again.
 - Each Modbus operation is retried a few times (reads 3×, writes 2×) and bounded to 30 s in total, so a wallbox that stops answering can't block a service call for minutes.
 
