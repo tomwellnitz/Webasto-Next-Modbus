@@ -50,13 +50,6 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle the initial configuration step."""
 
-        if vol is None:
-            _LOGGER.error(
-                "Missing dependency 'voluptuous'; aborting config flow. "
-                "Please ensure the Home Assistant environment includes this package."
-            )
-            return self.async_abort(reason="missing_dependency")
-
         errors: dict[str, str] = {}
 
         normalized_input: dict[str, Any] | None = None
@@ -388,13 +381,6 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Mapping[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Manage the options."""
-
-        if vol is None:
-            _LOGGER.error(
-                "Missing dependency 'voluptuous'; aborting options flow. "
-                "Please ensure the Home Assistant environment includes this package."
-            )
-            return self.async_abort(reason="missing_dependency")
 
         config_entry = self.config_entry
 

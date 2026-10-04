@@ -217,3 +217,23 @@ async def test_next_get_data_uses_sections() -> None:
 
     # Next reads the per-section endpoints, not the Unite's flat one.
     assert client._get_section.await_count == 2
+
+
+async def test_next_device_info_fields_are_strings() -> None:
+    """Values that feed DeviceInfo are coerced to str (registry rejects others)."""
+    client = _next_client()
+    system_fields = [
+        {"fieldKey": "comboard-sw-version", "value": " 3.1.27 "},
+        {"fieldKey": "comboard-hw-version", "value": 2},
+        {"fieldKey": "MAC-Address Eth0", "value": "AA:BB:CC:DD:EE:FF"},
+        {"fieldKey": "MAC-Address WiFi", "value": ""},
+    ]
+    client._get_section = AsyncMock(side_effect=[system_fields, []])  # type: ignore[method-assign]
+    client._get_current_errors = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+    data = await client.get_data()
+
+    assert data.comboard_sw_version == "3.1.27"
+    assert data.comboard_hw_version == "2"
+    assert data.mac_address_ethernet == "AA:BB:CC:DD:EE:FF"
+    assert data.mac_address_wifi is None

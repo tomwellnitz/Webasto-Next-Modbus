@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 import voluptuous as vol
 from homeassistant.components.device_automation.exceptions import (
@@ -54,7 +54,20 @@ TRIGGER_SCHEMA = cv.TRIGGER_BASE_SCHEMA.extend(
 SIGNAL_DEVICE_TRIGGER = "webasto_next_modbus_device_trigger_{device_slug}"
 
 
-def _get_device_slug(device_entry: dr.DeviceEntry | None) -> str | None:
+class _DeviceWithIdentifiers(Protocol):
+    """Registry entry exposing identifiers.
+
+    ``DeviceRegistry.async_get`` returns ``DeviceEntry | ChildDeviceEntry`` since
+    HA 2026.8; both carry ``identifiers``. A protocol keeps this working with
+    releases that predate ``ChildDeviceEntry``.
+    """
+
+    @property
+    def identifiers(self) -> set[tuple[str, str]]:
+        """Return the device identifiers."""
+
+
+def _get_device_slug(device_entry: _DeviceWithIdentifiers | None) -> str | None:
     if not device_entry:
         return None
     for domain, slug in device_entry.identifiers:

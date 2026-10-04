@@ -587,17 +587,17 @@ class RestClient:
             value = field.get("value")
 
             if key == "comboard-sw-version":
-                values["comboard_sw_version"] = value
+                values["comboard_sw_version"] = self._safe_str(value)
             elif key == "powerboard-sw-version":
-                values["powerboard_sw_version"] = value
+                values["powerboard_sw_version"] = self._safe_str(value)
             elif key == "comboard-hw-version":
-                values["comboard_hw_version"] = value
+                values["comboard_hw_version"] = self._safe_str(value)
             elif key == "powerboard-hw-version":
-                values["powerboard_hw_version"] = value
+                values["powerboard_hw_version"] = self._safe_str(value)
             elif key == "MAC-Address Eth0":
-                values["mac_address_ethernet"] = value
+                values["mac_address_ethernet"] = self._safe_str(value)
             elif key == "MAC-Address WiFi":
-                values["mac_address_wifi"] = value
+                values["mac_address_wifi"] = self._safe_str(value)
             elif key == "plug-cycles":
                 values["plug_cycles"] = self._safe_int(value)
             elif key == "error-counter":
@@ -696,6 +696,18 @@ class RestClient:
             return int(value)
         except ValueError, TypeError:
             return None
+
+    @staticmethod
+    def _safe_str(value: Any) -> str | None:
+        """Safely convert value to a stripped string, mapping empty to None.
+
+        These values end up in ``DeviceInfo`` (sw/hw version, MAC connections),
+        and the device registry rejects non-string fields from HA 2026.12 on.
+        """
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
     @staticmethod
     def _extract_ip(interfaces_str: str | None) -> str | None:

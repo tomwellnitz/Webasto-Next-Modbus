@@ -43,8 +43,7 @@
     "abort": {
       "already_configured": "Diese Wallbox ist bereits eingerichtet.",
       "reconfigure_successful": "Die Verbindungseinstellungen wurden aktualisiert.",
-      "reauth_successful": "Die REST-API-Zugangsdaten wurden aktualisiert.",
-      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
+      "reauth_successful": "Die REST-API-Zugangsdaten wurden aktualisiert."
     }
   },
   "entity": {
@@ -311,9 +310,6 @@
       "rest_password_required": "REST API ist aktiviert, aber es wurde kein Passwort hinterlegt.",
       "rest_cannot_connect": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen.",
       "rest_connection_failed": "Verbindung zur REST API fehlgeschlagen. Zugangsdaten und Netzwerk prüfen."
-    },
-    "abort": {
-      "missing_dependency": "Das benötigte Paket 'voluptuous' fehlt in dieser Home Assistant Umgebung."
     }
   },
   "exceptions": {
