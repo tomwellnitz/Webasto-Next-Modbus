@@ -109,7 +109,7 @@
         "name": "EVSE Fehlercode",
         "state": {
           "ok": "Kein Fehler",
-          "power_switch_failure_closed": "Leistungsschalter-Fehler (Relais fest geschlossen)",
+          "power_switch_failure": "Leistungsschalter-Fehler (Relais fest geschlossen)",
           "internal_error_aux_voltage": "Interner Fehler (Hilfsspannung)",
           "ev_communication_error_control_pilot": "EV-Kommunikationsfehler (Control Pilot)",
           "over_voltage": "Überspannung",
@@ -348,6 +348,18 @@
     },
     "set_randomised_delay_failed": {
       "message": "Zufällige Startverzögerung konnte nicht gesetzt werden: {error}"
+    },
+    "cannot_connect": {
+      "message": "Verbindung zur Wallbox fehlgeschlagen: {error}"
+    },
+    "update_failed": {
+      "message": "Daten konnten nicht von der Wallbox gelesen werden: {error}"
+    },
+    "entry_not_found": {
+      "message": "Keine geladene Webasto Next / Unite hat die Konfigurationseintrags-ID {entry_id}."
+    },
+    "current_below_minimum": {
+      "message": "Ladeströme zwischen 0 und {minimum} A sind nicht erlaubt. Nutze 0 A zum Pausieren oder mindestens {minimum} A."
     }
   },
   "device_automation": {
@@ -360,6 +372,114 @@
       "cable_connected": "Kabel verbunden",
       "cable_disconnected": "Kabel getrennt",
       "fault_occurred": "Fehler aufgetreten"
+    }
+  },
+  "issues": {
+    "connection_failed": {
+      "title": "{name} ist nicht erreichbar",
+      "description": "Home Assistant konnte wiederholt keine Daten von der Wallbox {name} lesen. Prüfe, ob sie Strom hat, mit dem Netzwerk verbunden ist und Modbus TCP in ihren Einstellungen aktiviert ist. Es kann immer nur ein Modbus-Client verbunden sein, stelle also sicher, dass kein anderes System (zum Beispiel ein weiteres Energiemanagement) die Verbindung belegt.\n\nLetzter Fehler: {error}\n\nDiese Meldung verschwindet, sobald die Wallbox wieder antwortet."
+    }
+  },
+  "services": {
+    "set_current": {
+      "name": "Ladestrom setzen",
+      "description": "Ändert die dynamische Ladestrombegrenzung. 0 A pausiert das Laden; andere Werte müssen mindestens 6 A betragen und werden auf das Maximum der Wallbox-Variante begrenzt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        },
+        "amps": {
+          "name": "Strom",
+          "description": "Ladestrom in Ampere: 0 zum Pausieren, sonst 6 bis 32."
+        }
+      }
+    },
+    "set_failsafe": {
+      "name": "Fail-Safe konfigurieren",
+      "description": "Setzt den Rückfall-Ladestrom und die Zeitspanne, nach der er gilt, wenn das Energiemanagement keine Keep-Alives mehr sendet.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        },
+        "amps": {
+          "name": "Rückfall-Strom",
+          "description": "Ladestrom, der im Fail-Safe-Betrieb gilt."
+        },
+        "timeout_s": {
+          "name": "Timeout",
+          "description": "Sekunden ohne Keep-Alive, bis der Fail-Safe-Modus greift."
+        }
+      }
+    },
+    "send_keepalive": {
+      "name": "Keep-Alive senden",
+      "description": "Schreibt das Life-Bit einmal, um der Wallbox zu signalisieren, dass das Energiemanagement noch aktiv ist. Die Integration macht das bereits automatisch.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        }
+      }
+    },
+    "start_session": {
+      "name": "Ladesitzung starten",
+      "description": "Startet eine Ladesitzung (nur Webasto Next).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        }
+      }
+    },
+    "stop_session": {
+      "name": "Ladesitzung beenden",
+      "description": "Bricht die laufende Ladesitzung ab (nur Webasto Next).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        }
+      }
+    },
+    "set_led_brightness": {
+      "name": "LED-Helligkeit setzen",
+      "description": "Setzt die LED-Helligkeit der Wallbox (erfordert die REST-API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        },
+        "brightness": {
+          "name": "Helligkeit",
+          "description": "LED-Helligkeit von 0 (aus) bis 100 (voll)."
+        }
+      }
+    },
+    "set_free_charging": {
+      "name": "Free Charging setzen",
+      "description": "Schaltet freies Laden ohne RFID-Freigabe ein oder aus (erfordert die REST-API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        },
+        "enabled": {
+          "name": "Aktiviert",
+          "description": "Ob freies Laden aktiviert ist."
+        }
+      }
+    },
+    "restart_wallbox": {
+      "name": "Wallbox neu starten",
+      "description": "Startet die Wallbox neu (erfordert die REST-API).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wallbox",
+          "description": "Konfigurationseintrag der Wallbox. Optional, wenn nur eine Wallbox eingerichtet ist."
+        }
+      }
     }
   }
 }

@@ -13,8 +13,8 @@ MIN_SCAN_INTERVAL: Final = 2
 MAX_SCAN_INTERVAL: Final = 60
 MAX_RETRY_ATTEMPTS: Final = 5
 RETRY_BACKOFF_SECONDS: Final = 2.0
-FAILURE_NOTIFICATION_THRESHOLD: Final = 3
-FAILURE_NOTIFICATION_TITLE: Final = "Webasto Next Modbus connection issue"
+# Raise a repair issue after this many consecutive failed polls.
+FAILURE_ISSUE_THRESHOLD: Final = 3
 
 CONF_UNIT_ID: Final = "unit_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
@@ -57,6 +57,10 @@ VARIANT_LABELS: Final = {
     VARIANT_22_KW: "22 kW (32 A)",
 }
 
+# IEC 61851 lower limit for AC charging. The charging-current register also
+# accepts 0 (pause), but nothing in between.
+MIN_CHARGING_CURRENT: Final = 6
+
 VARIANT_MAX_CURRENT: Final = {
     VARIANT_11_KW: 16,
     VARIANT_22_KW: 32,
@@ -87,6 +91,11 @@ DEVICE_NAME: Final = "Webasto Next Wallbox"
 KEEPALIVE_TRIGGER_VALUE: Final = 1
 SESSION_COMMAND_START_VALUE: Final = 1
 SESSION_COMMAND_STOP_VALUE: Final = 2
+SESSION_COMMAND_IDLE_VALUE: Final = 0
+# Register 5006 only acts on a change: "When value changes to 0 and then to 1
+# another charging session is started" (same for 2 = cancel). Writing the idle
+# value first and waiting briefly makes repeated commands take effect.
+SESSION_COMMAND_RESET_DELAY: Final = 1.0  # seconds
 SIGNAL_REGISTER_WRITTEN: Final = "webasto_next_modbus_register_written"
 
 # Service names (Modbus)
@@ -130,6 +139,10 @@ class RegisterDefinition:
     encoding: str | None = None
     translation_key: str | None = None
     optional: bool = False  # If True, register will be skipped if unsupported
+    suggested_display_precision: int | None = None
+    # Niche/diagnostic entities start disabled in the entity registry; users
+    # who need them enable them per device.
+    entity_registry_enabled_default: bool = True
 
 
 # Enumerations mapped to user friendly strings.
@@ -282,6 +295,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         state_class="measurement",
         translation_key="current_l1_a",
+        suggested_display_precision=2,
     ),
     RegisterDefinition(
         key="current_l2_a",
@@ -296,6 +310,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         state_class="measurement",
         translation_key="current_l2_a",
+        suggested_display_precision=2,
     ),
     RegisterDefinition(
         key="current_l3_a",
@@ -310,6 +325,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         state_class="measurement",
         translation_key="current_l3_a",
+        suggested_display_precision=2,
     ),
     RegisterDefinition(
         key="active_power_total_w",
@@ -323,6 +339,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="power",
         state_class="measurement",
         translation_key="active_power_total_w",
+        suggested_display_precision=0,
     ),
     RegisterDefinition(
         key="active_power_l1_w",
@@ -336,6 +353,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="power",
         state_class="measurement",
         translation_key="active_power_l1_w",
+        suggested_display_precision=0,
     ),
     RegisterDefinition(
         key="active_power_l2_w",
@@ -349,6 +367,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="power",
         state_class="measurement",
         translation_key="active_power_l2_w",
+        suggested_display_precision=0,
     ),
     RegisterDefinition(
         key="active_power_l3_w",
@@ -362,6 +381,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="power",
         state_class="measurement",
         translation_key="active_power_l3_w",
+        suggested_display_precision=0,
     ),
     RegisterDefinition(
         key="energy_total_kwh",
@@ -376,6 +396,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="energy",
         state_class="total_increasing",
         translation_key="energy_total_kwh",
+        suggested_display_precision=2,
     ),
     RegisterDefinition(
         key="session_max_current_a",
@@ -403,6 +424,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         entity_category="diagnostic",
         translation_key="evse_min_current_a",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="evse_max_current_a",
@@ -416,6 +438,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         entity_category="diagnostic",
         translation_key="evse_max_current_a",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="cable_max_current_a",
@@ -429,6 +452,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         entity_category="diagnostic",
         translation_key="cable_max_current_a",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="ev_max_current_a",
@@ -442,6 +466,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         device_class="current",
         entity_category="diagnostic",
         translation_key="ev_max_current_a",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="charged_energy_wh",
@@ -453,8 +478,9 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity="sensor",
         unit="Wh",
         device_class="energy",
-        state_class="total",
+        state_class="total_increasing",
         translation_key="charged_energy_wh",
+        suggested_display_precision=0,
     ),
     RegisterDefinition(
         key="session_start_time",
@@ -466,6 +492,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity="sensor",
         entity_category="diagnostic",
         translation_key="session_start_time",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="session_duration_s",
@@ -491,6 +518,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity="sensor",
         entity_category="diagnostic",
         translation_key="session_end_time",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="session_user_id",
@@ -503,6 +531,7 @@ SENSOR_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         entity_category="diagnostic",
         encoding="ascii",
         translation_key="session_user_id",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="smart_vehicle_detected",
@@ -537,6 +566,7 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         max_value=32,
         step=1,
         translation_key="failsafe_current_a",
+        entity_category="config",
     ),
     RegisterDefinition(
         key="failsafe_timeout_s",
@@ -552,6 +582,8 @@ NUMBER_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         max_value=120,
         step=1,
         translation_key="failsafe_timeout_s",
+        device_class="duration",
+        entity_category="config",
     ),
     RegisterDefinition(
         key="set_current_a",
@@ -587,6 +619,7 @@ BUTTON_REGISTERS: Final[tuple[RegisterDefinition, ...]] = (
         writable=True,
         write_only=True,
         translation_key="send_keepalive",
+        entity_registry_enabled_default=False,
     ),
     RegisterDefinition(
         key="start_session",
@@ -656,7 +689,7 @@ _UNITE_SENSOR_OVERRIDES: Final[dict[str, dict[str, object]]] = {
     # numeric code. Drop the "enum" device class so Home Assistant does not
     # validate the value against a (missing) options list.
     "fault_code": {"options": None, "device_class": None},
-    "energy_total_kwh": {"scale": 0.1},
+    "energy_total_kwh": {"scale": 0.1, "suggested_display_precision": 1},
     "charged_energy_wh": {"data_type": "uint32", "count": 2},
 }
 

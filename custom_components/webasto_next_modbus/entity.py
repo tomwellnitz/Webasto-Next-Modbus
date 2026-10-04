@@ -89,6 +89,7 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
                 self._attr_entity_category = EntityCategory(register.entity_category)
             except ValueError:
                 pass
+        self._attr_entity_registry_enabled_default = register.entity_registry_enabled_default
 
     def _handle_coordinator_update(self) -> None:
         """Update cached device info and write updated coordinator data."""

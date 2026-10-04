@@ -44,6 +44,7 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Webasto Next Modbus config flow."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: Mapping[str, Any] | None = None
@@ -449,12 +450,6 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 elif CONF_NAME in updated_data:
                     updated_data.pop(CONF_NAME)
                 title = name or f"{updated_data[CONF_HOST]} (unit {updated_data[CONF_UNIT_ID]})"
-                if updated_data != config_entry.data or title != config_entry.title:
-                    self.hass.config_entries.async_update_entry(
-                        config_entry,
-                        data=updated_data,
-                        title=title,
-                    )
 
                 options_data: dict[str, Any] = {
                     CONF_SCAN_INTERVAL: interval,
@@ -467,6 +462,15 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                     if rest_password:
                         options_data[CONF_REST_PASSWORD] = rest_password
 
+                # Apply data, title and options in one update so the update
+                # listener reloads the entry once. Finishing the flow with the
+                # same options afterwards is then a no-op.
+                self.hass.config_entries.async_update_entry(
+                    config_entry,
+                    data=updated_data,
+                    title=title,
+                    options=options_data,
+                )
                 return self.async_create_entry(title="", data=options_data)
 
         data_schema = vol.Schema(

@@ -6,21 +6,23 @@ import asyncio
 import logging
 
 from homeassistant.components.number import (
+    NumberDeviceClass,
     NumberEntity,
     NumberExtraStoredData,
     NumberMode,
     RestoreNumber,
 )
 from homeassistant.const import CONF_HOST, PERCENTAGE, EntityCategory, UnitOfTime
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
     CONF_UNIT_ID,
     DOMAIN,
+    MIN_CHARGING_CURRENT,
     MODEL_NEXT,
     MODEL_UNITE,
     SIGNAL_REGISTER_WRITTEN,
@@ -41,7 +43,7 @@ PARALLEL_UPDATES = 0
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: WebastoConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Webasto number entities."""
 
@@ -116,6 +118,11 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
             self._attr_native_step = register.step
         if register.unit:
             self._attr_native_unit_of_measurement = register.unit
+        if register.device_class:
+            try:
+                self._attr_device_class = NumberDeviceClass(register.device_class)
+            except ValueError:
+                pass
 
         self._last_written_value: int | None = None
         self._write_only = register.write_only
@@ -155,6 +162,12 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
         """Write a value to the Modbus register."""
 
         int_value = self._clamp_to_bounds(int(round(value)))
+        if self.register.key == "set_current_a" and 0 < int_value < MIN_CHARGING_CURRENT:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="current_below_minimum",
+                translation_placeholders={"minimum": str(MIN_CHARGING_CURRENT)},
+            )
         await self._async_write_register(int_value)
         self._last_written_value = int_value
         self._attr_native_value = int_value
@@ -263,6 +276,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
             self.async_write_ha_state()
         return True
 
+    @callback
     def _handle_register_written(
         self,
         device_slug: str,

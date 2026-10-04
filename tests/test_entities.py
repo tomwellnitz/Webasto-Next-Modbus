@@ -265,10 +265,7 @@ async def test_button_start_session(coordinator_fixture) -> None:
 
     await button.async_press()
 
-    bridge.async_write_register.assert_awaited_with(
-        register,
-        SESSION_COMMAND_START_VALUE,
-    )
+    bridge.async_send_session_command.assert_awaited_once_with(SESSION_COMMAND_START_VALUE)
     coordinator.async_request_refresh.assert_awaited()
 
 
@@ -289,10 +286,7 @@ async def test_button_stop_session(coordinator_fixture) -> None:
 
     await button.async_press()
 
-    bridge.async_write_register.assert_awaited_with(
-        register,
-        SESSION_COMMAND_STOP_VALUE,
-    )
+    bridge.async_send_session_command.assert_awaited_once_with(SESSION_COMMAND_STOP_VALUE)
     coordinator.async_request_refresh.assert_awaited()
 
 

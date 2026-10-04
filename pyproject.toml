@@ -47,6 +47,14 @@ verbose = false
 exclude = [".venv", ".git", "__pycache__"]
 ignore_names = ["_attr_has_entity_name"]
 
+[tool.uv]
+# Install the project with a plain .pth path entry instead of setuptools'
+# import-hook finder: Home Assistant's loader iterates
+# `custom_components.__path__` as directories and crashes on the finder's
+# `__editable__...__path_hook__` entry, which breaks every test that sets up
+# the integration in a real hass instance.
+config-settings = { editable_mode = "compat" }
+
 [tool.setuptools]
 packages = [
   "custom_components.webasto_next_modbus",

@@ -70,6 +70,7 @@ def _make_call(data: dict[str, Any], hass: HomeAssistant | None = None) -> Servi
 def _make_runtime(variant: str = VARIANT_22_KW) -> RuntimeData:
     bridge = cast(ModbusBridge, SimpleNamespace())
     bridge.async_write_register = AsyncMock()  # type: ignore[attr-defined]
+    bridge.async_send_session_command = AsyncMock()  # type: ignore[attr-defined]
     coordinator = cast(WebastoDataCoordinator, SimpleNamespace())
     coordinator.async_request_refresh = AsyncMock()  # type: ignore[attr-defined]
     return RuntimeData(
@@ -155,9 +156,9 @@ async def test_service_set_current_clamps_and_refreshes(dispatcher_stub) -> None
 async def test_service_set_failsafe_writes_optional_timeout(dispatcher_stub) -> None:
     """Failsafe service should write both registers when timeout provided."""
 
-    runtime = _make_runtime()
+    runtime = _make_runtime(VARIANT_11_KW)
     hass = _make_hass({"entry": runtime})
-    call = _make_call({"amps": 100, "timeout_s": 200}, hass=hass)
+    call = _make_call({"amps": 32, "timeout_s": 90}, hass=hass)
 
     current_register = get_register("failsafe_current_a")
     timeout_register = get_register("failsafe_timeout_s")
@@ -170,7 +171,7 @@ async def test_service_set_failsafe_writes_optional_timeout(dispatcher_stub) -> 
     )
     runtime.bridge.async_write_register.assert_any_await(  # type: ignore[attr-defined]
         timeout_register,
-        timeout_register.max_value,
+        90,
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
     assert dispatcher_stub.call_count == 2
@@ -186,7 +187,7 @@ async def test_service_set_failsafe_writes_optional_timeout(dispatcher_stub) -> 
         SIGNAL_REGISTER_WRITTEN,
         runtime.device_slug,
         timeout_register.key,
-        timeout_register.max_value,
+        90,
     )
 
 
@@ -277,13 +278,10 @@ async def test_service_start_session_writes_command(dispatcher_stub) -> None:
     hass = _make_hass({"entry": runtime})
     call = _make_call({}, hass=hass)
 
-    register = get_register("session_command")
-
     await _async_service_start_session(call)
 
-    runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
-        register,
-        SESSION_COMMAND_START_VALUE,
+    runtime.bridge.async_send_session_command.assert_awaited_once_with(  # type: ignore[attr-defined]
+        SESSION_COMMAND_START_VALUE
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
     dispatcher_stub.assert_not_called()
@@ -297,13 +295,10 @@ async def test_service_stop_session_writes_command(dispatcher_stub) -> None:
     hass = _make_hass({"entry": runtime})
     call = _make_call({}, hass=hass)
 
-    register = get_register("session_command")
-
     await _async_service_stop_session(call)
 
-    runtime.bridge.async_write_register.assert_awaited_once_with(  # type: ignore[attr-defined]
-        register,
-        SESSION_COMMAND_STOP_VALUE,
+    runtime.bridge.async_send_session_command.assert_awaited_once_with(  # type: ignore[attr-defined]
+        SESSION_COMMAND_STOP_VALUE
     )
     runtime.coordinator.async_request_refresh.assert_awaited_once()  # type: ignore[attr-defined]
     dispatcher_stub.assert_not_called()
@@ -314,7 +309,7 @@ async def test_session_services_surface_errors(dispatcher_stub) -> None:
     """Modbus errors should bubble up as HomeAssistantError."""
 
     runtime = _make_runtime()
-    runtime.bridge.async_write_register.side_effect = WebastoModbusError("boom")  # type: ignore[attr-defined]
+    runtime.bridge.async_send_session_command.side_effect = WebastoModbusError("boom")  # type: ignore[attr-defined]
     hass = _make_hass({"entry": runtime})
     call = _make_call({}, hass=hass)
 

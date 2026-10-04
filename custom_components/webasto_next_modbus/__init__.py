@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import voluptuous as vol
-from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -26,6 +26,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_MODEL,
     CONF_NAME,
+    CONF_REST_ENABLED,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     CONF_VARIANT,
@@ -35,11 +36,10 @@ from .const import (
     DEVICE_NAME,
     DOMAIN,
     KEEPALIVE_TRIGGER_VALUE,
-    MAX_RETRY_ATTEMPTS,
     MAX_SCAN_INTERVAL,
+    MIN_CHARGING_CURRENT,
     MIN_SCAN_INTERVAL,
     MODEL_NEXT,
-    RETRY_BACKOFF_SECONDS,
     SERVICE_RESTART_WALLBOX,
     SERVICE_SEND_KEEPALIVE,
     SERVICE_SET_CURRENT,
@@ -61,12 +61,19 @@ from .const import (
 from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .hub import ModbusBridge, WebastoModbusError
+from .rest_client import RestClient, RestClientError
 
 _LOGGER = logging.getLogger(__name__)
 
 _INTEGRATION_PATH = Path(__file__).resolve().parent
 _INTEGRATION_PATH_LOGGED = False
-_SERVICES_REGISTERED = False
+
+# Config entries only; there is no YAML configuration.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# Minor version 2: CONF_VARIANT / CONF_MODEL are always stored in entry.data
+# and an empty CONF_NAME is not.
+CONFIG_ENTRY_MINOR_VERSION = 2
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -129,22 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     )
     max_current = get_max_current_for_variant(variant)
     device_slug = build_device_slug(host, unit_id)
-    configured_name = entry.data.get(CONF_NAME)
-    device_name = configured_name or entry.title or DEVICE_NAME
-
-    updated_data = dict(entry.data)
-    if CONF_VARIANT not in updated_data:
-        updated_data[CONF_VARIANT] = variant
-    if CONF_MODEL not in updated_data:
-        updated_data[CONF_MODEL] = model
-    if configured_name != updated_data.get(CONF_NAME):
-        # Keep stored name in sync with data payload; remove empty values.
-        if configured_name:
-            updated_data[CONF_NAME] = configured_name
-        elif CONF_NAME in updated_data:
-            updated_data.pop(CONF_NAME)
-    if updated_data != entry.data:
-        hass.config_entries.async_update_entry(entry, data=updated_data)
+    device_name = entry.data.get(CONF_NAME) or entry.title or DEVICE_NAME
 
     bridge = ModbusBridge(
         host=host,
@@ -153,28 +145,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         registers=get_readable_registers(model),
     )
 
-    notification_id = f"{DOMAIN}_setup_{entry.entry_id}"
-
-    for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
-        try:
-            await bridge.async_connect()
-            persistent_notification.async_dismiss(hass, notification_id)
-            break
-        except WebastoModbusError as err:
-            msg = f"Verbindungsversuch {attempt}/{MAX_RETRY_ATTEMPTS} fehlgeschlagen: {err}"
-            _LOGGER.warning(msg)
-
-            if attempt == MAX_RETRY_ATTEMPTS:
-                persistent_notification.async_dismiss(hass, notification_id)
-                raise ConfigEntryNotReady(msg) from err
-
-            persistent_notification.async_create(
-                hass,
-                f"{msg}\nNächster Versuch in wenigen Sekunden...",
-                title="Webasto Next Verbindung",
-                notification_id=notification_id,
-            )
-            await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+    try:
+        await bridge.async_connect()
+    except WebastoModbusError as err:
+        # Home Assistant retries the setup with its own backoff; the wallbox
+        # is often just booting or its single Modbus slot is briefly taken.
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="cannot_connect",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
     update_interval = timedelta(seconds=_clamp(scan_interval, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL))
     coordinator = WebastoDataCoordinator(
@@ -188,36 +168,74 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         model=model,
     )
 
+    def _create_background_task(coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        return entry.async_create_background_task(
+            hass, coro, name=f"{DOMAIN} life bit {entry.entry_id}"
+        )
+
     try:
         await coordinator.async_config_entry_first_refresh()
-    except Exception:
+
+        # Initialize REST client if configured
+        await coordinator.async_setup_rest_client()
+
+        # Start the Life Bit loop after coordinator is ready
+        await bridge.start_life_bit_loop(_create_background_task)
+
+        entry.runtime_data = RuntimeData(
+            bridge=bridge,
+            coordinator=coordinator,
+            variant=variant,
+            max_current=max_current,
+            device_slug=device_slug,
+            device_name=device_name,
+            model=model,
+        )
+
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except BaseException:
         # Don't leave the Modbus socket open on a failed setup: these wallboxes
         # typically accept only one Modbus TCP connection, so a stale socket
         # makes the automatic retry fail with "connection refused".
-        await bridge.async_close()
+        await _async_shutdown_runtime(coordinator, bridge)
         raise
-
-    # Initialize REST client if configured
-    await coordinator.async_setup_rest_client()
-
-    # Start the Life Bit loop after coordinator is ready
-    await bridge.start_life_bit_loop()
-
-    entry.runtime_data = RuntimeData(
-        bridge=bridge,
-        coordinator=coordinator,
-        variant=variant,
-        max_current=max_current,
-        device_slug=device_slug,
-        device_name=device_name,
-        model=model,
-    )
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entries to the current schema."""
+
+    if entry.version > 1:
+        # Downgraded from a future version we don't know how to read.
+        return False
+
+    if entry.minor_version < CONFIG_ENTRY_MINOR_VERSION:
+        data = dict(entry.data)
+        data.setdefault(CONF_VARIANT, entry.options.get(CONF_VARIANT, DEFAULT_VARIANT))
+        data.setdefault(CONF_MODEL, normalize_model(entry.options.get(CONF_MODEL, DEFAULT_MODEL)))
+        if not data.get(CONF_NAME):
+            data.pop(CONF_NAME, None)
+        hass.config_entries.async_update_entry(
+            entry, data=data, minor_version=CONFIG_ENTRY_MINOR_VERSION
+        )
+        _LOGGER.debug(
+            "Migrated config entry %s to version 1.%s", entry.entry_id, entry.minor_version
+        )
+
+    return True
+
+
+async def _async_shutdown_runtime(
+    coordinator: WebastoDataCoordinator, bridge: ModbusBridge
+) -> None:
+    """Stop background work and release the wallbox connection."""
+
+    await coordinator.async_shutdown_rest_client()
+    await bridge.stop_life_bit_loop()
+    await bridge.async_close()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> bool:
@@ -241,9 +259,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
     runtime: RuntimeData | None = getattr(entry, "runtime_data", None)
     if runtime is not None:
         _LOGGER.debug("Stopping life bit loop and closing connection...")
-        await runtime.coordinator.async_shutdown_rest_client()
-        await runtime.bridge.stop_life_bit_loop()
-        await runtime.bridge.async_close()
+        await _async_shutdown_runtime(runtime.coordinator, runtime.bridge)
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
     _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
@@ -256,99 +272,74 @@ async def _async_reload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) ->
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+def _whole_number(value: Any) -> int:
+    """Coerce a service value to int, accepting rendered templates like ``16.0``."""
+
+    number = float(value)
+    if not number.is_integer():
+        raise vol.Invalid(f"expected a whole number, got {value}")
+    return int(number)
+
+
+_ENTRY_ID_SCHEMA: dict[Any, Any] = {vol.Optional("config_entry_id"): cv.string}
+
+_SERVICE_SCHEMAS: dict[str, vol.Schema] = {
+    SERVICE_SET_CURRENT: vol.Schema(
+        {
+            **_ENTRY_ID_SCHEMA,
+            vol.Required("amps"): vol.All(_whole_number, vol.Range(min=0, max=32)),
+        }
+    ),
+    SERVICE_SET_FAILSAFE: vol.Schema(
+        {
+            **_ENTRY_ID_SCHEMA,
+            vol.Required("amps"): vol.All(_whole_number, vol.Range(min=6, max=32)),
+            vol.Optional("timeout_s"): vol.All(_whole_number, vol.Range(min=6, max=120)),
+        }
+    ),
+    SERVICE_SEND_KEEPALIVE: vol.Schema(_ENTRY_ID_SCHEMA),
+    SERVICE_START_SESSION: vol.Schema(_ENTRY_ID_SCHEMA),
+    SERVICE_STOP_SESSION: vol.Schema(_ENTRY_ID_SCHEMA),
+    SERVICE_SET_LED_BRIGHTNESS: vol.Schema(
+        {
+            **_ENTRY_ID_SCHEMA,
+            vol.Required("brightness"): vol.All(_whole_number, vol.Range(min=0, max=100)),
+        }
+    ),
+    SERVICE_SET_FREE_CHARGING: vol.Schema(
+        {
+            **_ENTRY_ID_SCHEMA,
+            vol.Required("enabled"): cv.boolean,
+        }
+    ),
+    SERVICE_RESTART_WALLBOX: vol.Schema(_ENTRY_ID_SCHEMA),
+}
+
+
 def _register_services(hass: HomeAssistant) -> None:
-    """Register integration-wide services (idempotent)."""
+    """Register integration-wide service actions (idempotent per hass)."""
 
-    global _SERVICES_REGISTERED
-    if _SERVICES_REGISTERED:
-        return
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_CURRENT,
-        _async_service_set_current,
-        schema=vol.Schema(
-            {
-                vol.Optional("config_entry_id"): cv.string,
-                vol.Required("amps"): vol.All(int, vol.Range(min=0, max=32)),
-            }
-        ),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_FAILSAFE,
-        _async_service_set_failsafe,
-        schema=vol.Schema(
-            {
-                vol.Optional("config_entry_id"): cv.string,
-                vol.Required("amps"): vol.All(int, vol.Range(min=6, max=32)),
-                vol.Optional("timeout_s"): vol.All(int, vol.Range(min=6, max=120)),
-            }
-        ),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SEND_KEEPALIVE,
-        _async_service_send_keepalive,
-        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_START_SESSION,
-        _async_service_start_session,
-        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_STOP_SESSION,
-        _async_service_stop_session,
-        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
-    )
-
-    # REST API services
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_LED_BRIGHTNESS,
-        _async_service_set_led_brightness,
-        schema=vol.Schema(
-            {
-                vol.Optional("config_entry_id"): cv.string,
-                vol.Required("brightness"): vol.All(int, vol.Range(min=0, max=100)),
-            }
-        ),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_FREE_CHARGING,
-        _async_service_set_free_charging,
-        schema=vol.Schema(
-            {
-                vol.Optional("config_entry_id"): cv.string,
-                vol.Required("enabled"): bool,
-            }
-        ),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_RESTART_WALLBOX,
-        _async_service_restart_wallbox,
-        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
-    )
-
-    _SERVICES_REGISTERED = True
+    handlers = {
+        SERVICE_SET_CURRENT: _async_service_set_current,
+        SERVICE_SET_FAILSAFE: _async_service_set_failsafe,
+        SERVICE_SEND_KEEPALIVE: _async_service_send_keepalive,
+        SERVICE_START_SESSION: _async_service_start_session,
+        SERVICE_STOP_SESSION: _async_service_stop_session,
+        SERVICE_SET_LED_BRIGHTNESS: _async_service_set_led_brightness,
+        SERVICE_SET_FREE_CHARGING: _async_service_set_free_charging,
+        SERVICE_RESTART_WALLBOX: _async_service_restart_wallbox,
+    }
+    for service, handler in handlers.items():
+        if hass.services.has_service(DOMAIN, service):
+            continue
+        hass.services.async_register(DOMAIN, service, handler, schema=_SERVICE_SCHEMAS[service])
 
 
 def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
-    """Resolve runtime data for service handlers.
+    """Resolve the runtime data of the wallbox a service call targets.
 
-    If multiple entries are configured, require the caller to specify
-    `config_entry_id`. Otherwise the first entry is used implicitly.
+    ``config_entry_id`` is optional while a single wallbox is configured; with
+    several it is required. An explicitly given id must always match.
     """
 
     entries = [
@@ -359,14 +350,19 @@ def _resolve_runtime(hass: HomeAssistant, call: ServiceCall) -> RuntimeData:
     if not entries:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_configured")
 
-    if len(entries) == 1:
-        return cast(RuntimeData, entries[0].runtime_data)
-
     entry_id = call.data.get("config_entry_id")
     if entry_id:
         for entry in entries:
             if entry.entry_id == entry_id:
                 return cast(RuntimeData, entry.runtime_data)
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="entry_not_found",
+            translation_placeholders={"entry_id": str(entry_id)},
+        )
+
+    if len(entries) == 1:
+        return cast(RuntimeData, entries[0].runtime_data)
 
     raise ServiceValidationError(translation_domain=DOMAIN, translation_key="multiple_wallboxes")
 
@@ -375,35 +371,47 @@ def _require_session_command_support(runtime: RuntimeData) -> None:
     """Raise if the configured model has no start/stop-session command register."""
 
     if runtime.model != MODEL_NEXT:
-        raise HomeAssistantError(
+        raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="session_command_unsupported",
         )
+
+
+def _write_failed(err: WebastoModbusError) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="write_failed",
+        translation_placeholders={"error": str(err)},
+    )
+
+
+async def _async_write(
+    hass: HomeAssistant, runtime: RuntimeData, register_key: str, value: int
+) -> None:
+    """Write a register and tell the matching entity about the new value."""
+
+    register = get_register(register_key)
+    try:
+        await runtime.bridge.async_write_register(register, value)
+    except WebastoModbusError as err:
+        raise _write_failed(err) from err
+    async_dispatcher_send(hass, SIGNAL_REGISTER_WRITTEN, runtime.device_slug, register.key, value)
 
 
 async def _async_service_set_current(call: ServiceCall) -> None:
     """Handle service to set the dynamic charging current."""
 
     runtime = _resolve_runtime(call.hass, call)
-    register = get_register("set_current_a")
     amps = int(call.data["amps"])
-    max_allowed = min(runtime.max_current, register.max_value or runtime.max_current)
-    value = int(_clamp(amps, register.min_value or 0, max_allowed))
-    try:
-        await runtime.bridge.async_write_register(register, value)
-    except WebastoModbusError as err:
-        raise HomeAssistantError(
+    if 0 < amps < MIN_CHARGING_CURRENT:
+        raise ServiceValidationError(
             translation_domain=DOMAIN,
-            translation_key="write_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
-    async_dispatcher_send(
-        call.hass,
-        SIGNAL_REGISTER_WRITTEN,
-        runtime.device_slug,
-        register.key,
-        value,
-    )
+            translation_key="current_below_minimum",
+            translation_placeholders={"minimum": str(MIN_CHARGING_CURRENT)},
+        )
+    # Above the variant's maximum the value is capped, like the number entity
+    # does (an 11 kW unit given 32 A charges at 16 A).
+    await _async_write(call.hass, runtime, "set_current_a", min(amps, runtime.max_current))
     await runtime.coordinator.async_request_refresh()
 
 
@@ -411,49 +419,10 @@ async def _async_service_set_failsafe(call: ServiceCall) -> None:
     """Handle service to configure fail-safe parameters."""
 
     runtime = _resolve_runtime(call.hass, call)
-    amps_register = get_register("failsafe_current_a")
-    amps = int(call.data["amps"])
-    max_allowed = min(runtime.max_current, amps_register.max_value or runtime.max_current)
-    amps_value = int(_clamp(amps, amps_register.min_value or 6, max_allowed))
-    try:
-        await runtime.bridge.async_write_register(amps_register, amps_value)
-    except WebastoModbusError as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="write_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
-    async_dispatcher_send(
-        call.hass,
-        SIGNAL_REGISTER_WRITTEN,
-        runtime.device_slug,
-        amps_register.key,
-        amps_value,
-    )
-
-    timeout_value: int | None = None
+    amps = min(int(call.data["amps"]), runtime.max_current)
+    await _async_write(call.hass, runtime, "failsafe_current_a", amps)
     if "timeout_s" in call.data:
-        timeout_register = get_register("failsafe_timeout_s")
-        timeout = int(call.data["timeout_s"])
-        timeout_value = int(
-            _clamp(timeout, timeout_register.min_value or 6, timeout_register.max_value or 120)
-        )
-        try:
-            await runtime.bridge.async_write_register(timeout_register, timeout_value)
-        except WebastoModbusError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="write_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
-        async_dispatcher_send(
-            call.hass,
-            SIGNAL_REGISTER_WRITTEN,
-            runtime.device_slug,
-            timeout_register.key,
-            timeout_value,
-        )
-
+        await _async_write(call.hass, runtime, "failsafe_timeout_s", int(call.data["timeout_s"]))
     await runtime.coordinator.async_request_refresh()
 
 
@@ -465,11 +434,7 @@ async def _async_service_send_keepalive(call: ServiceCall) -> None:
     try:
         await runtime.bridge.async_write_register(register, KEEPALIVE_TRIGGER_VALUE)
     except WebastoModbusError as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="write_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
+        raise _write_failed(err) from err
     async_fire_device_trigger(
         call.hass,
         runtime.device_slug,
@@ -479,55 +444,47 @@ async def _async_service_send_keepalive(call: ServiceCall) -> None:
     await runtime.coordinator.async_request_refresh()
 
 
+async def _async_send_session_command(call: ServiceCall, value: int) -> None:
+    runtime = _resolve_runtime(call.hass, call)
+    _require_session_command_support(runtime)
+    try:
+        await runtime.bridge.async_send_session_command(value)
+    except WebastoModbusError as err:
+        raise _write_failed(err) from err
+    await runtime.coordinator.async_request_refresh()
+
+
 async def _async_service_start_session(call: ServiceCall) -> None:
     """Handle service to start a charging session explicitly."""
 
-    runtime = _resolve_runtime(call.hass, call)
-    _require_session_command_support(runtime)
-    register = get_register("session_command")
-    try:
-        await runtime.bridge.async_write_register(register, SESSION_COMMAND_START_VALUE)
-    except WebastoModbusError as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="write_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
-    await runtime.coordinator.async_request_refresh()
+    await _async_send_session_command(call, SESSION_COMMAND_START_VALUE)
 
 
 async def _async_service_stop_session(call: ServiceCall) -> None:
     """Handle service to stop the active charging session."""
 
-    runtime = _resolve_runtime(call.hass, call)
-    _require_session_command_support(runtime)
-    register = get_register("session_command")
-    try:
-        await runtime.bridge.async_write_register(register, SESSION_COMMAND_STOP_VALUE)
-    except WebastoModbusError as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="write_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
-    await runtime.coordinator.async_request_refresh()
+    await _async_send_session_command(call, SESSION_COMMAND_STOP_VALUE)
+
+
+def _require_rest_client(runtime: RuntimeData) -> RestClient:
+    """Return the REST client, or raise a translated error explaining why not."""
+
+    entry = runtime.coordinator.config_entry
+    if entry is None or not entry.options.get(CONF_REST_ENABLED, False):
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
+    rest_client = runtime.coordinator.rest_client
+    if rest_client is None:
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
+    return rest_client
 
 
 async def _async_service_set_led_brightness(call: ServiceCall) -> None:
     """Handle service to set LED brightness via REST API."""
-    from .rest_client import RestClientError
 
     runtime = _resolve_runtime(call.hass, call)
-    if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
-
-    brightness = int(call.data["brightness"])
-    rest_client = runtime.coordinator.rest_client
-    if rest_client is None:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
-
+    rest_client = _require_rest_client(runtime)
     try:
-        await rest_client.set_led_brightness(brightness)
+        await rest_client.set_led_brightness(int(call.data["brightness"]))
     except RestClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -539,19 +496,11 @@ async def _async_service_set_led_brightness(call: ServiceCall) -> None:
 
 async def _async_service_set_free_charging(call: ServiceCall) -> None:
     """Handle service to enable/disable free charging via REST API."""
-    from .rest_client import RestClientError
 
     runtime = _resolve_runtime(call.hass, call)
-    if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
-
-    enabled = bool(call.data["enabled"])
-    rest_client = runtime.coordinator.rest_client
-    if rest_client is None:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
-
+    rest_client = _require_rest_client(runtime)
     try:
-        await rest_client.set_free_charging(enabled)
+        await rest_client.set_free_charging(bool(call.data["enabled"]))
     except RestClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -563,16 +512,9 @@ async def _async_service_set_free_charging(call: ServiceCall) -> None:
 
 async def _async_service_restart_wallbox(call: ServiceCall) -> None:
     """Handle service to restart the wallbox via REST API."""
-    from .rest_client import RestClientError
 
     runtime = _resolve_runtime(call.hass, call)
-    if not runtime.coordinator.rest_enabled:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_enabled")
-
-    rest_client = runtime.coordinator.rest_client
-    if rest_client is None:
-        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="rest_not_connected")
-
+    rest_client = _require_rest_client(runtime)
     try:
         await rest_client.restart_system()
     except RestClientError as err:

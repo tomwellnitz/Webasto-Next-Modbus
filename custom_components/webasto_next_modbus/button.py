@@ -6,7 +6,7 @@ from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebastoConfigEntry
 from .const import (
@@ -20,6 +20,7 @@ from .const import (
 from .coordinator import WebastoDataCoordinator
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .entity import WebastoRegisterEntity, WebastoRestEntity
+from .hub import WebastoModbusError
 
 PARALLEL_UPDATES = 0
 
@@ -27,7 +28,7 @@ PARALLEL_UPDATES = 0
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: WebastoConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Webasto button entities."""
 
@@ -70,15 +71,12 @@ class WebastoButton(WebastoRegisterEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Trigger the Modbus action associated with the register."""
 
-        if self.register.key == "send_keepalive":
-            value = KEEPALIVE_TRIGGER_VALUE
-        elif self.register.key == "start_session":
-            value = SESSION_COMMAND_START_VALUE
+        if self.register.key == "start_session":
+            await self._async_send_session_command(SESSION_COMMAND_START_VALUE)
         elif self.register.key == "stop_session":
-            value = SESSION_COMMAND_STOP_VALUE
+            await self._async_send_session_command(SESSION_COMMAND_STOP_VALUE)
         else:
-            value = 1
-        await self._async_write_register(value)
+            await self._async_write_register(KEEPALIVE_TRIGGER_VALUE)
         if self.register.key == "send_keepalive":
             async_fire_device_trigger(
                 self.coordinator.hass,
@@ -87,6 +85,16 @@ class WebastoButton(WebastoRegisterEntity, ButtonEntity):
                 {"source": "button"},
             )
         await self.coordinator.async_request_refresh()
+
+    async def _async_send_session_command(self, value: int) -> None:
+        try:
+            await self._bridge.async_send_session_command(value)
+        except WebastoModbusError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="write_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
 
 class WebastoRestartButton(WebastoRestEntity, ButtonEntity):

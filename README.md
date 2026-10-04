@@ -102,6 +102,8 @@ Credentials are stored in the Home Assistant config entry and redacted from down
 | Buttons | Start charging, Stop charging, Send keep-alive. |
 | Binary sensors | Connected (`device_class: connectivity`), Charging (`device_class: battery_charging`). |
 
+A few niche entities start **disabled** and can be enabled per device: the EVSE/cable/EV current-limit diagnostics, session start/end time, the RFID tag of the last session and the *Send keep-alive* button (the keep-alive already runs automatically). Undocumented enum values (for example a fault code added by a firmware update) show as *unknown* instead of breaking the sensor.
+
 ### REST API (when enabled)
 
 | Platform | Entities |
@@ -118,10 +120,10 @@ All services live under the `webasto_next_modbus` domain.
 
 | Service | Description |
 | :--- | :--- |
-| `set_current` | Set the dynamic charging current (0–32 A). |
+| `set_current` | Set the dynamic charging current: `0` pauses charging, otherwise 6–32 A (1–5 A is rejected, values above the variant's maximum are capped). Rendered templates such as `16.0` are accepted. |
 | `set_failsafe` | Set the fail-safe current (6–32 A) and optional timeout (6–120 s). |
-| `start_session` | Start a charging session. |
-| `stop_session` | Stop the active charging session. |
+| `start_session` | Start a charging session (Webasto Next only). |
+| `stop_session` | Stop the active charging session (Webasto Next only). |
 | `send_keepalive` | Send a keep-alive frame manually. |
 
 REST API services (when enabled):
@@ -171,7 +173,7 @@ automation:
       - action: notify.mobile_app_my_phone
         data:
           title: Webasto fault
-          message: "Fault code {{ trigger.event.data.fault_code }}"
+          message: "Fault code {{ trigger.fault_code }}"
 ```
 
 ## Known limitations
@@ -189,7 +191,7 @@ automation:
 ## Troubleshooting
 
 - **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. Make sure **Modbus TCP is enabled on the wallbox** (expert view) — it is off by default. These wallboxes also accept only one Modbus TCP connection at a time, so make sure no other client (e.g. EVCC) holds it.
-- **Values stuck or stale** — check the logs; transient errors are retried automatically, and a booting wallbox recovers on its own within a few minutes.
+- **Values stuck or stale** — check the logs; transient errors are retried automatically, and a booting wallbox recovers on its own within a few minutes. If polling keeps failing, a **repair issue** appears under *Settings → System → Repairs*; it disappears by itself once the wallbox answers again.
 - **Diagnostics** — integration entry → three-dot menu → **Download diagnostics** (secrets are redacted).
 
 See [`docs/support.md`](docs/support.md) for more.

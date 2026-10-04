@@ -1,17 +1,11 @@
 set_current:
-  name: Set charging current
-  description: Update the dynamic charging current limit of the wallbox.
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
     amps:
-      name: Current (A)
-      description: Desired charging current in ampere.
       required: true
       example: 16
       selector:
@@ -22,20 +16,13 @@ set_current:
           unit_of_measurement: A
 
 set_failsafe:
-  name: Configure fail-safe parameters
-  description: >-
-    Set the fallback charging current and optional timeout used when the energy management system drops offline.
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
     amps:
-      name: Fallback current (A)
-      description: Charging current enforced during fail-safe operation.
       required: true
       example: 10
       selector:
@@ -45,8 +32,6 @@ set_failsafe:
           step: 1
           unit_of_measurement: A
     timeout_s:
-      name: Timeout (s)
-      description: Time window without updates before fail-safe mode activates.
       required: false
       example: 30
       selector:
@@ -57,55 +42,37 @@ set_failsafe:
           unit_of_measurement: s
 
 send_keepalive:
-  name: Send keep-alive frame
-  description: Trigger the keep-alive command to inform the wallbox that the energy manager is still present.
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
 
 start_session:
-  name: Start charging session
-  description: Issue an explicit start command to the wallbox.
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
 
 stop_session:
-  name: Stop charging session
-  description: Request the wallbox to end the active charging session.
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
 
 set_led_brightness:
-  name: Set LED brightness
-  description: Set the LED brightness of the wallbox (requires REST API to be enabled).
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
     brightness:
-      name: Brightness (%)
-      description: LED brightness level from 0 (off) to 100 (full).
       required: true
       example: 50
       selector:
@@ -116,31 +83,21 @@ set_led_brightness:
           unit_of_measurement: "%"
 
 set_free_charging:
-  name: Set free charging mode
-  description: Enable or disable free charging mode (requires REST API to be enabled).
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:
           integration: webasto_next_modbus
     enabled:
-      name: Enabled
-      description: True to enable free charging, false to disable.
       required: true
       example: true
       selector:
         boolean:
 
 restart_wallbox:
-  name: Restart wallbox
-  description: Restart the wallbox system (requires REST API to be enabled).
   fields:
     config_entry_id:
-      name: Config entry ID
-      description: Optional when only one Webasto Next wallbox is configured.
       example: "d4f4e2e7c3d6499f9bc2f6b4f4bb86a7"
       selector:
         config_entry:

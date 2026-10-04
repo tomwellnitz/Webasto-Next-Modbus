@@ -14,7 +14,7 @@ from homeassistant.const import (
     CONF_PLATFORM,
     CONF_TYPE,
 )
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HassJob, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
@@ -119,21 +119,27 @@ async def async_attach_trigger(
             f"Device {device_id} is not a Webasto Next Modbus device"
         )
 
+    job = HassJob(action, f"webasto_next_modbus device trigger {trigger_type}")
+    trigger_data = trigger_info["trigger_data"]
+
     @callback
     def _handle_trigger(event_type: str, extra: dict[str, Any] | None) -> None:
         if event_type != trigger_type:
             return
 
+        # Automations read the trigger variables from run_variables["trigger"];
+        # trigger_data carries the automation's id/idx/alias for that trigger.
         payload: dict[str, Any] = {
+            **trigger_data,
             CONF_PLATFORM: "device",
             CONF_DOMAIN: DOMAIN,
             CONF_DEVICE_ID: device_id,
             CONF_TYPE: trigger_type,
+            "description": f"Webasto Next {trigger_type.replace('_', ' ')}",
         }
         if extra:
             payload.update(extra)
-        context = getattr(trigger_info, "context", None)
-        hass.async_create_task(action(payload, context))
+        hass.async_run_hass_job(job, {"trigger": payload})
 
     return async_dispatcher_connect(
         hass,

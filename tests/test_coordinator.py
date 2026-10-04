@@ -70,7 +70,7 @@ async def test_coordinator_success_resets_failures() -> None:
     coordinator = _build_coordinator(bridge, entry)
 
     with patch(
-        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_dismiss"
+        "custom_components.webasto_next_modbus.coordinator.ir.async_delete_issue"
     ) as dismiss:
         data = await coordinator._async_update_data()
 
@@ -89,9 +89,7 @@ async def test_coordinator_failure_increments_counter() -> None:
 
     coordinator = _build_coordinator(bridge, entry)
 
-    with patch(
-        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_create"
-    ) as create:
+    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create:
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
 
@@ -101,8 +99,8 @@ async def test_coordinator_failure_increments_counter() -> None:
     create.assert_not_called()
 
 
-async def test_coordinator_failure_triggers_notification() -> None:
-    """After threshold failures a persistent notification should be created."""
+async def test_coordinator_failure_creates_repair_issue() -> None:
+    """After threshold failures a repair issue should be created."""
 
     bridge = AsyncMock(spec=ModbusBridge)
     bridge.async_read_data = AsyncMock(side_effect=WebastoModbusError("boom"))
@@ -111,9 +109,7 @@ async def test_coordinator_failure_triggers_notification() -> None:
     coordinator = _build_coordinator(bridge, entry)
     coordinator.consecutive_failures = 2
 
-    with patch(
-        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_create"
-    ) as create:
+    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create:
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
 
@@ -285,9 +281,7 @@ async def test_coordinator_retries_rest_setup_when_due() -> None:
     coordinator.async_setup_rest_client = AsyncMock()
     coordinator._rest_setup_retry_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with patch(
-        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_dismiss"
-    ):
+    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_delete_issue"):
         await coordinator._async_update_data()
 
     coordinator.async_setup_rest_client.assert_awaited_once()
@@ -304,9 +298,7 @@ async def test_coordinator_does_not_retry_rest_setup_before_due() -> None:
     coordinator.async_setup_rest_client = AsyncMock()
     coordinator._rest_setup_retry_at = datetime.now(UTC) + timedelta(minutes=10)
 
-    with patch(
-        "custom_components.webasto_next_modbus.coordinator.persistent_notification.async_dismiss"
-    ):
+    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_delete_issue"):
         await coordinator._async_update_data()
 
     coordinator.async_setup_rest_client.assert_not_awaited()
