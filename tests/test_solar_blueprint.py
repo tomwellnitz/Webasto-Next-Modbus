@@ -11,7 +11,6 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import async_mock_service
 
 BLUEPRINT = (
     Path(__file__).resolve().parents[1]
@@ -28,17 +27,41 @@ SWITCH = "switch.wallbox_three_phase_charging"
 
 
 class Wallbox:
-    """Records the current and phase writes the automation makes."""
+    """Records the current and phase writes the automation makes, in order."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
-        self.current_calls: list[ServiceCall] = async_mock_service(hass, "number", "set_value")
-        self.switch_on: list[ServiceCall] = async_mock_service(hass, "switch", "turn_on")
-        self.switch_off: list[ServiceCall] = async_mock_service(hass, "switch", "turn_off")
+        self.calls: list[ServiceCall] = []
+        for domain, service in (
+            ("number", "set_value"),
+            ("switch", "turn_on"),
+            ("switch", "turn_off"),
+        ):
+            hass.services.async_register(domain, service, self._record)
+
+    async def _record(self, call: ServiceCall) -> None:
+        self.calls.append(call)
+
+    def _of(self, service: str) -> list[ServiceCall]:
+        return [call for call in self.calls if call.service == service]
+
+    @property
+    def switch_on(self) -> list[ServiceCall]:
+        return self._of("turn_on")
+
+    @property
+    def switch_off(self) -> list[ServiceCall]:
+        return self._of("turn_off")
 
     @property
     def currents(self) -> list[float]:
-        return [call.data["value"] for call in self.current_calls]
+        return [call.data["value"] for call in self._of("set_value")]
+
+    @property
+    def sequence(self) -> list[str]:
+        """The service calls in the order they were made."""
+
+        return [call.service for call in self.calls]
 
     async def grid(self, watts: float) -> None:
         self.hass.states.async_set(GRID, str(watts), {"unit_of_measurement": "W"})
@@ -164,6 +187,8 @@ async def test_switches_to_single_phase_on_low_surplus(
     assert len(wallbox.switch_off) == 1
     assert wallbox.switch_off[0].data["entity_id"] == [SWITCH]
     assert wallbox.currents == [13]  # 3140 W / 230 V
+    # Single-phase first, then the higher current.
+    assert wallbox.sequence == ["turn_off", "set_value"]
 
 
 async def test_switches_to_three_phase_on_high_surplus(
@@ -175,6 +200,9 @@ async def test_switches_to_three_phase_on_high_surplus(
 
     assert len(wallbox.switch_on) == 1
     assert wallbox.currents == [7]  # 5180 W / 690 W per A
+    # The current is lowered before the third phase is added, so 16 A is
+    # never drawn on three phases.
+    assert wallbox.sequence == ["set_value", "turn_on"]
 
 
 async def test_no_three_phase_without_headroom(
@@ -203,3 +231,30 @@ async def test_phase_changes_respect_the_interval(hass: HomeAssistant) -> None:
 
     assert wallbox.switch_off == []
     assert wallbox.currents == [0]  # three-phase can't carry 6 A: pause instead
+
+
+async def test_keep_leaves_a_manual_pause_alone(hass: HomeAssistant) -> None:
+    """In "keep" mode 0 A comes from the user; even a large surplus doesn't resume."""
+
+    _set_current(hass, 0)
+    wallbox = await _setup(hass)
+
+    await wallbox.grid(-6000)
+
+    assert wallbox.currents == []
+
+
+@pytest.mark.parametrize("state", ["unknown", "unavailable"])
+async def test_unknown_phase_mode_uses_fixed_factor_and_never_switches(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, state: str
+) -> None:
+    _set_current(hass, 6)
+    hass.states.async_set(PHASES, state)
+    hass.states.async_set(SWITCH, "on")
+    freezer.tick(timedelta(minutes=11))
+    wallbox = await _setup(hass, phase_sensor=PHASES, phase_switch=SWITCH, watts_per_amp=690)
+
+    await wallbox.grid(-690)  # +1 A with the fixed 690 W/A
+
+    assert wallbox.switch_on == wallbox.switch_off == []
+    assert wallbox.currents == [7]

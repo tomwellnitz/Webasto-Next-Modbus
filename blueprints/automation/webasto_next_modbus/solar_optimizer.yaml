@@ -54,8 +54,9 @@ blueprint:
       name: Below the minimum current
       description: >-
         What to do when the surplus is too small even for the minimum current.
-        "Keep charging" charges at the minimum (some grid import), "Pause"
-        sets the current to 0 A and resumes once the surplus is large enough.
+        "Keep charging" charges at the minimum (some grid import) and leaves
+        a current of 0 A set by hand alone. "Pause" sets the current to 0 A
+        and resumes once the surplus is large enough.
       default: keep
       selector:
         select:
@@ -120,7 +121,10 @@ blueprint:
           max: 120
           unit_of_measurement: min
 
-mode: restart
+# single: a phase change and its current write must not be cut apart by the
+# next grid update (restart could leave 16 A on three phases); updates that
+# arrive while a run is in progress are dropped, the next one is handled.
+mode: single
 max_exceeded: silent
 
 triggers:
@@ -143,10 +147,16 @@ variables:
   grid_power: "{{ states(grid_sensor) | float(0) }}"
   current_setpoint: "{{ states(current_entity) | float(min_amp) }}"
 
-  # Active phase count from the phase sensor; without one the fixed
-  # conversion factor is used instead.
-  phases: "{{ 1 if states(phase_sensor) == 'single_phase' else 3 }}"
-  w_per_amp: "{{ volts * phases if phase_sensor else fixed_w_per_amp }}"
+  # Active phase count from the phase sensor; 0 while it is unknown or
+  # unavailable (or none is selected): then the fixed conversion factor is
+  # used and the phases are never switched.
+  phases: >-
+    {{ {'single_phase': 1, 'three_phase': 3}.get(states(phase_sensor), 0)
+       if phase_sensor else 0 }}
+  w_per_amp: "{{ volts * phases if phases > 0 else fixed_w_per_amp }}"
+  # In "keep" mode the blueprint never sets 0 A itself, so a current of 0 A
+  # was set by hand or by another automation: leave it alone.
+  paused_elsewhere: "{{ current_setpoint == 0 and below_minimum != 'pause' }}"
 
   # Calculate surplus (Export is negative, so Surplus = -Grid)
   # If Grid is -2000W (Export), Surplus is 2000W.
@@ -163,7 +173,7 @@ variables:
 
   # Phase switching (needs both the switch and the phase sensor).
   can_switch_phases: >-
-    {{ phase_switch != '' and phase_sensor != ''
+    {{ phase_switch != '' and phases > 0 and not paused_elsewhere
        and states(phase_switch) in ['on', 'off']
        and (now() - states[phase_switch].last_changed).total_seconds()
            >= phase_switch_minutes * 60 }}
@@ -183,7 +193,8 @@ actions:
   # sensor does not produce redundant Modbus writes.
   - choose:
       # Too little surplus for three phases but enough for one: go
-      # single-phase at the current that the surplus carries.
+      # single-phase first, then raise the current to what the surplus
+      # carries (raising it first would draw it on all three phases).
       - conditions:
           - condition: template
             value_template: "{{ switch_to_single }}"
@@ -200,13 +211,12 @@ actions:
                     max_amp] | min }}
 
       # Enough surplus for the minimum on all three phases: go three-phase.
+      # Lower the per-phase current first, so the wallbox never draws the
+      # single-phase current on all three phases.
       - conditions:
           - condition: template
             value_template: "{{ switch_to_three }}"
         sequence:
-          - action: switch.turn_on
-            target:
-              entity_id: "{{ phase_switch }}"
           - action: number.set_value
             target:
               entity_id: !input current_entity
@@ -214,11 +224,15 @@ actions:
               value: >-
                 {{ [[(available_watts / (volts * 3)) | int, min_amp] | max,
                     max_amp] | min }}
+          - action: switch.turn_on
+            target:
+              entity_id: "{{ phase_switch }}"
 
       - conditions:
           - condition: template
             value_template: >-
-              {{ target_amps >= min_amp and target_amps <= max_amp }}
+              {{ target_amps >= min_amp and target_amps <= max_amp
+                 and not paused_elsewhere }}
           - condition: template
             value_template: "{{ target_amps != current_setpoint }}"
         sequence:
@@ -232,7 +246,8 @@ actions:
       - conditions:
           - condition: template
             value_template: >-
-              {{ target_amps > max_amp and current_setpoint != max_amp }}
+              {{ target_amps > max_amp and current_setpoint != max_amp
+                 and not paused_elsewhere }}
         sequence:
           - action: number.set_value
             target:
