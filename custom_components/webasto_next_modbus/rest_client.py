@@ -27,14 +27,17 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 # API Configuration
-# Per-request timeout. The wallbox web server answers within a second or two
-# when it is up; a longer timeout only stretches outages.
-DEFAULT_TIMEOUT: Final = 10
+# Per-request timeout. The Next's web server can take well over 10 s to serve
+# `/api/sections/system` (docs/rest-api.md, "Rate Limiting"); REST runs on its
+# own coordinator, so a long timeout never delays the Modbus data.
+DEFAULT_TIMEOUT: Final = 30
 TOKEN_REFRESH_MARGIN: Final = timedelta(minutes=5)
 # Used when the access token carries no readable ``exp`` claim.
 DEFAULT_TOKEN_LIFETIME: Final = timedelta(hours=1)
-# Idempotent GETs are retried once; POSTs (configuration updates, restart)
-# are never retried, a duplicate restart or write is worse than a failure.
+# Idempotent GETs are retried once after a dropped connection (a timeout is
+# not retried: a web server that took 30 s won't be faster right after);
+# POSTs (configuration updates, restart) are never retried, a duplicate
+# restart or write is worse than a failure.
 GET_ATTEMPTS: Final = 2
 RETRY_BACKOFF_SECONDS: Final = 1.0
 # After a failed login, callers within this many seconds get the same error
@@ -239,9 +242,12 @@ class RestClient:
     ) -> RestData:
         """Fetch the REST data, keeping ``previous`` values for what wasn't fetched.
 
-        Each endpoint is fetched separately. An endpoint this firmware doesn't
-        have (404) or can't be parsed keeps its previous values; a rejected
-        login or an unreachable wallbox raises, so the caller keeps its last
+        Each endpoint is fetched separately. An endpoint that fails (404, an
+        unparsable answer, a timeout or a dropped connection) keeps its
+        previous values while the others are still read: the Next's web
+        server is slow, and one slow section must not make every REST entity
+        unavailable. A rejected login raises right away; otherwise the poll
+        only fails when no endpoint answered, so the caller keeps its last
         good data instead of replacing it with empty fields.
 
         Args:
@@ -251,7 +257,7 @@ class RestClient:
 
         Raises:
             AuthenticationError: If the credentials are rejected.
-            ConnectionError: If the wallbox can't be reached.
+            ConnectionError: If no endpoint could be reached.
             RestClientError: If no endpoint returned usable data.
         """
         values: dict[str, Any] = asdict(previous) if previous is not None else {}
@@ -274,9 +280,11 @@ class RestClient:
         for name, fetch in fetchers:
             try:
                 await fetch()
-            except AuthenticationError, ConnectionError:
+            except AuthenticationError:
                 raise
             except RestClientError as err:
+                # ConnectionError included: a timeout on one section is not
+                # an unreachable wallbox while the others answer.
                 _LOGGER.debug("Failed to fetch %s: %s", name, err)
                 last_error = err
             else:
@@ -599,7 +607,7 @@ class RestClient:
                 _LOGGER.debug(
                     "Attempt %s/%s to %s %s failed: %r", attempt, attempts, method, path, err
                 )
-                if attempt >= attempts:
+                if attempt >= attempts or isinstance(err, TimeoutError):
                     msg = f"{method} {path} failed: {err!r}"
                     raise ConnectionError(msg) from err
                 await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)

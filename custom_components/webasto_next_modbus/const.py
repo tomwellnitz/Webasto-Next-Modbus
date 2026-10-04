@@ -29,8 +29,9 @@ REST_SCAN_INTERVAL: Final = 60  # REST API polling interval (seconds)
 # slow to serve and rarely changes, so it is only re-read this often (and
 # right after a write).
 REST_SYSTEM_SECTION_INTERVAL: Final = 300  # seconds
-# Upper bound for one REST poll (all endpoints, including a login).
-REST_FETCH_TIMEOUT: Final = 45  # seconds
+# Upper bound for one REST poll: a login plus three sections, each up to the
+# client's 30 s request timeout.
+REST_FETCH_TIMEOUT: Final = 150  # seconds
 
 # Webasto / Ampure Unite REST settings (served via the flat
 # `/api/configuration-fields/` endpoint; see issue #97). The LED dimming level
