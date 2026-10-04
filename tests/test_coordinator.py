@@ -87,9 +87,11 @@ async def test_coordinator_failure_increments_counter() -> None:
 
     coordinator = _build_coordinator(bridge, entry)
 
-    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create:
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
+    with (
+        patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create,
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()
 
     assert coordinator.consecutive_failures == 1
     assert coordinator.last_failure is not None
@@ -107,9 +109,11 @@ async def test_coordinator_failure_creates_repair_issue() -> None:
     coordinator = _build_coordinator(bridge, entry)
     coordinator.consecutive_failures = 2
 
-    with patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create:
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
+    with (
+        patch("custom_components.webasto_next_modbus.coordinator.ir.async_create_issue") as create,
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()
 
     create.assert_called_once()
 

@@ -370,14 +370,14 @@ def _encode_value(definition: RegisterDefinition, value: Any) -> list[int]:
     scale = definition.scale
     if definition.data_type == "uint16":
         numeric = float(value)
-        raw = int(round(numeric / scale)) if scale != 1 else int(round(numeric))
+        raw = round(numeric / scale) if scale != 1 else round(numeric)
         if not 0 <= raw <= 0xFFFF:
             raise ValueError(f"Value {value} out of range for 16-bit register {definition.key}")
         return [raw]
 
     if definition.data_type == "uint32":
         numeric = float(value)
-        raw = int(round(numeric / scale)) if scale != 1 else int(round(numeric))
+        raw = round(numeric / scale) if scale != 1 else round(numeric)
         if not 0 <= raw <= 0xFFFFFFFF:
             raise ValueError(f"Value {value} out of range for 32-bit register {definition.key}")
         return [(raw >> 16) & 0xFFFF, raw & 0xFFFF]

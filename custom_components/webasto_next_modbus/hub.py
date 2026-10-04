@@ -421,11 +421,8 @@ class ModbusBridge:
         """Return True if TypeError indicates an unexpected keyword argument."""
 
         message = str(err)
-        return (
-            "unexpected keyword argument" in message
-            and f"'{keyword}'" in message
-            or "multiple values for argument" in message
-            and f"'{keyword}'" in message
+        return ("unexpected keyword argument" in message and f"'{keyword}'" in message) or (
+            "multiple values for argument" in message and f"'{keyword}'" in message
         )
 
     @staticmethod

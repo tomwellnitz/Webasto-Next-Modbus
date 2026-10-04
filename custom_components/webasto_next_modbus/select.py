@@ -54,9 +54,6 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
-    # HA-facing options are lowercase slugs (translation keys must be); the
-    # wallbox's camelCase API values are mapped in/out below.
-    _attr_options = list(UNITE_LED_DIMMING_OPTION_TO_API)
 
     def __init__(
         self,
@@ -66,6 +63,9 @@ class WebastoLedDimming(WebastoRestEntity, SelectEntity):
         model_name: str,
     ) -> None:
         super().__init__(coordinator, host, "led_dimming", device_name, model_name)
+        # HA-facing options are lowercase slugs (translation keys must be); the
+        # wallbox's camelCase API values are mapped in/out below.
+        self._attr_options = list(UNITE_LED_DIMMING_OPTION_TO_API)
         self._pending_option: str | None = None
         self._update_from_rest()
 

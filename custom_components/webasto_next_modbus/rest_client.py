@@ -53,7 +53,7 @@ class AuthenticationError(RestClientError):
     """Raised when authentication fails."""
 
 
-class ConnectionError(RestClientError):  # noqa: A001
+class ConnectionError(RestClientError):
     """Raised when connection to wallbox fails."""
 
 

@@ -569,7 +569,9 @@ ______________________________________________________________________
 ```python
 import requests
 import urllib3
+
 urllib3.disable_warnings()
+
 
 class WebastoAPI:
     def __init__(self, host: str, username: str, password: str):
@@ -577,37 +579,38 @@ class WebastoAPI:
         self.session = requests.Session()
         self.session.verify = False
         self._login(username, password)
-    
+
     def _login(self, username: str, password: str):
         resp = self.session.post(
-            f"{self.base_url}/login",
-            json={"username": username, "password": password}
+            f"{self.base_url}/login", json={"username": username, "password": password}
         )
         resp.raise_for_status()
         token = resp.json()["access_token"]
         self.session.headers["Authorization"] = f"Bearer {token}"
-    
+
     def get_dashboard(self) -> list:
         return self.session.get(f"{self.base_url}/dashboard-information").json()
-    
+
     def get_section(self, section: str) -> list:
         return self.session.get(f"{self.base_url}/sections/{section}").json()
-    
+
     def update_config(self, updates: list) -> dict:
-        return self.session.post(
-            f"{self.base_url}/configuration-updates",
-            json=updates
-        ).json()
-    
+        return self.session.post(f"{self.base_url}/configuration-updates", json=updates).json()
+
     def set_led_brightness(self, brightness: int):
-        return self.update_config([{
-            "fieldKey": "led-brightness", 
-            "value": brightness,
-            "configurationFieldUpdateType": "number-configuration-field-update"
-        }])
-    
+        return self.update_config(
+            [
+                {
+                    "fieldKey": "led-brightness",
+                    "value": brightness,
+                    "configurationFieldUpdateType": "number-configuration-field-update",
+                }
+            ]
+        )
+
     def restart(self):
         return self.session.post(f"{self.base_url}/custom-actions/restart-system")
+
 
 # Usage
 api = WebastoAPI("192.168.178.109", "admin", "password")

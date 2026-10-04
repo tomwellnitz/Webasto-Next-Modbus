@@ -466,7 +466,8 @@ def main(argv: list[str] | None = None) -> int:
             failsafe_amps=args.failsafe_amps,
             failsafe_timeout=args.failsafe_timeout,
         )
-    except Exception as err:  # pragma: no cover - smoke tests are best-effort
+    # Top-level CLI handler: report any failure as a non-zero exit code.
+    except Exception as err:  # noqa: BLE001  # pragma: no cover - best-effort smoke test
         print(f"[webasto-smoke] ❌ {err}", file=sys.stderr)
         return 1
 

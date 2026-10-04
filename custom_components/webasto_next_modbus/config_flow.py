@@ -418,22 +418,21 @@ class WebastoOptionsFlow(config_entries.OptionsFlow):
                 else:
                     rest_password = existing_password
 
-            if not errors:
-                # Validate REST connection if enabled
-                if rest_enabled and rest_password:
-                    try:
-                        await _async_validate_rest(
-                            self.hass,
-                            config_entry.data[CONF_HOST],
-                            rest_username,
-                            rest_password,
-                            model,
-                        )
-                    except AuthenticationError:
-                        errors["base"] = "invalid_auth"
-                    except RestClientError as err:
-                        _LOGGER.warning("REST API validation failed: %s", err)
-                        errors["base"] = "rest_cannot_connect"
+            # Validate the REST connection if enabled.
+            if not errors and rest_enabled and rest_password:
+                try:
+                    await _async_validate_rest(
+                        self.hass,
+                        config_entry.data[CONF_HOST],
+                        rest_username,
+                        rest_password,
+                        model,
+                    )
+                except AuthenticationError:
+                    errors["base"] = "invalid_auth"
+                except RestClientError as err:
+                    _LOGGER.warning("REST API validation failed: %s", err)
+                    errors["base"] = "rest_cannot_connect"
 
             if not errors:
                 updated_data = dict(config_entry.data)

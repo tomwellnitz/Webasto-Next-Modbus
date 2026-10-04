@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from homeassistant.const import EntityCategory
@@ -67,10 +68,8 @@ class WebastoRegisterEntity(CoordinatorEntity[WebastoDataCoordinator]):
         )
 
         if register.entity_category:
-            try:
+            with suppress(ValueError):
                 self._attr_entity_category = EntityCategory(register.entity_category)
-            except ValueError:
-                pass
         self._attr_entity_registry_enabled_default = register.entity_registry_enabled_default
 
     @property

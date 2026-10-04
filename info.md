@@ -6,9 +6,9 @@ Bring Webasto Next and Ampure / Webasto Unite wallboxes into Home Assistant via 
 
 - Guided onboarding with immediate Modbus validation; model selector (Webasto Next or Webasto / Ampure Unite) and 11 kW (16 A) / 22 kW (32 A) variants.
 - Reconfigure flow for in-place host/port/unit ID changes and a guided reauth flow when REST credentials are rejected.
-- Rich entities: sensors, numbers, switches, buttons, text, and **Connected** + **Charging** binary sensors.
-- Device triggers (charging, connection, cable, fault) and ready-to-import blueprints (FastCharge, Charge target, Charge until full, Solar surplus, Event notifications).
-- Resilient polling: retry/backoff, automatic Life Bit keep-alive, optional REST diagnostics, redacted diagnostics download.
+- Rich entities: sensors, numbers, switches, selects, buttons, text, and **Connected** + **Charging** binary sensors; niche diagnostics start disabled.
+- Device triggers (charging, connection, cable, fault) and blueprints with one-click import links in the README (FastCharge, Charge target, Charge until full, Solar surplus, Event notifications).
+- Resilient polling: bounded retries, automatic Life Bit keep-alive, a repair issue when the wallbox stays unreachable, REST polled independently of Modbus, redacted diagnostics download.
 - HA quality scale **Platinum**: strict typing, shared aiohttp session, icon and exception translations, action-setup, full pytest suite.
 
 ## Requirements

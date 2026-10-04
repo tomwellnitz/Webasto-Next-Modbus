@@ -29,12 +29,22 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 
+[tool.coverage.run]
+source = ["custom_components/webasto_next_modbus"]
+branch = true
+
+[tool.coverage.report]
+# CI fails below this line/branch coverage; raise it as coverage improves.
+fail_under = 80
+show_missing = true
+skip_covered = true
+
 [tool.ruff]
 line-length = 100
 exclude = [".vulture_whitelist.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "ASYNC", "C4", "TID"]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "C4", "TID", "BLE", "RUF", "SIM", "PT"]
 
 [tool.bandit]
 skips = ["B101", "B110"]
@@ -81,6 +91,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+    "actionlint-py>=1.7.12",
     "bandit>=1.9.2",
     "codespell>=2.4.1",
     "colorlog>=6.10.1",
@@ -114,7 +125,9 @@ extend_exclude = ["scripts"]
 DEP003 = ["custom_components"]
 DEP004 = ["homeassistant", "voluptuous"]
 
+# Single codespell configuration, used by CI, scripts/check.sh and pre-commit.
 [tool.codespell]
-skip = "*.pdf,*.log,*.log.*,*.csv"
+skip = "./.*,*.pdf,*.log,*.log.*,*.csv,*.json,*.ambr,uv.lock,*.egg-info,./build,./dist"
 ignore-words-list = "hass,alle,unter,adresse,ist,oder,paket,intervall,stopp,startet,aktive,variante,randomised"
+quiet-level = 2
 

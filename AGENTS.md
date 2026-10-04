@@ -11,11 +11,11 @@ This document provides context and guidelines for AI agents working on this code
   - **Primary**: Modbus TCP (using `pymodbus`) - real-time charging data
   - **Optional**: REST API (using `aiohttp`) - configuration & diagnostics
 - **IoT Class**: Local Polling
-- **Config Flow**: UI-based configuration with auto-discovery (Zeroconf).
+- **Config Flow**: UI-based configuration (host / port / unit ID entered manually — the wallboxes do not advertise themselves via mDNS/zeroconf), plus reconfigure, reauth and options flows.
 
 ## 🛠️ Tech Stack & Tooling
 
-- **Language**: Python 3.13.2+
+- **Language**: Python 3.14.2+ (what Home Assistant 2026.x requires)
 - **Framework**: Home Assistant (Custom Component)
 - **Dependency Management**: `uv` (replaces pip/poetry)
 - **Linting & Formatting**: `ruff`
@@ -54,19 +54,24 @@ This document provides context and guidelines for AI agents working on this code
 **Always** use the provided check script before committing changes. It runs the full suite of QA tools.
 
 ```bash
-./scripts/check.sh
+./scripts/check.sh          # fixes lint/format/Markdown in place, then checks
+./scripts/check.sh --check  # read-only; this is exactly what CI runs
 ```
 
 This script executes:
 
 1. `deptry` (Dependencies)
 1. `ruff` (Lint/Format)
-1. `codespell` (Spelling)
-1. `yamllint` (YAML)
+1. `codespell` (Spelling; the only config is `[tool.codespell]` in `pyproject.toml`)
+1. `mdformat` (Markdown, tracked files only)
+1. `yamllint` (YAML, including `.github/`)
+1. `actionlint` (GitHub workflows)
 1. `bandit` (Security)
 1. `vulture` (Dead code)
 1. `mypy` (Type checking)
-1. `pytest` (Tests)
+1. `pytest --cov` (Tests; fails below `[tool.coverage.report] fail_under`)
+
+`uv.lock` is committed and CI installs with `uv sync --locked`: after any dependency change run `uv lock` and commit `uv.lock` together with `pyproject.toml`.
 
 ## 📏 Coding Standards
 
@@ -108,11 +113,11 @@ This script executes:
 
 ### 6. Dependabot & auto-merge
 
-- `dependabot.yml` keeps PRs low-noise: direct deps only, grouped per ecosystem, a 7-day `cooldown`, `pymodbus` major/minor and `homeassistant` / `pytest-homeassistant-custom-component` patch bumps ignored (they just track HA point releases).
+- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, grouped per ecosystem, monthly, a 7-day `cooldown`, and `pymodbus` major/minor bumps ignored. `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against.
 - `.github/workflows/dependabot-auto-merge.yml` enables GitHub auto-merge for **patch + minor** Dependabot PRs; **major** bumps are left for manual review. For grouped PRs the highest semver bump in the group decides.
 - **Two repository settings are required for auto-merge to be safe**, otherwise GitHub would merge without waiting for CI:
   1. Settings → General → **Allow auto-merge** (enabled).
-  1. Settings → Branches → branch protection on `main` with **required status checks** (`build`, `validate`, CodeQL `Analyze`). Do **not** require pull-request approvals — Dependabot cannot approve its own PR, which would deadlock auto-merge on a solo-maintainer repo.
+  1. Settings → Branches → branch protection on `main` with **required status checks** `build (3.14.2)`, `validate` and `Analyze (python)` (plus `Analyze (actions)` if wanted). Matrix jobs report their matrix values in the check name, so bumping the CI Python version or renaming a job renames the check: update the protection rule in the same change, otherwise PRs wait forever for a check that no longer exists. Do **not** require pull-request approvals — Dependabot cannot approve its own PR, which would deadlock auto-merge on a solo-maintainer repo.
 
 ### 7. Commits, PRs & GitHub posts
 
@@ -122,7 +127,9 @@ This script executes:
 ## 🧪 Testing Strategy
 
 - **Unit Tests**: Cover all config flows, sensor parsing, and coordinator logic.
-- **Mocking**: Use `unittest.mock` to mock the `ModbusBridge` and `pymodbus` client.
+- **Integration tests in a real Home Assistant** (`tests/test_init.py`, `tests/test_rest.py`, `tests/test_snapshots.py`): opt in with `pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")`, use the `wallbox` / `config_entry` fixtures from `tests/conftest.py`, and mock REST with `aioclient_mock`.
+- **Snapshots**: `tests/test_snapshots.py` records every entity, the device and the diagnostics in `tests/snapshots/`. Regenerate with `--snapshot-update` after intended changes and review the diff.
+- **Mocking**: Use `unittest.mock` to mock the `ModbusBridge`; patch `hub._ensure_pymodbus` (the `fake_pymodbus` fixture) to route the client to the virtual wallbox. There are no global module stubs: tests import the real `pymodbus` and `voluptuous`.
 - **Virtual Wallbox**: The `virtual_wallbox` module provides a fake Modbus server for end-to-end testing or local development without hardware.
 
 ## 🔑 Key Files to Know
@@ -143,12 +150,14 @@ This script executes:
 1. The entity will be auto-created based on the `entity` field in the definition.
 1. Update `translations/en.json` and `de.json` if using `translation_key`.
 1. Run `./scripts/check.sh` to verify types and tests.
+1. Regenerate the entity snapshots (`uv run pytest tests/test_snapshots.py --snapshot-update`) and review the diff.
 
 ### Updating Dependencies
 
 1. Edit `pyproject.toml`.
-1. Run `uv sync`.
+1. Run `uv sync` (updates `uv.lock`).
 1. Run `./scripts/check.sh`.
+1. Commit `pyproject.toml` and `uv.lock` together.
 
 ## 🌐 REST API Integration
 

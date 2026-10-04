@@ -21,13 +21,13 @@ Thanks for taking the time to improve Webasto Next! The notes below summarise ho
 1. **Create a feature branch**:
 
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feat/short-description  # <type>/<kebab-case>, type: feat, fix, chore, docs, refactor, test, ci
    ```
 
 1. **Make your changes** and verify quality:
 
    ```bash
-   ./scripts/check.sh
+   ./scripts/check.sh  # CI runs the read-only ./scripts/check.sh --check
    ```
 
 1. **Commit and push**:
@@ -35,7 +35,7 @@ Thanks for taking the time to improve Webasto Next! The notes below summarise ho
    ```bash
    git add .
    git commit -m "Add your feature"
-   git push origin feature/your-feature-name
+   git push origin feat/short-description
    ```
 
 1. **Open a Pull Request** on GitHub and wait for CI checks to pass.

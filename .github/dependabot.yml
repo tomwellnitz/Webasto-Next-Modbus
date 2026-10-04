@@ -1,6 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # The uv ecosystem updates pyproject.toml and uv.lock together, so CI's
+  # `uv sync --locked` keeps passing on Dependabot PRs.
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: monthly
@@ -10,10 +12,16 @@ updates:
     # the cooldown and still arrive immediately.
     cooldown:
       default-days: 7
-    # Only direct dependencies declared in pyproject.toml; there is no lock
-    # file, so transitive bumps would just be noise.
+    # Only direct dependencies declared in pyproject.toml; transitive bumps
+    # in uv.lock would just be noise.
     allow:
       - dependency-type: "direct"
+    # pytest-homeassistant-custom-component is deliberately NOT ignored:
+    # it pins the Home Assistant version the tests run against, and every
+    # HA release (including 2026.10.0 itself) is only a *patch* bump of it
+    # (0.13.367 = HA 2026.9.4, 0.13.368 = HA 2026.10.0b0). Ignoring patch
+    # bumps meant the test environment never followed HA. The monthly,
+    # grouped schedule keeps this to one PR a month.
     ignore:
       # pymodbus bumps are driven by Home Assistant core's `modbus`
       # integration, not by us (HA 2026.5/6: 3.11.x, HA 2026.7: 3.13.1).
@@ -23,18 +31,6 @@ updates:
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
-      # pytest-homeassistant-custom-component mirrors HA core releases 1:1 —
-      # a new patch version ships with every HA patch (0.13.330 = HA 2026.5.1,
-      # 0.13.331 = 2026.5.2, …). Patch bumps carry no new test-helper logic,
-      # so only minor/major bumps (which signal an HA API change) warrant a PR.
-      - dependency-name: "pytest-homeassistant-custom-component"
-        update-types:
-          - "version-update:semver-patch"
-      # homeassistant (dev dep) patch releases are HA maintenance releases;
-      # minor/major bumps signal API changes worth tracking in pyproject.toml.
-      - dependency-name: "homeassistant"
-        update-types:
-          - "version-update:semver-patch"
     groups:
       python-dependencies:
         patterns:

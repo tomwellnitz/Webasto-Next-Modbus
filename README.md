@@ -21,10 +21,10 @@ The wallbox must be reachable over Modbus TCP (default port `502`). The REST API
 
 - Local polling over Modbus TCP through an async update coordinator.
 - Sensors for charge point and charging state, currents, power, energy, session data, fault codes and EV limits.
-- Controls: dynamic charging current, fail-safe current and timeout, and start/stop/keep-alive buttons.
+- Controls: dynamic charging current, fail-safe current and timeout, start/stop/keep-alive buttons and, on the Unite, a three-phase switch.
 - A **Connected** binary sensor that reports reachability even while the wallbox is offline (useful in automations).
 - Services for current limit, fail-safe, charging sessions and keep-alive frames.
-- Optional REST API integration: LED brightness, free-charging toggle and tag ID, firmware/diagnostics sensors and a restart button.
+- Optional REST API integration: LED brightness (Next) or LED dimming level and randomised start delay (Unite), free-charging toggle and tag ID, firmware/diagnostics sensors and a restart button.
 - Device triggers (charging started/stopped, connection lost/restored, keep-alive sent) and ready-to-use blueprints.
 - Automatic "Life Bit" keep-alive handling and resilient reconnect with back-off, so a power-cycled or still-booting wallbox recovers on its own.
 - Tested against a virtual wallbox simulator.
@@ -43,20 +43,20 @@ The wallbox must be reachable over Modbus TCP (default port `502`). The REST API
 Or add it manually:
 
 1. In HACS, open the three-dot menu and choose **Custom repositories**.
-2. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` with category **Integration**.
-3. Install **Webasto Next** and restart Home Assistant.
+1. Add `https://github.com/tomwellnitz/Webasto-Next-Modbus` with category **Integration**.
+1. Install **Webasto Next** and restart Home Assistant.
 
 To test upcoming changes, enable **Show beta versions** on the integration in HACS.
 
 ### Manual
 
 1. Copy `custom_components/webasto_next_modbus/` from this repository into your Home Assistant `config/custom_components/` directory.
-2. Restart Home Assistant.
+1. Restart Home Assistant.
 
 ### Removal
 
 1. Go to **Settings → Devices & Services → Webasto Next / Unite**, open the **⋮** menu on the entry and choose **Delete**. This removes the device, its entities and stored credentials.
-2. If you installed via HACS, optionally remove the repository from HACS; for a manual install, delete `custom_components/webasto_next_modbus/`. Restart Home Assistant.
+1. If you installed via HACS, optionally remove the repository from HACS; for a manual install, delete `custom_components/webasto_next_modbus/`. Restart Home Assistant.
 
 ## Configuration
 
@@ -65,7 +65,7 @@ To test upcoming changes, enable **Show beta versions** on the integration in HA
 Modbus TCP is **disabled by default** on the Webasto Next / Unite. Enable it first in the wallbox web interface: switch to the **expert/installer view**, then turn on **Modbus TCP** (default port `502`). Without this the integration cannot connect ([#36](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/36)).
 
 1. Go to **Settings → Devices & Services → Add Integration** and search for **Webasto Next**.
-2. Enter your wallbox details:
+1. Enter your wallbox details:
    - **Host** — IP address or hostname (e.g. `192.168.1.50`).
    - **Port** — default `502`.
    - **Unit ID** — default `255`.
@@ -81,7 +81,7 @@ The host, port, unit ID and entry name can be changed later without removing the
 The REST API exposes features that are not available over Modbus (LED control, free charging, firmware info, diagnostics, restart).
 
 1. Open the integration entry → three-dot menu → **Configure**.
-2. Enable **REST API features** and enter the wallbox web-interface credentials (username default `admin`).
+1. Enable **REST API features** and enter the wallbox web-interface credentials (username default `admin`).
 
 Credentials are stored in the Home Assistant config entry and redacted from downloaded diagnostics. If the wallbox later rejects them, Home Assistant starts a guided **reauthentication** dialog so you can enter new ones; the Modbus side keeps working regardless. The wallbox's web interface uses a self-signed certificate, so the integration disables TLS verification for that local HTTPS endpoint.
 
@@ -101,8 +101,11 @@ Credentials are stored in the Home Assistant config entry and redacted from down
 | :--- | :--- |
 | Sensors | Charge point state, charging state, EVSE state, cable state, fault code, per-phase current and power, total energy, session energy and times, EV current limits, smart-vehicle detection. |
 | Numbers | Charging current limit (0–32 A), fail-safe current (6–32 A), fail-safe timeout (6–120 s). |
-| Buttons | Start charging, Stop charging, Send keep-alive. |
+| Buttons | Start charging, Stop charging (Webasto Next only), Send keep-alive. |
 | Binary sensors | Connected (`device_class: connectivity`), Charging (`device_class: battery_charging`). |
+| Switches | Three-phase charging (Unite only; firmware-dependent, see [Known limitations](#known-limitations)). |
+
+The Unite additionally reports the number of active phases, the charge-point power and the L1/L2/L3 voltages over Modbus; it has no session RFID tag or smart-vehicle detection.
 
 A few niche entities start **disabled** and can be enabled per device: the EVSE/cable/EV current-limit diagnostics, session start/end time, the RFID tag of the last session and the *Send keep-alive* button (the keep-alive already runs automatically). Undocumented enum values (for example a fault code added by a firmware update) show as *unknown* instead of breaking the sensor.
 
@@ -110,8 +113,9 @@ A few niche entities start **disabled** and can be enabled per device: the EVSE/
 
 | Platform | Entities |
 | :--- | :--- |
-| Sensors | Comboard/Powerboard firmware (SW & HW), plug cycles, error counter, signal voltages L1/L2/L3, active errors. |
-| Numbers | LED brightness (0–100 %). |
+| Sensors | Comboard/Powerboard firmware (SW & HW), plug cycles, error counter, signal voltages L1/L2/L3, active errors (Webasto Next only). |
+| Numbers | LED brightness (0–100 %, Webasto Next); randomised start delay (0–1800 s, Unite). |
+| Selects | LED dimming level (Unite). |
 | Switches | Free charging. |
 | Text | Free charging tag ID. |
 | Buttons | Restart wallbox. |
@@ -140,13 +144,13 @@ REST API services (when enabled):
 
 ## Automations and blueprints
 
-Ready-to-import blueprints live under **Settings → Automations & Scenes → Blueprints**:
+The repository ships five blueprints. HACS does not install blueprints, so import the ones you want with the **Import** links (or *Settings → Automations & Scenes → Blueprints → Import blueprint* with the file's GitHub URL); they then appear under **Blueprints**:
 
-- **FastCharge / FullCharge control** — start or stop charging from `input_boolean` toggles.
-- **Charge target (kWh)** — charge a set amount of energy, then stop.
-- **Charge until full** — stop automatically once charging power drops below a threshold.
-- **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption.
-- **Event notifications** — send a mobile notification on wallbox events (charging started/stopped, connection lost/restored, keep-alive sent, cable connected/disconnected, fault occurred).
+- **FastCharge / FullCharge control** — start or stop charging from `input_boolean` toggles. [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftomwellnitz%2FWebasto-Next-Modbus%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwebasto_next_modbus%2Ffastcharge_fullcharge.yaml)
+- **Charge target (kWh)** — charge a set amount of energy, then stop. [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftomwellnitz%2FWebasto-Next-Modbus%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwebasto_next_modbus%2Fcharge_target.yaml)
+- **Charge until full** — stop automatically once charging power drops below a threshold. [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftomwellnitz%2FWebasto-Next-Modbus%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwebasto_next_modbus%2Fcharge_until_full.yaml)
+- **Solar surplus optimizer** — adjust the charging current to grid export to maximise self-consumption. [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftomwellnitz%2FWebasto-Next-Modbus%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwebasto_next_modbus%2Fsolar_optimizer.yaml)
+- **Event notifications** — send a mobile notification on wallbox events (charging started/stopped, connection lost/restored, keep-alive sent, cable connected/disconnected, fault occurred). [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftomwellnitz%2FWebasto-Next-Modbus%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwebasto_next_modbus%2Fevent_notifications.yaml)
 
 Device triggers for charging start/stop, connection state, cable connected/disconnected and fault occurred are available for your own automations.
 
@@ -201,9 +205,9 @@ See [`docs/support.md`](docs/support.md) for more.
 ## Development
 
 ```bash
-uv sync            # install dependencies
-uv run pytest      # run the test suite
-uv run ruff check . # lint
+uv sync                     # install the locked dependencies
+./scripts/check.sh          # all checks (fixes formatting in place)
+./scripts/check.sh --check  # the same, read-only (what CI runs)
 ```
 
 A virtual wallbox simulator lets you develop without hardware. See [`docs/development.md`](docs/development.md) and [`docs/architecture.md`](docs/architecture.md).
