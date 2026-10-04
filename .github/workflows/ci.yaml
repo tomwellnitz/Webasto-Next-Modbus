@@ -6,7 +6,20 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
+# A new push to a PR supersedes the run for the previous commit; runs on main
+# are never cancelled so every merged commit gets a full result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # The required status checks on `main` are named after these jobs:
+  # `build (<python-version>)`, `validate` and CodeQL's `Analyze (<language>)`.
+  # Renaming a job or changing the matrix values renames the check, so update
+  # the branch protection rule in the same change (see AGENTS.md).
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -27,41 +40,13 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
+      # --locked fails if uv.lock is out of date with pyproject.toml instead of
+      # silently re-resolving, so CI always tests exactly the committed lock.
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
-      - name: Lint with Ruff
-        run: |
-          uv run ruff check custom_components/webasto_next_modbus tests
-          uv run ruff format --check custom_components/webasto_next_modbus tests
-
-      - name: Check spelling with codespell
-        run: |
-          uv run codespell --ignore-words-list=hass,alot,datas,dof,dur,farenheit,hist,iff,ines,ist,lights,mut,nd,pres,provid,referance,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,sould,startet,oder,stopp,alle,unter,adresse,randomised --skip="./.*,*.csv,*.json,*.ambr,*.pdf,uv.lock" --quiet-level=2
-
-      - name: Lint YAML with yamllint
-        run: |
-          uv run yamllint .
-
-      - name: Security check with bandit
-        run: |
-          uv run bandit -r custom_components/webasto_next_modbus --skip B101,B110
-
-      - name: Check dependencies with deptry
-        run: |
-          uv run deptry .
-
-      - name: Check for dead code with vulture
-        run: |
-          uv run vulture custom_components/webasto_next_modbus .vulture_whitelist.py
-
-      - name: Type check with mypy
-        run: |
-          uv run mypy custom_components/webasto_next_modbus
-
-      - name: Run tests
-        run: |
-          uv run pytest
+      - name: Run checks
+        run: ./scripts/check.sh --check
 
   validate:
     runs-on: ubuntu-latest
@@ -76,4 +61,3 @@ jobs:
 
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@master
-

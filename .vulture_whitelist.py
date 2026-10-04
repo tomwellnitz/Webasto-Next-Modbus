@@ -7,7 +7,6 @@ async_press  # unused function
 WebastoConfigFlow  # unused class
 VERSION  # unused variable
 async_step_user  # unused method
-async_step_zeroconf  # unused method
 async_get_options_flow  # unused method
 async_step_init  # unused method
 entry_data  # unused arg required by Home Assistant's async_step_reauth signature

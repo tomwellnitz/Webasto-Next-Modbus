@@ -123,7 +123,7 @@ async def test_unite_set_led_dimming_rejects_unknown_level() -> None:
     client = _unite_client()
     client._update_config = AsyncMock()  # type: ignore[method-assign]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown LED dimming level"):
         await client.set_led_dimming_level("bogus")
     client._update_config.assert_not_awaited()
 
@@ -148,7 +148,7 @@ async def test_unite_set_randomised_delay_out_of_range() -> None:
     client = _unite_client()
     client._update_config = AsyncMock()  # type: ignore[method-assign]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Randomised delay must be"):
         await client.set_randomised_delay(3600)
     client._update_config.assert_not_awaited()
 

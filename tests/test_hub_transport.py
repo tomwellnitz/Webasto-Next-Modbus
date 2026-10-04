@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -65,9 +65,9 @@ class _Err:
 class ScriptedClient:
     """Fake pymodbus client recording its lifecycle; behaviour set per test."""
 
-    instances: list[ScriptedClient] = []
+    instances: ClassVar[list[ScriptedClient]] = []
     behaviour: Any = None
-    kwargs_seen: list[dict[str, Any]] = []
+    kwargs_seen: ClassVar[list[dict[str, Any]]] = []
 
     def __init__(self, host: str, **kwargs: Any) -> None:
         self.connected = False

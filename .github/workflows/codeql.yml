@@ -8,6 +8,9 @@ on:
   schedule:
     - cron: "0 3 * * 0"
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze
@@ -20,19 +23,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["python"]
+        # "actions" scans the workflows themselves (injection, permissions).
+        language: ["python", "actions"]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Neither Python nor Actions needs a build step.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: ${{ matrix.language }}
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+          build-mode: none
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4

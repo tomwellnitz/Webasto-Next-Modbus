@@ -111,7 +111,17 @@ jobs:
         run: |
           # shellcheck disable=SC1091
           source "${RUNNER_TEMP}/venv-canary/bin/activate"
-          python -c "import homeassistant; from custom_components.webasto_next_modbus import const, hub, rest_client, coordinator, device_trigger"
+          python - <<'PY'
+          import importlib
+          import pkgutil
+
+          import homeassistant  # noqa: F401  (must come first, see above)
+          import custom_components.webasto_next_modbus as integration
+
+          for module in pkgutil.iter_modules(integration.__path__):
+              importlib.import_module(f"{integration.__name__}.{module.name}")
+              print(f"✓ imported {module.name}")
+          PY
 
   hassfest:
     # Split from ha-latest so hassfest sees a clean workspace: the

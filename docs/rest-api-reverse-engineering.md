@@ -48,9 +48,9 @@ Either way, each entry has a `fieldKey`, a `value` and metadata describing wheth
 The most reliable way to find Unite-specific or otherwise unknown endpoints is to observe what the **web UI itself** calls:
 
 1. Open the wallbox web UI in your browser.
-2. Open DevTools → **Network** tab, filter by `/api`.
-3. Click through every screen (Settings, Charging, Network, Free Charging, Off-Peak, Time, …).
-4. Note every URL the UI fetches. Each one is a candidate endpoint.
+1. Open DevTools → **Network** tab, filter by `/api`.
+1. Click through every screen (Settings, Charging, Network, Free Charging, Off-Peak, Time, …).
+1. Note every URL the UI fetches. Each one is a candidate endpoint.
 
 For systematic probing of a path like `/api/sections/<name>`, try plausible names taken from the UI's vocabulary (`network`, `time`, `off-peak`, `charging`, `phases`, …) and record which return data versus `404`.
 

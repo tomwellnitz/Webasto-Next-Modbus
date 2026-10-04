@@ -7,7 +7,7 @@
 - **Setup** makes one connection attempt and leaves retrying to Home Assistant, instead of blocking startup for up to ~90 s with five attempts. The untranslated (German-only) persistent notifications are gone: a translated error explains a failed setup, and a lasting connection problem raises a **repair issue** that clears itself on recovery.
 - Service names and descriptions are translated (English, German) and have icons; numeric sensors have a suggested display precision; current/duration numbers get their device class and the fail-safe numbers the *configuration* category.
 - Niche diagnostic entities start disabled (see README).
-- Config entries are migrated to version 1.2 instead of being rewritten on every setup.
+- Config entries are migrated to version 1.3 instead of being rewritten on every setup.
 - **`pymodbus` runtime constraint no longer pins an upper bound** — `>=3.11.2` in both `manifest.json` and `pyproject.toml [project].dependencies` (previously `>=3.11.2,<4`). Home Assistant core dictates the installed version via its bundled `modbus` integration, and every fixed ceiling automatically blocks the integration at load time when HA-Core moves past it — see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88) for the 2026.7 incident. Our production code is defensive against pymodbus API churn, so removing the ceiling is safer than repeating the block for every user on the next HA release. The dev group still pins `pymodbus<3.12` for the `virtual_wallbox` simulator.
 
 ### Fixed
@@ -47,6 +47,16 @@
 
 - **REST API support for the Ampure / Webasto Unite** ([#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97), thanks @lonkhuijzen for the reverse-engineering). The Unite serves a different REST surface than the Next — a single flat `/api/configuration-fields/` endpoint with its own dotted field keys, and writes that take only `{fieldKey, value}` — so the REST client is now model-aware. On a Unite, enabling the REST API exposes the **Free charging** switch and **tag ID**, a new **LED dimming level** select (`veryLow`/`low`/`mid`/`high`/`timeBased`, since the Unite has no 0-100 brightness), and a **Randomised start delay** number (0-1800 s). The Next's firmware/diagnostic REST sensors have no Unite equivalent (that data isn't in the Unite's REST API) and are not created on a Unite; live telemetry is unaffected — it comes over Modbus.
 - **`.github/workflows/upstream-compat.yml`** — early-warning canary against the moving targets HA-Core ships. Runs weekly (and on demand) against the latest Home Assistant and pymodbus releases, verifies the manifest requirement is still satisfied, smoke-imports the production modules, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration ~1-2 weeks before end users hit it.
+
+### Development
+
+- `uv.lock` is committed and CI installs with `uv sync --locked`; Dependabot uses the `uv` ecosystem and now also bumps `pytest-homeassistant-custom-component` patch releases (every HA release is one), so the tests follow Home Assistant.
+- CI runs `./scripts/check.sh --check`, the same read-only script contributors run locally, instead of a hand-maintained copy of it. The script no longer reformats Markdown inside `.venv`, and gained `mdformat`, `actionlint` and a coverage gate (80 % line + branch).
+- Snapshot tests cover every entity (registry entry and state), the device and the diagnostics for both models; a static test checks that every register's device class, state class and entity category is valid.
+- The global `pymodbus` / `voluptuous` stubs in `tests/conftest.py` are gone, so the tests import the real libraries.
+- The release workflow refuses a tag that doesn't match the `manifest.json` / `pyproject.toml` version or (for a final release) has no `CHANGELOG.md` section, and runs the full check script.
+- Workflows: least-privilege `permissions`, superseded PR runs are cancelled, CodeQL also scans the workflows (`actions`), `.github/` is linted by yamllint and actionlint, and the canary smoke-imports every module.
+- Ruff additionally enforces `BLE`, `RUF`, `SIM` and `PT`; one codespell configuration in `pyproject.toml`; pre-commit hooks run the locked tools via `uv run`.
 
 ## [1.3.1] - 2026-07-02
 
@@ -88,7 +98,7 @@
 - **Forward-compatibility (HA 2026.6)**: the reconfigure/reauth flows update the entry and rely on the existing update listener for a single reload, avoiding the now-deprecated config-entry-listener-plus-reloading-method combination that becomes an error in 2026.12.
 - **Example blueprints**: fixed the FastCharge/FullCharge, Charge-Target and Charge-Until-Full blueprints, which referenced blueprint inputs in templates in a way that failed at runtime; all four blueprints were modernised to the current `triggers`/`conditions`/`actions` syntax and are now guarded by a lint test.
 - **REST API logging**: request timeouts are now retried like other transient errors instead of bubbling up as a blank `Failed to fetch <section> section:` warning, and per-section fetch failures (which keep partial/stale data) log at debug instead of repeating a warning every poll. Per-attempt retries also log at debug now (only the final outcome matters). Genuine REST outages are still surfaced once via the throttled coordinator warning.
-- **Quieter startup**: the one-time "integration loaded from &lt;path&gt;" message is now logged at debug instead of warning.
+- **Quieter startup**: the one-time "integration loaded from \<path>" message is now logged at debug instead of warning.
 
 ### Internal
 

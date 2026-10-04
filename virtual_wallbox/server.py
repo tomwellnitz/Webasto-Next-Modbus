@@ -35,12 +35,12 @@ class VirtualWallboxDataBlock(ModbusSparseDataBlock):
         self._register_type = register_type
         self._zero_mode = zero_mode
 
-    def validate(self, address: int, count: int = 1) -> bool:  # noqa: N802 - pymodbus API
+    def validate(self, address: int, count: int = 1) -> bool:
         """Always allow the request; out-of-range addresses yield zeroed values."""
 
         return count >= 0
 
-    def getValues(self, address: int, count: int = 1) -> list[int]:  # noqa: N802 - pymodbus API
+    def getValues(self, address: int, count: int = 1) -> list[int]:
         """Return a contiguous block of register values."""
 
         start = self._normalize_address(address)
@@ -61,7 +61,7 @@ class VirtualWallboxDataBlock(ModbusSparseDataBlock):
 
         return values
 
-    def setValues(  # noqa: N802 - pymodbus API
+    def setValues(
         self,
         address: int,
         values: Iterable[int],

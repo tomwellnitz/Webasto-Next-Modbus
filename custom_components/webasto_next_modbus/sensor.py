@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -153,15 +154,11 @@ class WebastoSensor(WebastoRegisterEntity, SensorEntity):
         super().__init__(coordinator, bridge, host, register, device_name)
 
         if register.device_class:
-            try:
+            with suppress(ValueError):
                 self._attr_device_class = SensorDeviceClass(register.device_class)
-            except ValueError:
-                pass
         if register.state_class:
-            try:
+            with suppress(ValueError):
                 self._attr_state_class = SensorStateClass(register.state_class)
-            except ValueError:
-                pass
         if register.unit:
             self._attr_native_unit_of_measurement = register.unit
 
@@ -244,22 +241,16 @@ class WebastoRestSensor(WebastoRestEntity, SensorEntity):
         self._definition = definition
 
         if definition.device_class:
-            try:
+            with suppress(ValueError):
                 self._attr_device_class = SensorDeviceClass(definition.device_class)
-            except ValueError:
-                pass
         if definition.state_class:
-            try:
+            with suppress(ValueError):
                 self._attr_state_class = SensorStateClass(definition.state_class)
-            except ValueError:
-                pass
         if definition.unit:
             self._attr_native_unit_of_measurement = definition.unit
         if definition.entity_category:
-            try:
+            with suppress(ValueError):
                 self._attr_entity_category = EntityCategory(definition.entity_category)
-            except ValueError:
-                pass
         if definition.translation_key:
             self._attr_translation_key = definition.translation_key
         self._attr_entity_registry_enabled_default = definition.entity_registry_enabled_default

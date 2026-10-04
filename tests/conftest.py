@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from collections.abc import Generator
-from typing import Any, cast
+from typing import Any
 
 import pytest
+from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
+from syrupy.assertion import SnapshotAssertion
 
 from virtual_wallbox.simulator import (
     FakeAsyncModbusTcpClient,
@@ -20,43 +20,16 @@ from virtual_wallbox.simulator import (
     registry as virtual_registry,
 )
 
-_pymodbus_client = types.ModuleType("pymodbus.client")
-cast(Any, _pymodbus_client).AsyncModbusTcpClient = FakeAsyncModbusTcpClient
 
-_pymodbus_exceptions = types.ModuleType("pymodbus.exceptions")
-cast(Any, _pymodbus_exceptions).ModbusException = FakeModbusException
+@pytest.fixture
+def snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
+    """Serialise Home Assistant objects (states, registry entries) stably.
 
-_pymodbus = types.ModuleType("pymodbus")
-cast(Any, _pymodbus).client = _pymodbus_client
-cast(Any, _pymodbus).exceptions = _pymodbus_exceptions
+    Two pytest plugins define ``snapshot``; pin the Home Assistant extension so
+    timestamps, IDs and contexts never end up in the snapshots.
+    """
 
-sys.modules.setdefault("pymodbus", _pymodbus)
-sys.modules.setdefault("pymodbus.client", _pymodbus_client)
-sys.modules.setdefault("pymodbus.exceptions", _pymodbus_exceptions)
-
-
-_voluptuous = types.ModuleType("voluptuous")
-
-
-class _DummyValidator:
-    def __call__(self, value):
-        return value
-
-
-def _pass_through(*args, **kwargs):
-    def _inner(value):
-        return value
-
-    return _inner
-
-
-cast(Any, _voluptuous).Schema = lambda schema: _DummyValidator()
-cast(Any, _voluptuous).Required = lambda *args, **kwargs: args[0] if args else None
-cast(Any, _voluptuous).Optional = lambda *args, **kwargs: args[0] if args else None
-cast(Any, _voluptuous).All = lambda *args, **kwargs: _DummyValidator()
-cast(Any, _voluptuous).Range = _pass_through
-
-sys.modules.setdefault("voluptuous", _voluptuous)
+    return snapshot.use_extension(HomeAssistantSnapshotExtension)
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +41,7 @@ def _reset_virtual_wallbox_registry() -> Generator[None]:
     virtual_registry.clear()
 
 
-@pytest.fixture()
+@pytest.fixture
 def default_virtual_wallbox() -> Generator[VirtualWallboxState]:
     """Provide a default virtual wallbox matching ModbusBridge defaults."""
 
@@ -117,7 +90,12 @@ def wallbox() -> Generator[VirtualWallboxState]:
         yield state
 
 
-def make_config_entry(*, options: dict[str, Any] | None = None, model: str | None = None) -> Any:
+def make_config_entry(
+    *,
+    options: dict[str, Any] | None = None,
+    model: str | None = None,
+    entry_id: str | None = None,
+) -> Any:
     """Return a MockConfigEntry for the virtual wallbox."""
 
     from homeassistant.const import CONF_HOST, CONF_PORT
@@ -149,6 +127,7 @@ def make_config_entry(*, options: dict[str, Any] | None = None, model: str | Non
             CONF_MODEL: model or MODEL_NEXT,
         },
         options=options or {},
+        entry_id=entry_id,
     )
 
 

@@ -3,7 +3,6 @@ extends: default
 ignore: |
   .venv/
   .git/
-  .github/
   __pycache__/
   *.egg-info/
 
@@ -14,5 +13,8 @@ rules:
   line-length:
     max: 120
     allow-non-breakable-words: true
+  # Dependabot writes SHA pins as `@<sha> # vX.Y.Z` (one space).
+  comments:
+    min-spaces-from-content: 1
   document-start: disable
   truthy: disable

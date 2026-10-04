@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -24,28 +27,64 @@ jobs:
       - name: Set up Python
         run: uv python install 3.14.2
 
+      # The tag, manifest.json and pyproject.toml must agree: HACS shows the
+      # tag, Home Assistant the manifest version. A final release also needs
+      # its own CHANGELOG section (pre-releases use "Unreleased").
+      - name: Verify version and changelog
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import tomllib
+
+          tag = os.environ["TAG_NAME"]
+          version = tag.removeprefix("v")
+          base_version = version.split("-", 1)[0]
+
+          with open("custom_components/webasto_next_modbus/manifest.json") as f:
+              manifest_version = json.load(f)["version"]
+          with open("pyproject.toml", "rb") as f:
+              project_version = tomllib.load(f)["project"]["version"]
+          with open("CHANGELOG.md") as f:
+              changelog = f.read()
+
+          errors = []
+          if manifest_version != base_version:
+              errors.append(f"manifest.json version {manifest_version} != tag {tag}")
+          if project_version != base_version:
+              errors.append(f"pyproject.toml version {project_version} != tag {tag}")
+          if version == base_version and not re.search(
+              rf"^## \[{re.escape(version)}\]", changelog, re.MULTILINE
+          ):
+              errors.append(f"CHANGELOG.md has no '## [{version}]' section")
+
+          for error in errors:
+              print(f"::error::{error}")
+          sys.exit(1 if errors else 0)
+          PY
+
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
-      - name: Lint
-        run: uv run ruff check .
+      - name: Run checks
+        run: ./scripts/check.sh --check
 
-      - name: Run tests
-        run: uv run pytest
-
-      - name: Build distribution
-        run: uv build
-
+      # Asset for manual installs: unzip into the Home Assistant config
+      # directory. HACS installs from the tagged source, not from this zip.
       - name: Zip custom component
         run: |
-          zip -r webasto_next_modbus.zip custom_components/webasto_next_modbus blueprints -x "*.DS_Store" -x "*__pycache__*"
+          zip -r webasto_next_modbus.zip custom_components/webasto_next_modbus blueprints \
+            -x "*.DS_Store" -x "*__pycache__*"
 
       - name: Extract release notes
-        id: extract_release_notes
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
-          # Get the tag name (e.g., v1.2.0-beta.1)
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          # Remove 'v' prefix to match changelog version (e.g., 1.2.0-beta.1)
+          # Remove the 'v' prefix to match the changelog version (e.g. 1.2.0-beta.1)
           VERSION=${TAG_NAME#v}
 
           # Pre-release tags (anything with a '-', e.g. -beta.1) don't get their
@@ -55,11 +94,14 @@ jobs:
             *-*) SECTION="Unreleased" ;;
           esac
 
-          # Extract the section from CHANGELOG.md
-          # Find the line with the version, print until the next version header
-          sed -n "/## \[$SECTION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > RELEASE_NOTES.md
+          # Print from the section header up to (excluding) the next one.
+          awk -v header="## [$SECTION]" '
+            index($0, header) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
 
-          # If empty (e.g. first release or format mismatch), fallback to simple message
+          # Fallback for an empty section (e.g. a pre-release without notes)
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "Release $TAG_NAME" > RELEASE_NOTES.md
           fi

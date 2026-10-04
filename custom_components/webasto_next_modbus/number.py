@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from homeassistant.components.number import (
     NumberDeviceClass,
@@ -104,10 +105,8 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
         if register.unit:
             self._attr_native_unit_of_measurement = register.unit
         if register.device_class:
-            try:
+            with suppress(ValueError):
                 self._attr_device_class = NumberDeviceClass(register.device_class)
-            except ValueError:
-                pass
 
         self._last_written_value: int | None = None
         self._write_only = register.write_only
@@ -146,7 +145,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Write a value to the Modbus register."""
 
-        int_value = self._clamp_to_bounds(int(round(value)))
+        int_value = self._clamp_to_bounds(round(value))
         if self.register.key == "set_current_a" and 0 < int_value < MIN_CHARGING_CURRENT:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -186,9 +185,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
             last_number_data = await self.async_get_last_number_data()
             if last_number_data and last_number_data.native_value is not None:
                 try:
-                    restored = self._clamp_to_bounds(
-                        int(round(float(last_number_data.native_value)))
-                    )
+                    restored = self._clamp_to_bounds(round(float(last_number_data.native_value)))
                     self._last_written_value = restored
                     self._attr_native_value = float(restored)
                 except TypeError, ValueError:
@@ -254,7 +251,7 @@ class WebastoNumber(WebastoRegisterEntity, RestoreNumber, NumberEntity):
             return False
         if not isinstance(value, (int, float)):
             return False
-        int_value = self._clamp_to_bounds(int(round(value)))
+        int_value = self._clamp_to_bounds(round(value))
         self._last_written_value = int_value
         self._attr_native_value = float(int_value)
         if self.hass is not None:
@@ -333,7 +330,7 @@ class WebastoLedBrightness(WebastoRestEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set LED brightness via REST API."""
 
-        int_value = int(round(value))
+        int_value = round(value)
         self._pending_value = int_value
         self._attr_native_value = float(int_value)
         if self.hass is not None:
@@ -407,7 +404,7 @@ class WebastoRandomisedDelay(WebastoRestEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the randomised delay via REST API."""
 
-        int_value = int(round(value))
+        int_value = round(value)
         self._pending_value = int_value
         self._attr_native_value = float(int_value)
         if self.hass is not None:
