@@ -189,10 +189,10 @@ async def test_cancellation_is_not_swallowed() -> None:
     assert len(ScriptedClient.instances) == 1
 
 
-async def test_forced_close_does_not_crash_the_running_request(
+async def test_forced_close_ends_the_running_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Closing while a request holds the lock gives that request a clean error."""
+    """Closing while a request holds the lock gives a clean error and no reconnect."""
 
     monkeypatch.setattr(hub_module, "CLOSE_LOCK_TIMEOUT", 0.05)
     release = asyncio.Event()
@@ -205,7 +205,7 @@ async def test_forced_close_does_not_crash_the_running_request(
 
     ScriptedClient.behaviour = _slow_then_closed
     bridge = _bridge()
-    task = asyncio.create_task(bridge._async_read_register_once(CORE))
+    task = asyncio.create_task(bridge.async_read_register(CORE))
     await asyncio.sleep(0.01)
 
     await bridge.async_close()
@@ -213,6 +213,37 @@ async def test_forced_close_does_not_crash_the_running_request(
 
     with pytest.raises(WebastoModbusError):
         await task
+    # The retry loop must not have opened a new connection after the close.
+    assert len(ScriptedClient.instances) == 1
+    with pytest.raises(WebastoModbusError, match="closed"):
+        await bridge.async_read_register(CORE)
+    assert len(ScriptedClient.instances) == 1
+
+
+async def test_life_bit_write_happens_even_if_reads_fail() -> None:
+    """The diagnostic reads must not gate the keep-alive write."""
+
+    writes: list[int] = []
+
+    async def _reads_fail(_client: ScriptedClient, address: int, _count: int) -> Any:
+        raise FakeModbusError(f"read @{address} timed out")
+
+    async def _write(self: ScriptedClient, address: int, value: int, **_kw: Any) -> Any:
+        writes.append(address)
+        return _Ok()
+
+    ScriptedClient.behaviour = _reads_fail
+    original_write = ScriptedClient.write_register
+    ScriptedClient.write_register = _write  # type: ignore[method-assign]
+    try:
+        bridge = _bridge()
+        interval = await bridge._async_life_bit_cycle()
+    finally:
+        ScriptedClient.write_register = original_write  # type: ignore[method-assign]
+
+    assert writes == [6000]
+    assert interval == LIFE_BIT_DEFAULT_COM_TIMEOUT / 2
+    await bridge.async_close()
 
 
 @pytest.mark.parametrize(("code", "pruned"), [(1, True), (2, True), (5, False), (6, False)])

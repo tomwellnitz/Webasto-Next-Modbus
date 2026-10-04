@@ -266,6 +266,9 @@ class ModbusBridge:
         # Set by the coordinator after a successful poll; wakes the life-bit
         # loop out of its error backoff.
         self._reachable = asyncio.Event()
+        # Set by async_close(): the bridge is being torn down and must not
+        # reconnect, not even from a retry of a request that was in flight.
+        self._closed = False
 
     # ------------------------------------------------------------------ #
     # Life bit
@@ -348,18 +351,20 @@ class ModbusBridge:
 
         life_bit_reg = get_register("send_keepalive")
         com_timeout: int | float | str | None = None
+        # Neither read may keep the write below from happening: the write is
+        # what keeps the wallbox out of fail-safe, and it reconnects by itself.
         try:
             com_timeout = await self.async_read_register(get_register("failsafe_timeout_s"))
-        except WebastoModbusDeviceError:
-            pass  # quirk reading @2002; use the default interval, still write
+        except WebastoModbusError as err:
+            _LOGGER.debug("Reading the fail-safe timeout failed, using the default: %s", err)
         interval = life_bit_interval(com_timeout)
 
         try:
             if await self.async_read_register(life_bit_reg) == 1:
                 # Diagnostic only: the wallbox should have cleared our last write.
                 _LOGGER.debug("Life bit still set from the previous write")
-        except WebastoModbusDeviceError:
-            pass
+        except WebastoModbusError as err:
+            _LOGGER.debug("Reading back the life bit failed: %s", err)
 
         await self.async_write_register(life_bit_reg, 1)
         return interval
@@ -443,6 +448,9 @@ class ModbusBridge:
     async def _async_ensure_connected(self) -> Any:
         """Return a connected client, (re)connecting if needed. Caller holds the lock."""
 
+        if self._closed:
+            raise WebastoModbusError(f"Connection to {self._host} has been closed")
+
         client = self._client
         if client is not None and getattr(client, "connected", False):
             return client
@@ -513,12 +521,14 @@ class ModbusBridge:
     async def async_close(self) -> None:
         """Close the Modbus connection.
 
-        Waits briefly for a running request to finish. If the lock can't be
-        taken (a request is stuck), the client is closed anyway: requests work
-        on their own reference to the client, so the holder just sees a
-        connection error instead of crashing.
+        Final: the bridge does not reconnect afterwards, including retries of
+        requests that were still running. Waits briefly for a running request
+        to finish. If the lock can't be taken (a request is stuck), the client
+        is closed anyway: requests work on their own reference to the client,
+        so the holder just sees a connection error instead of crashing.
         """
         _LOGGER.debug("Closing Modbus connection to %s...", self._host)
+        self._closed = True
         try:
             async with asyncio.timeout(CLOSE_LOCK_TIMEOUT):
                 async with self._lock:
@@ -606,6 +616,8 @@ class ModbusBridge:
                         _LOGGER.debug(
                             "Attempt %s/%s to %s failed: %s", attempt, attempts, description, err
                         )
+                        if self._closed:
+                            break
                         if attempt < attempts:
                             await asyncio.sleep(RETRY_BACKOFF * attempt)
         except TimeoutError as err:
