@@ -1,6 +1,6 @@
 {
   "name": "Webasto Next / Unite",
   "render_readme": true,
-  "homeassistant": "2026.5.1",
+  "homeassistant": "2026.9.0",
   "content_in_root": false
 }

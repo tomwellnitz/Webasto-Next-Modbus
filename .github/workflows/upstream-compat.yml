@@ -3,8 +3,9 @@ name: Upstream compatibility
 # Early-warning canary against the moving targets HA-Core ships. Runs
 # weekly (and on demand):
 #
-#   * ha-latest: installs the latest Home Assistant and pymodbus,
-#     verifies our manifest requirement is still satisfied, and
+#   * ha-latest: installs the latest Home Assistant plus the requirements
+#     of its `modbus` integration (which provides our Modbus connection),
+#     checks the shared-connection API we use is still there, and
 #     smoke-imports the production modules — catches runtime API drift.
 #
 #   * hassfest: static schema validation against HA-Core main — catches
@@ -33,27 +34,31 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        # Deliberately no cache-dependency-glob — we do NOT want to
-        # restore the project's uv.lock, whose dev group pins
-        # pymodbus<3.12 for the virtual_wallbox simulator. This job
-        # runs against a fresh environment that resolves to the
-        # actual latest upstream versions.
+        # Deliberately no cache-dependency-glob: this job must not restore
+        # the project's uv.lock but resolve the actual latest upstream
+        # versions in a fresh environment.
 
-      - name: Create fresh venv and install latest HA + pymodbus
+      - name: Create fresh venv and install latest HA + its modbus requirements
         # Venv lives outside the workspace so hassfest (in the sibling
         # job) never has a chance to walk site-packages. Kept off
         # $HOME too so nothing accidentally leaks into the runner's
-        # default python.
+        # default python. Home Assistant installs an integration's
+        # requirements at runtime; read them from the `modbus` manifest so
+        # the canary gets exactly what HA would install.
         run: |
           uv venv --python 3.14.2 "${RUNNER_TEMP}/venv-canary"
           # shellcheck disable=SC1091
           source "${RUNNER_TEMP}/venv-canary/bin/activate"
-          uv pip install --upgrade \
-            homeassistant \
-            pymodbus \
-            voluptuous \
-            colorlog \
-            packaging
+          uv pip install --upgrade homeassistant voluptuous colorlog packaging
+          mapfile -t modbus_requirements < <(python - <<'PY'
+          import json
+          from importlib.resources import files
+
+          manifest = files("homeassistant.components.modbus") / "manifest.json"
+          print("\n".join(json.loads(manifest.read_text())["requirements"]))
+          PY
+          )
+          uv pip install "${modbus_requirements[@]}"
 
       - name: Show installed versions
         # `uv venv` intentionally creates a venv without pip (uv itself is
@@ -64,40 +69,47 @@ jobs:
           source "${RUNNER_TEMP}/venv-canary/bin/activate"
           python - <<'PY'
           from importlib.metadata import version
-          print(f"Home Assistant : {version('homeassistant')}")
-          print(f"pymodbus       : {version('pymodbus')}")
+          for package in ("homeassistant", "modbus-connection", "tmodbus"):
+              print(f"{package:18}: {version(package)}")
           PY
 
-      - name: Verify manifest requirements are satisfied
+      - name: Verify the shared Modbus connection API
+        # The integration gets its connection from Home Assistant's modbus
+        # integration. Fail early if the helpers or their signatures change.
         run: |
           # shellcheck disable=SC1091
           source "${RUNNER_TEMP}/venv-canary/bin/activate"
           python - <<'PY'
-          import json, sys
-          from importlib.metadata import PackageNotFoundError, version
-          from packaging.requirements import Requirement
+          import inspect
+          import sys
 
-          with open("custom_components/webasto_next_modbus/manifest.json") as f:
-              reqs = json.load(f).get("requirements", [])
+          import homeassistant  # noqa: F401  (bootstraps probatio first)
+          from homeassistant.components import modbus
+          from modbus_connection import ModbusTcpParams, ModbusUnit
 
-          if not reqs:
-              print("manifest.requirements is empty — nothing to check")
-              sys.exit(0)
-
+          expected = {
+              "async_get_unit": ["hass", "entry", "params", "unit_id"],
+              "async_get_temporary_unit": ["hass", "params", "unit_id"],
+          }
           failed = False
-          for req_str in reqs:
-              req = Requirement(req_str)
-              try:
-                  installed = version(req.name)
-              except PackageNotFoundError:
-                  print(f"❌ {req.name} not installed")
+          for name, params in expected.items():
+              helper = getattr(modbus, name, None)
+              if helper is None:
+                  print(f"❌ homeassistant.components.modbus.{name} is gone")
                   failed = True
                   continue
-              if req.specifier.contains(installed, prereleases=True):
-                  print(f"✓ {req.name}=={installed} satisfies {req_str!r}")
-              else:
-                  print(f"❌ installed {req.name}=={installed} does NOT satisfy {req_str!r}")
+              actual = list(inspect.signature(helper).parameters)
+              if actual[: len(params)] != params:
+                  print(f"❌ {name}{inspect.signature(helper)} changed (expected {params})")
                   failed = True
+              else:
+                  print(f"✓ {name}{inspect.signature(helper)}")
+
+          for method in ("read_holding_registers", "read_input_registers", "write_register", "disconnect"):
+              if not hasattr(ModbusUnit, method):
+                  print(f"❌ ModbusUnit.{method} is gone")
+                  failed = True
+          ModbusTcpParams(host="192.0.2.1", port=502)
           sys.exit(1 if failed else 0)
           PY
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import voluptuous as vol
+from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -25,6 +26,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.typing import ConfigType
+from modbus_connection import ModbusTcpParams
 
 from .const import (
     CONF_MODEL,
@@ -149,23 +151,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
     device_slug = entry.entry_id
     device_name = entry.data.get(CONF_NAME) or entry.title or DEVICE_NAME
 
-    bridge = ModbusBridge(
-        host=host,
-        port=port,
-        unit_id=unit_id,
-        registers=get_readable_registers(model),
-    )
-
+    # Home Assistant's modbus integration owns the connection: entries (of
+    # any integration) that talk to the same wallbox share it, and it is
+    # released when this entry unloads or its setup fails. Getting the unit
+    # does no I/O; an unreachable wallbox surfaces from the first refresh
+    # below as ConfigEntryNotReady, and Home Assistant retries the setup.
     try:
-        await bridge.async_connect()
-    except WebastoModbusError as err:
-        # Home Assistant retries the setup with its own backoff; the wallbox
-        # is often just booting or its single Modbus slot is briefly taken.
+        unit = async_get_unit(hass, entry, ModbusTcpParams(host=host, port=port), unit_id)
+    except HomeAssistantError as err:
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key="cannot_connect",
             translation_placeholders={"error": str(err)},
         ) from err
+
+    bridge = ModbusBridge(
+        unit,
+        host=host,
+        port=port,
+        unit_id=unit_id,
+        registers=get_readable_registers(model),
+    )
 
     update_interval = timedelta(seconds=_clamp(scan_interval, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL))
     coordinator = WebastoDataCoordinator(
@@ -210,9 +216,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> b
         if rest_coordinator is not None:
             rest_coordinator.async_start_initial_refresh()
     except BaseException:
-        # Don't leave the Modbus socket open on a failed setup: these wallboxes
-        # typically accept only one Modbus TCP connection, so a stale socket
-        # makes the automatic retry fail with "connection refused".
+        # Stop the life-bit loop; Home Assistant then releases the connection
+        # (the wallbox accepts only one Modbus TCP connection).
         await _async_shutdown_runtime(bridge)
         raise
 
@@ -295,7 +300,7 @@ async def async_remove_config_entry_device(
 
 
 async def _async_shutdown_runtime(bridge: ModbusBridge) -> None:
-    """Stop background work and release the wallbox connection."""
+    """Stop background work; Home Assistant releases the shared connection."""
 
     await bridge.stop_life_bit_loop()
     await bridge.async_close()

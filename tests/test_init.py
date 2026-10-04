@@ -40,7 +40,7 @@ HOST = HA_HOST
 PORT = HA_PORT
 UNIT_ID = HA_UNIT_ID
 
-pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus")
 
 
 @pytest.fixture
@@ -82,7 +82,9 @@ async def test_setup_retries_when_wallbox_unreachable(
 
     assert config_entry.state is ConfigEntryState.SETUP_RETRY
     assert config_entry.reason is not None
-    assert "Could not connect to the wallbox" in config_entry.reason
+    # The unit is handed out without I/O; the first refresh finds the wallbox
+    # unreachable and Home Assistant retries the setup.
+    assert "Reading data from the wallbox failed" in config_entry.reason
     assert not hass.states.async_all("persistent_notification")
 
 

@@ -23,10 +23,9 @@ updates:
     # bumps meant the test environment never followed HA. The monthly,
     # grouped schedule keeps this to one PR a month.
     ignore:
-      # pymodbus bumps are driven by Home Assistant core's `modbus`
-      # integration, not by us (HA 2026.5/6: 3.11.x, HA 2026.7: 3.13.1).
-      # Ignore automatic major/minor bumps so they don't drift ahead of
-      # HA core; see AGENTS.md § Dependency Pinning.
+      # pymodbus is only a dev dependency for the virtual_wallbox TCP
+      # simulator, which needs the 3.11 datastore API; see AGENTS.md
+      # § Dependency Pinning.
       - dependency-name: "pymodbus"
         update-types:
           - "version-update:semver-major"
