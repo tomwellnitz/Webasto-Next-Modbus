@@ -221,7 +221,7 @@ async def test_forced_close_ends_the_running_operation(
 
 
 async def test_life_bit_write_happens_even_if_reads_fail() -> None:
-    """The diagnostic reads must not gate the keep-alive write."""
+    """A failed comTimeout read must not gate the keep-alive write."""
 
     writes: list[int] = []
 
@@ -280,14 +280,14 @@ def test_life_bit_interval_is_half_the_com_timeout(com_timeout: object, expected
 
 
 async def test_life_bit_cycle_writes_one_and_returns_interval() -> None:
+    reads: list[int] = []
     writes: list[tuple[int, int]] = []
 
     async def _wallbox(client: ScriptedClient, address: int, count: int) -> Any:
+        reads.append(address)
         result = _Ok(count)
         if address == 2002:
             result.registers = [20]
-        elif address == 6000:
-            result.registers = [0]
         return result
 
     async def _write(self: ScriptedClient, address: int, value: int, **_kw: Any) -> Any:
@@ -303,6 +303,10 @@ async def test_life_bit_cycle_writes_one_and_returns_interval() -> None:
     finally:
         ScriptedClient.write_register = original_write  # type: ignore[method-assign]
 
+    # Only comTimeout is read. The life bit itself is not read back: the
+    # wallbox clears it about comTimeout/2 after the write, so right before
+    # the next write it still holds our 1.
+    assert reads == [2002]
     assert writes == [(6000, 1)]
     assert interval == 10.0
     await bridge.async_close()
