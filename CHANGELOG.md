@@ -42,7 +42,8 @@
 
 #### REST API
 
-- **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes. REST now has its own coordinator (60 s, 10 s per request, 45 s per poll) and is fetched in the background at startup.
+- **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes. REST now has its own coordinator (every 60 s) and is fetched in the background at startup.
+- **A slow or failing REST endpoint no longer makes every REST entity unavailable.** The Next's web server can take well over 10 s for the *system* section; a timeout there failed the whole poll, so e.g. *Active errors* and *Free charging* showed *unavailable* while the wallbox was reachable. Each endpoint now fails on its own (keeping its last values), the request timeout is 30 s again, and timeouts are not retried.
 - **REST entities are created even if the web interface is down at startup** (typical after a power cut) and recover on their own; before, they only appeared after a manual reload.
 - **A failed REST poll keeps the last good values** instead of replacing them with empty ones, and *Active errors* shows *unknown* instead of *ok* when the errors couldn't be read.
 - **A changed web-interface password starts the reauth flow** at runtime too (HTTP 401 and 403), and polling stops until new credentials are entered instead of retrying the login every few seconds (repeated failed logins can lock the account).

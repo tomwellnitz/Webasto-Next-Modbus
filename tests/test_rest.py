@@ -193,6 +193,39 @@ async def test_failed_fetch_keeps_last_good_data(
     assert hass.states.get("switch.wallbox_free_charging").state == STATE_UNAVAILABLE
 
 
+async def test_slow_section_does_not_fail_the_poll(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, rest_entry: MockConfigEntry
+) -> None:
+    """A timed-out section keeps its values; the other endpoints still update."""
+
+    _mock_next_api(aioclient_mock)
+    await _setup(hass, rest_entry)
+    rest = rest_entry.runtime_data.rest_coordinator
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(f"{BASE}/login", json={"access_token": "token-1"}, headers=JSON)
+    aioclient_mock.get(f"{BASE}/sections/system", exc=TimeoutError())
+    aioclient_mock.get(
+        f"{BASE}/sections/auth",
+        json=[{"fieldKey": "free-charging", "value": "true"}],
+        headers=JSON,
+    )
+    aioclient_mock.get(
+        f"{BASE}/current-errors", json=[{"errorDescription": "Overheating"}], headers=JSON
+    )
+    await rest.async_refresh_after_write()  # includes the system section
+    await hass.async_block_till_done()
+
+    assert rest.last_update_success is True
+    assert hass.states.get("switch.wallbox_free_charging").state == "on"
+    assert hass.states.get("sensor.wallbox_active_errors").state == "Overheating"
+    # The system section kept its previous values ...
+    assert hass.states.get("number.wallbox_led_brightness").state == "40.0"
+    # ... and a timeout is not retried.
+    system_calls = [call for call in aioclient_mock.mock_calls if "sections/system" in str(call[1])]
+    assert len(system_calls) == 1
+
+
 async def test_missing_endpoint_keeps_previous_values(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, rest_entry: MockConfigEntry
 ) -> None:
