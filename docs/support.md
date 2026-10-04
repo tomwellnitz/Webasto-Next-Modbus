@@ -18,7 +18,12 @@
      default: info
      logs:
        custom_components.webasto_next_modbus: debug
+       # The Modbus connection itself (Home Assistant's shared connection):
+       modbus_connection: debug
+       tmodbus: debug
    ```
+
+   Alternatively, use **Enable debug logging** on the integration's page; it covers all three.
 
 ## Where to Ask
 
