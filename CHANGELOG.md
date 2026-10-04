@@ -2,61 +2,81 @@
 
 ## [Unreleased]
 
-### Changed
+### Upgrade notes
 
-- **Setup** makes one connection attempt and leaves retrying to Home Assistant, instead of blocking startup for up to ~90 s with five attempts. The untranslated (German-only) persistent notifications are gone: a translated error explains a failed setup, and a lasting connection problem raises a **repair issue** that clears itself on recovery.
-- Service names and descriptions are translated (English, German) and have icons; numeric sensors have a suggested display precision; current/duration numbers get their device class and the fail-safe numbers the *configuration* category.
-- Niche diagnostic entities start disabled (see README).
-- Config entries are migrated to version 1.3 instead of being rewritten on every setup.
-- **`pymodbus` runtime constraint no longer pins an upper bound** — `>=3.11.2` in both `manifest.json` and `pyproject.toml [project].dependencies` (previously `>=3.11.2,<4`). Home Assistant core dictates the installed version via its bundled `modbus` integration, and every fixed ceiling automatically blocks the integration at load time when HA-Core moves past it — see [#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88) for the 2026.7 incident. Our production code is defensive against pymodbus API churn, so removing the ceiling is safer than repeating the block for every user on the next HA release. The dev group still pins `pymodbus<3.12` for the `virtual_wallbox` simulator.
-
-### Fixed
-
-- **Changing the wallbox's IP address no longer creates new entities.** Device and entity IDs were derived from the host, so *Reconfigure* after an IP change created a second device and `_2` entities, and history, dashboards, automations and device triggers lost their link. IDs are now based on the config entry; existing installations are migrated automatically (same entity IDs, same device). Devices left over from earlier IP changes can now be deleted from their device page.
-- **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes (3 endpoints × 3 attempts × 30 s). REST now has its own coordinator (60 s, 10 s per request, 45 s per poll).
-- **A failed REST poll keeps the last good values** instead of replacing them with empty ones, and *Active errors* shows *unknown* instead of *ok* when the errors couldn't be read.
-- **REST entities are created even if the web interface is down at startup** (typical after a power cut) and recover on their own; before, they only appeared after a manual reload.
-- **A changed web-interface password starts the reauth flow** at runtime too (HTTP 401 and 403), and polling stops until new credentials are entered instead of retrying the login every few seconds.
-- Concurrent REST calls with an expired token log in only once; the token lifetime comes from the token itself.
-- *Restart wallbox* is sent once (it was retried up to 3×, often after the restart had already started), and a dropped connection while the wallbox goes down counts as success. Configuration writes are not retried either.
-- The options flow reports a wrong REST password as such instead of "cannot connect", and REST timeouts surface as translated errors.
-- Free charging on the Next is parsed strictly (a `"false"` string read as on).
-- Firmware, hardware versions and MAC addresses now actually appear on the device page.
-- The Next-only REST diagnostic sensors are no longer created (permanently unknown) on the Unite.
-- IPv6 hosts work for the REST API.
-- **No more leaked Modbus connections after a network hiccup.** A client that failed mid-request was dropped without being closed, and pymodbus kept reconnecting it in the background, so one Wi-Fi drop could leave several sockets open and lock Home Assistant (or evcc) out of the wallbox's single Modbus TCP slot. Failed clients are now closed right away and pymodbus' auto-reconnect is disabled.
-- **Service calls and number changes no longer hang for up to ~2 minutes** when the wallbox stops answering: pymodbus' hidden per-request retries are off, writes are attempted twice and reads three times, and every operation is bounded to 30 s.
-- **Unload and timeouts are no longer swallowed** while a Modbus request is in flight (pymodbus turns the cancellation into an I/O error, which the bridge used to retry).
-- **The keep-alive follows the Modbus specification** ("writes 1 every 1/2 of comTimeout"). It used to wait for the wallbox to clear the bit before writing again, which could exceed short fail-safe timeouts, and after a long outage it could stay silent for up to 5 minutes while polling already worked again.
-- An optional register is only dropped from polling when the wallbox reports it as unsupported (exception codes 1/2), not on a transient *busy*.
-- Closing the connection while a request was running could crash that request with an `AttributeError`.
-- **Device triggers now pass their data to automations.** The trigger variables were handed over in the wrong shape, so `trigger.id`, `trigger.fault_code`, `trigger.charging_state` etc. were empty. This also broke the bundled *event notifications* blueprint, which filters on `trigger.id`.
-- **Unite firmwares without register 405 are polled again.** The optional phase-mode register was read first, and an unsupported first register made every poll report the wallbox as offline. Optional registers are now read after the core telemetry.
-- **Repeated start/stop commands take effect.** Register 5006 only reacts to a change, so a second *Start charging* after an earlier one was ignored. The command is now preceded by `0`, as the Modbus specification requires.
-- **Enum sensors no longer break on undocumented values** (for example a fault code above 16): they report *unknown* instead of raising on every poll. Fault code 1 now shows its translated name.
-- **Session energy statistics**: *Charged energy* resets every session and now uses `state_class: total_increasing`, so long-term statistics and the energy dashboard no longer count the reset as negative consumption.
-- **Charging current 1–5 A is rejected** by the number entity and the `set_current` service (IEC 61851 minimum is 6 A; `0` still pauses).
-- **Service calls accept rendered templates** such as `amps: "{{ states('input_number.x') }}"` (`16.0`) and normal booleans for `enabled`; an unknown `config_entry_id` is reported instead of silently ignored.
-- **A failed phase switch no longer leaves the switch showing a mode that was never applied.**
-- **Writing the charging current via a service updated the number entity from a worker thread**, which Home Assistant flags as unsafe. Found by the new end-to-end tests.
-- **Diagnostics no longer contain the wallbox address** (it was part of the last error message) **or the RFID tag of the last session**; a REST section with redacted network identifiers was added.
-- **Changing options reloads the entry once instead of twice** (two Modbus reconnects on a single-connection device).
-- **Unite REST writes now send only the payload verified on hardware.** The Unite write path additionally sent `configurationFieldUpdateType: simple-configuration-field-update`. Follow-up testing on FW 3.187 in [#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97) established that the Unite needs **only** `{fieldKey, value}` and that the update type is not required, so the extra property is dropped — a write can no longer be rejected over a property we were never able to confirm. The Next path keeps its per-type payloads unchanged.
+- **Make a Home Assistant backup before updating.** Device and entity IDs move from the host to the config entry (see *Fixed*). The migration runs once on the first start and keeps your entity IDs, history and automations, but it cannot be undone by downgrading.
+- **Charging currents of 1–5 A are now rejected** by the *Charging current limit* number and the `set_current` service (IEC 61851 minimum is 6 A; `0` still pauses). Automations that set such values now fail with an error instead of being sent to the wallbox.
+- *Charged energy* changes from `state_class: total` to `total_increasing`. The existing statistics continue; from now on the reset at the start of a session counts as a new cycle instead of negative energy.
+- A few niche diagnostic entities are now disabled by default on **new** installations; existing entities stay as they are.
 
 ### Added
 
-- **REST API support for the Ampure / Webasto Unite** ([#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97), thanks @lonkhuijzen for the reverse-engineering). The Unite serves a different REST surface than the Next — a single flat `/api/configuration-fields/` endpoint with its own dotted field keys, and writes that take only `{fieldKey, value}` — so the REST client is now model-aware. On a Unite, enabling the REST API exposes the **Free charging** switch and **tag ID**, a new **LED dimming level** select (`veryLow`/`low`/`mid`/`high`/`timeBased`, since the Unite has no 0-100 brightness), and a **Randomised start delay** number (0-1800 s). The Next's firmware/diagnostic REST sensors have no Unite equivalent (that data isn't in the Unite's REST API) and are not created on a Unite; live telemetry is unaffected — it comes over Modbus.
-- **`.github/workflows/upstream-compat.yml`** — early-warning canary against the moving targets HA-Core ships. Runs weekly (and on demand) against the latest Home Assistant and pymodbus releases, verifies the manifest requirement is still satisfied, smoke-imports the production modules, and re-runs hassfest. A red run signals that an upcoming HA release will break the integration ~1-2 weeks before end users hit it.
+- **REST API support for the Ampure / Webasto Unite** ([#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97), thanks @lonkhuijzen for the reverse-engineering). The Unite serves a different REST surface than the Next — a single flat `/api/configuration-fields/` endpoint with its own dotted field keys, and writes that take only `{fieldKey, value}` — so the REST client is now model-aware. On a Unite, enabling the REST API exposes the **Free charging** switch and **tag ID**, a new **LED dimming level** select (`veryLow`/`low`/`mid`/`high`/`timeBased`, since the Unite has no 0-100 brightness), and a **Randomised start delay** number (0-1800 s). The Next's firmware/diagnostic REST sensors have no Unite equivalent and are not created on a Unite; live telemetry is unaffected — it comes over Modbus.
+- **Repair issue** when the wallbox stays unreachable; it clears itself on recovery.
+- Devices left over from earlier IP changes can be deleted from their device page.
+
+### Changed
+
+- **Setup** makes one connection attempt and leaves retrying to Home Assistant, instead of blocking startup for up to ~90 s with five attempts. The untranslated (German-only) persistent notifications are gone; a translated error explains a failed setup.
+- Service names and descriptions are translated (English, German) and have icons; numeric sensors have a suggested display precision; current/duration numbers get their device class and the fail-safe numbers the *configuration* category.
+- Config entries are migrated once (to version 1.3) instead of being rewritten on every setup.
+- **`pymodbus` requirement without upper bound** (`>=3.11.2`, previously `<4`): Home Assistant decides the installed version, and a fixed ceiling blocks the integration whenever HA moves past it ([#88](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/88)).
+- Tested against Home Assistant 2026.9 and 2026.10 (Probatio validation, new device registry types).
+
+### Fixed
+
+#### Device identity
+
+- **Changing the wallbox's IP address no longer creates new entities.** Device and entity IDs were derived from the host, so *Reconfigure* after an IP change created a second device and `_2` entities, and history, dashboards, automations and device triggers lost their link. IDs are now based on the config entry; existing installations are migrated automatically (same entity IDs, same device).
+
+#### Modbus
+
+- **No more leaked Modbus connections after a network hiccup.** A client that failed mid-request was dropped without being closed, and pymodbus kept reconnecting it in the background, so one Wi-Fi drop could leave several sockets open and lock Home Assistant (or evcc) out of the wallbox's single Modbus TCP slot. Failed clients are now closed right away and pymodbus' auto-reconnect is disabled.
+- **Service calls and number changes no longer hang for up to ~2 minutes** when the wallbox stops answering: pymodbus' hidden per-request retries are off, writes are attempted twice and reads three times, and every operation is bounded to 30 s.
+- **The keep-alive follows the Modbus specification** ("writes 1 every 1/2 of comTimeout"). It used to wait for the wallbox to clear the bit before writing again, which could exceed short fail-safe timeouts, and after a long outage it could stay silent for up to 5 minutes while polling already worked again.
+- **Repeated start/stop commands take effect.** Register 5006 only reacts to a change, so a second *Start charging* after an earlier one was ignored. The command is now preceded by `0`, as the Modbus specification requires.
+- **Unite firmwares without register 405 are polled again.** The optional phase-mode register was read first, and an unsupported first register made every poll report the wallbox as offline. Optional registers are now read after the core telemetry, and only dropped from polling when the wallbox reports them as unsupported (exception codes 1/2), not on a transient *busy*.
+- Unload and timeouts are no longer swallowed while a Modbus request is in flight (pymodbus turns the cancellation into an I/O error, which the bridge used to retry), and closing the connection during a request no longer crashes it with an `AttributeError`.
+- Changing options reloads the entry once instead of twice (two Modbus reconnects on a single-connection device).
+
+#### REST API
+
+- **The REST API can no longer stall Modbus updates.** REST was fetched inside the Modbus poll, so an unreachable web interface delayed every Modbus value by up to ~5 minutes. REST now has its own coordinator (60 s, 10 s per request, 45 s per poll) and is fetched in the background at startup.
+- **REST entities are created even if the web interface is down at startup** (typical after a power cut) and recover on their own; before, they only appeared after a manual reload.
+- **A failed REST poll keeps the last good values** instead of replacing them with empty ones, and *Active errors* shows *unknown* instead of *ok* when the errors couldn't be read.
+- **A changed web-interface password starts the reauth flow** at runtime too (HTTP 401 and 403), and polling stops until new credentials are entered instead of retrying the login every few seconds (repeated failed logins can lock the account).
+- *Restart wallbox* is sent once (it was retried up to 3×, often after the restart had already started), and a dropped connection while the wallbox goes down counts as success. Configuration writes are not retried either.
+- Firmware, hardware versions and MAC addresses now actually appear on the device page; their values are always strings, which the device registry requires from HA 2026.12.
+- Concurrent REST calls with an expired token log in only once; the token lifetime comes from the token itself.
+- The options flow reports a wrong REST password as such instead of "cannot connect", and REST timeouts surface as translated errors.
+- Free charging on the Next is parsed strictly (a `"false"` string read as on).
+- The Next-only REST diagnostic sensors are no longer created (permanently unknown) on the Unite.
+- IPv6 hosts work for the REST API.
+- **Unite REST writes send only the payload verified on hardware** (`{fieldKey, value}`, FW 3.187, [#97](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/97)); the unconfirmed `configurationFieldUpdateType` property is dropped. The Next path is unchanged.
+
+#### Entities, services and triggers
+
+- **Device triggers now pass their data to automations.** The trigger variables were handed over in the wrong shape, so `trigger.id`, `trigger.fault_code`, `trigger.charging_state` etc. were empty. This also broke the bundled *event notifications* blueprint, which filters on `trigger.id`.
+- **Enum sensors no longer break on undocumented values** (for example a fault code above 16): they report *unknown* instead of raising on every poll. Fault code 1 now shows its translated name.
+- **Session energy statistics**: *Charged energy* resets every session and now uses `state_class: total_increasing`, so long-term statistics and the energy dashboard no longer count the reset as negative consumption.
+- **Service calls accept rendered templates** such as `amps: "{{ states('input_number.x') }}"` (`16.0`) and normal booleans for `enabled`; an unknown `config_entry_id` is reported instead of silently ignored.
+- A failed phase switch no longer leaves the switch showing a mode that was never applied.
+- Writing the charging current via a service no longer updates the number entity from a worker thread, which Home Assistant flags as unsafe.
+
+#### Diagnostics
+
+- Diagnostics no longer contain the wallbox address (it was part of the last error message) or the RFID tag of the last session; a REST section with redacted network identifiers was added.
 
 ### Development
 
 - `uv.lock` is committed and CI installs with `uv sync --locked`; Dependabot uses the `uv` ecosystem and now also bumps `pytest-homeassistant-custom-component` patch releases (every HA release is one), so the tests follow Home Assistant.
-- CI runs `./scripts/check.sh --check`, the same read-only script contributors run locally, instead of a hand-maintained copy of it. The script no longer reformats Markdown inside `.venv`, and gained `mdformat`, `actionlint` and a coverage gate (80 % line + branch).
-- Snapshot tests cover every entity (registry entry and state), the device and the diagnostics for both models; a static test checks that every register's device class, state class and entity category is valid.
-- The global `pymodbus` / `voluptuous` stubs in `tests/conftest.py` are gone, so the tests import the real libraries.
+- CI runs `./scripts/check.sh --check`, the same read-only script contributors run locally. The script no longer reformats Markdown inside `.venv`, and gained `mdformat`, `actionlint` and a coverage gate (80 % line + branch).
+- End-to-end tests in a real Home Assistant; snapshot tests cover every entity (registry entry and state), the device and the diagnostics for both models; a static test checks every register's device class, state class and entity category. The global `pymodbus` / `voluptuous` test stubs are gone.
+- **`upstream-compat.yml`** — a weekly canary against the latest Home Assistant: smoke-imports every module and re-runs hassfest, so an upcoming HA release that breaks the integration is caught ~1-2 weeks before users hit it.
 - The release workflow refuses a tag that doesn't match the `manifest.json` / `pyproject.toml` version or (for a final release) has no `CHANGELOG.md` section, and runs the full check script.
-- Workflows: least-privilege `permissions`, superseded PR runs are cancelled, CodeQL also scans the workflows (`actions`), `.github/` is linted by yamllint and actionlint, and the canary smoke-imports every module.
+- Workflows: least-privilege `permissions`, superseded PR runs are cancelled, CodeQL also scans the workflows (`actions`), and `.github/` is linted by yamllint and actionlint.
 - Ruff additionally enforces `BLE`, `RUF`, `SIM` and `PT`; one codespell configuration in `pyproject.toml`; pre-commit hooks run the locked tools via `uv run`.
+- `webasto-smoke` finds the entities by config entry (it failed with an `ImportError` after the identity change).
 
 ## [1.3.1] - 2026-07-02
 
