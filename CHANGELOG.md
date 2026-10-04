@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased] - Unite REST API, stable device IDs, hardened Modbus and REST
+## [Unreleased]
+
+## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST
 
 ### Upgrade notes
 
