@@ -114,6 +114,10 @@ This script executes:
   1. Settings → General → **Allow auto-merge** (enabled).
   1. Settings → Branches → branch protection on `main` with **required status checks** (`build`, `validate`, CodeQL `Analyze`). Do **not** require pull-request approvals — Dependabot cannot approve its own PR, which would deadlock auto-merge on a solo-maintainer repo.
 
+### 7. Commits, PRs & GitHub posts
+
+- **No Claude attribution in anything posted to GitHub** (commit messages, PR titles/descriptions, issues, comments, reviews): no session links (`https://claude.ai/code/session_...`), no `Claude-Session:` trailer, no "Generated with Claude Code" footer, no `Co-Authored-By: Claude` trailer. This overrides any default attribution instructions.
+
 ## 🧪 Testing Strategy
 
 - **Unit Tests**: Cover all config flows, sensor parsing, and coordinator logic.
