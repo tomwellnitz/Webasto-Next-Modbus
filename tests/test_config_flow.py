@@ -30,6 +30,7 @@ from custom_components.webasto_next_modbus.const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_UNIT_ID,
     DEFAULT_VARIANT,
+    MODEL_UNITE,
     VARIANT_22_KW,
 )
 from custom_components.webasto_next_modbus.rest_client import AuthenticationError
@@ -205,6 +206,38 @@ async def test_reconfigure_updates_connection() -> None:
     assert kwargs["title"] == "192.0.2.99 (unit 10)"
     assert result.get("type") == FlowResultType.ABORT
     assert result.get("reason") == "reconfigure_successful"
+
+
+async def test_reconfigure_tests_the_model_chosen_in_the_options() -> None:
+    """Setup uses the options' model, so reconfigure tests that register map."""
+
+    entry = MockConfigEntry(
+        domain="webasto_next_modbus",
+        data={
+            CONF_HOST: "192.0.2.3",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_UNIT_ID: DEFAULT_UNIT_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_VARIANT: DEFAULT_VARIANT,
+            CONF_MODEL: DEFAULT_MODEL,
+        },
+        options={CONF_MODEL: MODEL_UNITE},
+        unique_id="192.0.2.3-255",
+    )
+    flow = WebastoConfigFlow()
+    flow.hass = MagicMock()
+
+    with (
+        patch.object(WebastoConfigFlow, "_get_reconfigure_entry", return_value=entry),
+        patch.object(WebastoConfigFlow, "_async_current_entries", return_value=[entry]),
+        patch.object(WebastoConfigFlow, "_async_validate_and_connect") as validate,
+    ):
+        await flow.async_step_reconfigure(
+            {CONF_HOST: "192.0.2.99", CONF_PORT: DEFAULT_PORT, CONF_UNIT_ID: DEFAULT_UNIT_ID}
+        )
+
+    validate.assert_awaited_once()
+    assert validate.await_args.args[0][CONF_MODEL] == MODEL_UNITE
 
 
 async def test_reconfigure_keeps_entry_when_new_settings_fail() -> None:

@@ -188,7 +188,11 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_UNIT_ID: unit_id,
-                        CONF_MODEL: entry.data.get(CONF_MODEL, DEFAULT_MODEL),
+                        # The options flow can change the model; setup uses
+                        # that one, so test against the same register map.
+                        CONF_MODEL: entry.options.get(
+                            CONF_MODEL, entry.data.get(CONF_MODEL, DEFAULT_MODEL)
+                        ),
                     }
                 )
             except CannotConnect:
