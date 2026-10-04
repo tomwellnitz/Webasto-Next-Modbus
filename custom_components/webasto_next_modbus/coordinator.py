@@ -43,6 +43,12 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def connection_issue_id(entry_id: str) -> str:
+    """Return the repair issue id used for a config entry's connection problems."""
+
+    return f"connection_failed_{entry_id}"
+
+
 class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinate Modbus polling and expose decoded values."""
 
@@ -67,7 +73,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_failure: datetime | None = None
         self.last_error: str | None = None
         self._connection_online = True
-        self._issue_id = f"connection_failed_{entry_id}"
+        self._issue_id = connection_issue_id(entry_id)
 
         # REST API client (optional)
         self._rest_client: RestClient | None = None

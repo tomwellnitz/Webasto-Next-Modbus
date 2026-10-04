@@ -20,6 +20,7 @@ from homeassistant.exceptions import (
     ServiceValidationError,
 )
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.typing import ConfigType
 
@@ -58,7 +59,7 @@ from .const import (
     get_register,
     normalize_model,
 )
-from .coordinator import WebastoDataCoordinator
+from .coordinator import WebastoDataCoordinator, connection_issue_id
 from .device_trigger import TRIGGER_KEEPALIVE_SENT, async_fire_device_trigger
 from .hub import ModbusBridge, WebastoModbusError
 from .rest_client import RestClient, RestClientError
@@ -262,8 +263,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> 
         await _async_shutdown_runtime(runtime.coordinator, runtime.bridge)
         _LOGGER.debug("Connection closed for entry %s", entry.entry_id)
 
+    # Nothing polls an unloaded entry any more, so its connection issue could
+    # never clear itself; a reload recreates it if the problem persists.
+    ir.async_delete_issue(hass, DOMAIN, connection_issue_id(entry.entry_id))
+
     _LOGGER.info("Config entry %s unloaded successfully", entry.entry_id)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean up when a config entry is deleted."""
+
+    ir.async_delete_issue(hass, DOMAIN, connection_issue_id(entry.entry_id))
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: WebastoConfigEntry) -> None:

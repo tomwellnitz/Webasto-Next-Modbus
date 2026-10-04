@@ -297,3 +297,27 @@ async def test_options_change_reloads_once(
     assert loaded_entry.title == "Garage"
     assert loaded_entry.options[CONF_SCAN_INTERVAL] == 15
     reload_mock.assert_awaited_once_with(loaded_entry.entry_id)
+
+
+async def test_repair_issue_removed_when_entry_unloaded_or_deleted(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    """An issue raised while offline doesn't outlive the entry."""
+
+    coordinator = loaded_entry.runtime_data.coordinator
+    issue_id = f"connection_failed_{loaded_entry.entry_id}"
+    issue_registry = ir.async_get(hass)
+
+    with patch.object(
+        loaded_entry.runtime_data.bridge,
+        "async_read_data",
+        AsyncMock(side_effect=hub_module.WebastoModbusError("offline")),
+    ):
+        for _ in range(FAILURE_ISSUE_THRESHOLD):
+            await coordinator.async_refresh()
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+
+    assert await hass.config_entries.async_remove(loaded_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
