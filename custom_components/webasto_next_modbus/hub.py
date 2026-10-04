@@ -43,9 +43,11 @@ CLOSE_LOCK_TIMEOUT: Final = 2.0
 CLIENT_CLOSE_TIMEOUT: Final = 3.0
 
 # Life bit ("keep-alive"): the spec says the energy manager "writes 1 every
-# 1/2 of comTimeout" (register 2002) and the wallbox clears it. The interval
-# is clamped so a 0/garbage timeout can't spin the loop and a long timeout
-# doesn't leave the wallbox unattended for minutes.
+# 1/2 of comTimeout" (register 2002) and the wallbox clears it. A Next on
+# firmware 3.1.16 clears it about comTimeout/2 after each write, so right
+# before the next write it still holds our 1 and is not read back. The
+# interval is clamped so a 0/garbage timeout can't spin the loop and a long
+# timeout doesn't leave the wallbox unattended for minutes.
 LIFE_BIT_DEFAULT_COM_TIMEOUT: Final = 60  # seconds, if 2002 can't be read
 LIFE_BIT_MIN_INTERVAL: Final = 2.0
 LIFE_BIT_MAX_INTERVAL: Final = 30.0
@@ -349,24 +351,16 @@ class ModbusBridge:
     async def _async_life_bit_cycle(self) -> float:
         """Write the life bit once and return the interval until the next write."""
 
-        life_bit_reg = get_register("send_keepalive")
         com_timeout: int | float | str | None = None
-        # Neither read may keep the write below from happening: the write is
-        # what keeps the wallbox out of fail-safe, and it reconnects by itself.
+        # A failed read must not keep the write below from happening: the
+        # write is what keeps the wallbox out of fail-safe.
         try:
             com_timeout = await self.async_read_register(get_register("failsafe_timeout_s"))
         except WebastoModbusError as err:
             _LOGGER.debug("Reading the fail-safe timeout failed, using the default: %s", err)
         interval = life_bit_interval(com_timeout)
 
-        try:
-            if await self.async_read_register(life_bit_reg) == 1:
-                # Diagnostic only: the wallbox should have cleared our last write.
-                _LOGGER.debug("Life bit still set from the previous write")
-        except WebastoModbusError as err:
-            _LOGGER.debug("Reading back the life bit failed: %s", err)
-
-        await self.async_write_register(life_bit_reg, 1)
+        await self.async_write_register(get_register("send_keepalive"), 1)
         return interval
 
     async def _async_wait_reachable(self, delay: float) -> None:

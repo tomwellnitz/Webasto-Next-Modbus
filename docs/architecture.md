@@ -111,7 +111,7 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 1. The config flow collects user input, performs a probe read, and stores a unique ID.
 1. `async_setup_entry` creates the `ModbusBridge`, optionally the `WebastoRestClient`, and the `DataUpdateCoordinator`.
 1. After the coordinator completes its first refresh, the `ModbusBridge` starts a background "Life Bit" task.
-1. The Life Bit task writes `1` to register `6000` every `comTimeout / 2` seconds (register `2002`, clamped to 2–30 s), as the Modbus specification requires; the wallbox clears it to `0`. This prevents failsafe mode. While the wallbox is unreachable the loop backs off (2 s doubling to 30 s) and is woken early by the next successful data poll.
+1. The Life Bit task writes `1` to register `6000` every `comTimeout / 2` seconds (register `2002`, clamped to 2–30 s), as the Modbus specification requires; the wallbox clears it to `0` (a Next on firmware 3.1.16 does so about `comTimeout / 2` after each write). This prevents failsafe mode. While the wallbox is unreachable the loop backs off (2 s doubling to 30 s) and is woken early by the next successful data poll.
 1. The coordinator batches register reads, decodes values via helpers in `const.py`, and caches structured dictionaries.
 1. If REST API is enabled, the coordinator also fetches data from the wallbox web interface (firmware info, LED brightness, diagnostics, etc.).
 1. Entities subscribe to the coordinator and expose the relevant keys to Home Assistant.
