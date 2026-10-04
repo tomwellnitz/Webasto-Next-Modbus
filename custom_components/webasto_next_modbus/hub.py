@@ -479,6 +479,11 @@ class ModbusBridge:
                         if attempt < attempts:
                             await asyncio.sleep(RETRY_BACKOFF * attempt)
         except TimeoutError as err:
+            # The budget ran out, usually while a request was still waiting on
+            # a silent peer (the cancelled request never reaches _request's
+            # timeout handling). Drop the link here too.
+            with contextlib.suppress(ModbusError, OSError):
+                await self._unit.disconnect()
             raise WebastoModbusError(
                 f"{description} timed out after {OPERATION_TIMEOUT:.0f} s"
             ) from err
