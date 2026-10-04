@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import time
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from dataclasses import dataclass
 from typing import Any, Final, TypeVar, cast
 
 from .const import (
-    MAX_RETRY_ATTEMPTS,
     REGISTER_TYPE,
-    RETRY_BACKOFF_SECONDS,
     SESSION_COMMAND_IDLE_VALUE,
     SESSION_COMMAND_RESET_DELAY,
     RegisterDefinition,
@@ -32,16 +29,37 @@ _LOGGER = logging.getLogger(__name__)
 
 MAX_REGISTERS_PER_REQUEST: Final = 110
 
-# Lower bound for the life-bit polling window. Guards against a 0/garbage
-# value in the failsafe-timeout register turning the loop into a tight
-# read/write spin that would hammer the wallbox and starve the data poll.
-LIFE_BIT_MIN_INTERVAL: Final = 10
+# Retry policy of a single bridge operation (read, bulk read, write). Each
+# attempt is one Modbus request with the bridge's request timeout; pymodbus'
+# own per-request retries are disabled so this is the only retry layer, and
+# the whole operation is bounded by OPERATION_TIMEOUT.
+READ_ATTEMPTS: Final = 3
+WRITE_ATTEMPTS: Final = 2
+RETRY_BACKOFF: Final = 1.0  # seconds, multiplied by the attempt number
+OPERATION_TIMEOUT: Final = 30.0  # seconds
 
-# Exponential backoff bounds (seconds) for the life-bit loop while the
-# wallbox is unreachable (e.g. powered off, or still booting — which can
-# take a couple of minutes on these devices).
-LIFE_BIT_BACKOFF_MIN: Final = 5.0
-LIFE_BIT_BACKOFF_MAX: Final = 300.0
+# Waiting for the lock before a forced close on unload (seconds).
+CLOSE_LOCK_TIMEOUT: Final = 2.0
+CLIENT_CLOSE_TIMEOUT: Final = 3.0
+
+# Life bit ("keep-alive"): the spec says the energy manager "writes 1 every
+# 1/2 of comTimeout" (register 2002) and the wallbox clears it. The interval
+# is clamped so a 0/garbage timeout can't spin the loop and a long timeout
+# doesn't leave the wallbox unattended for minutes.
+LIFE_BIT_DEFAULT_COM_TIMEOUT: Final = 60  # seconds, if 2002 can't be read
+LIFE_BIT_MIN_INTERVAL: Final = 2.0
+LIFE_BIT_MAX_INTERVAL: Final = 30.0
+
+# Backoff (seconds) while the wallbox is unreachable. Capped at the longest
+# keep-alive interval, and cut short as soon as a data poll succeeds again,
+# so a wallbox that comes back is not left in fail-safe for minutes.
+LIFE_BIT_BACKOFF_MIN: Final = 2.0
+LIFE_BIT_BACKOFF_MAX: Final = LIFE_BIT_MAX_INTERVAL
+
+# Modbus exception codes that mean "this register does not exist here".
+# Only these remove an optional block from the read plan; anything else
+# (busy, acknowledge, ...) is transient.
+_UNSUPPORTED_REGISTER_CODES: Final = frozenset({1, 2})
 
 
 class WebastoModbusError(Exception):
@@ -94,10 +112,13 @@ class ReadRequest:
 
 
 def _build_read_plan(definitions: Iterable[RegisterDefinition]) -> tuple[ReadRequest, ...]:
-    """Build efficient read requests from register definitions.
+    """Build the read requests for a set of register definitions.
 
-    Registers are grouped by type (input/holding) and merged while they remain
-    contiguous and fit into the maximum register count supported by the EVSE.
+    Registers are grouped by type (input/holding). Only overlapping
+    definitions share a request; adjacent registers are deliberately read one
+    request each, which is how the integration has always polled the wallbox
+    and avoids depending on how a firmware handles reads spanning several
+    registers. Blocks of optional registers come last.
     """
 
     requests: list[ReadRequest] = []
@@ -181,6 +202,41 @@ def _ensure_pymodbus() -> tuple[type[Any], type[Exception]]:
 T = TypeVar("T")
 
 
+def life_bit_interval(com_timeout: object) -> float:
+    """Return the keep-alive write interval for a comTimeout value (seconds)."""
+
+    if not isinstance(com_timeout, (int, float)) or com_timeout <= 0:
+        com_timeout = LIFE_BIT_DEFAULT_COM_TIMEOUT
+    return float(min(max(com_timeout / 2, LIFE_BIT_MIN_INTERVAL), LIFE_BIT_MAX_INTERVAL))
+
+
+async def _async_close_client(client: Any) -> None:
+    """Close a pymodbus client, whether its ``close`` is sync or async."""
+
+    try:
+        result = client.close()
+        if inspect.isawaitable(result):
+            await asyncio.wait_for(result, timeout=CLIENT_CLOSE_TIMEOUT)
+    except Exception as err:  # noqa: BLE001 - closing must never raise
+        _LOGGER.debug("Error closing Modbus client: %s", err)
+
+
+def _raise_if_cancelled(err: BaseException) -> None:
+    """Re-raise a cancellation that pymodbus converted into a ModbusIOException.
+
+    pymodbus catches ``CancelledError`` inside a pending request and raises
+    ``ModbusIOException("Request cancelled outside library")`` instead. If we
+    treated that as a transport error, unload, ``asyncio.timeout`` and
+    ``asyncio.wait_for`` around a bridge call would be swallowed and retried.
+    """
+
+    task = asyncio.current_task()
+    if isinstance(err.__cause__, asyncio.CancelledError) or (
+        task is not None and task.cancelling()
+    ):
+        raise asyncio.CancelledError from err
+
+
 class ModbusBridge:
     """Handle Modbus TCP communication with the wallbox."""
 
@@ -207,6 +263,13 @@ class ModbusBridge:
         )
         self._read_plan: tuple[ReadRequest, ...] = _build_read_plan(self._readable_registers)
         self._life_bit_task: asyncio.Task[None] | None = None
+        # Set by the coordinator after a successful poll; wakes the life-bit
+        # loop out of its error backoff.
+        self._reachable = asyncio.Event()
+
+    # ------------------------------------------------------------------ #
+    # Life bit
+    # ------------------------------------------------------------------ #
 
     async def start_life_bit_loop(
         self,
@@ -237,73 +300,83 @@ class ModbusBridge:
             self._life_bit_task = None
             _LOGGER.debug("Life bit loop stopped")
 
+    def notify_reachable(self) -> None:
+        """Tell the life-bit loop that the wallbox answered a data poll."""
+
+        self._reachable.set()
+
     async def _life_bit_loop(self) -> None:
-        """Maintain the wallbox keep-alive ("life bit") register.
+        """Write the life bit every comTimeout/2, as the Modbus spec requires.
 
         There is no "wallbox ready" status register: while the wallbox is still
-        booting (which can take a couple of minutes) reads and writes simply come
-        back as Modbus exceptions, and a powered-off wallbox refuses the
-        connection outright. Either way the loop just backs off exponentially
-        and keeps trying — and logs the failure only once (then at DEBUG) so a
-        slow boot doesn't flood the log — until an operation finally succeeds.
+        booting (which can take a couple of minutes) reads and writes come back
+        as Modbus exceptions, and a powered-off wallbox refuses the connection.
+        Either way the loop backs off, logs the failure once (then at DEBUG),
+        and resumes the normal cadence as soon as an operation succeeds or the
+        coordinator reports the wallbox reachable again.
         """
-        life_bit_reg = get_register("send_keepalive")
-        timeout_reg = get_register("failsafe_timeout_s")
-
+        loop = asyncio.get_running_loop()
         backoff = LIFE_BIT_BACKOFF_MIN
         warned = False
 
         while True:
+            cycle_start = loop.time()
             try:
-                poll_timeout = 60  # default keep-alive window
-                try:
-                    val = await self.async_read_register(timeout_reg)
-                    if isinstance(val, (int, float)):
-                        poll_timeout = max(int(val), LIFE_BIT_MIN_INTERVAL)
-                except WebastoModbusDeviceError:
-                    pass  # quirk reading @2002; use the default window, still try the write
-                # Transport errors here propagate to the handler below.
-
-                await self.async_write_register(life_bit_reg, 1)
-
-                # Success: the wallbox is up. Reset the error state.
-                if warned:
-                    _LOGGER.info("Life bit loop recovered")
-                    warned = False
-                backoff = LIFE_BIT_BACKOFF_MIN
-
-                start_time = time.time()
-                read_failed = False
-                while time.time() - start_time < poll_timeout:
-                    try:
-                        if await self.async_read_register(life_bit_reg) == 0:
-                            _LOGGER.debug("Life bit cleared after %.2f s", time.time() - start_time)
-                            break
-                    except WebastoModbusError:
-                        # Reading the life-bit register failed (rare: writes work
-                        # but reads don't). Stop polling it; the longer cooldown
-                        # below keeps this from becoming a tight write loop.
-                        read_failed = True
-                        break
-                    await asyncio.sleep(1)
-
-                # Floor between keep-alive cycles so a fast-clearing life bit
-                # (or a register we can't read back) can't turn this into a
-                # tight write loop.
-                await asyncio.sleep(LIFE_BIT_MIN_INTERVAL if read_failed else 1)
-
+                interval = await self._async_life_bit_cycle()
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001 - keep the loop alive
-                # Device exception (still booting / wallbox in a bad state) or
-                # transport error (powered off): back off and retry, quietly.
                 if not warned:
                     _LOGGER.warning("Life bit loop error (will keep retrying): %s", err)
                     warned = True
                 else:
                     _LOGGER.debug("Life bit loop still failing: %s", err)
-                await asyncio.sleep(backoff)
+                await self._async_wait_reachable(backoff)
                 backoff = min(backoff * 2, LIFE_BIT_BACKOFF_MAX)
+                continue
+
+            if warned:
+                _LOGGER.info("Life bit loop recovered")
+                warned = False
+            backoff = LIFE_BIT_BACKOFF_MIN
+            # Fixed schedule: the time the cycle itself took counts against
+            # the interval, so slow responses don't stretch it past comTimeout.
+            await asyncio.sleep(max(0.0, interval - (loop.time() - cycle_start)))
+
+    async def _async_life_bit_cycle(self) -> float:
+        """Write the life bit once and return the interval until the next write."""
+
+        life_bit_reg = get_register("send_keepalive")
+        com_timeout: int | float | str | None = None
+        try:
+            com_timeout = await self.async_read_register(get_register("failsafe_timeout_s"))
+        except WebastoModbusDeviceError:
+            pass  # quirk reading @2002; use the default interval, still write
+        interval = life_bit_interval(com_timeout)
+
+        try:
+            if await self.async_read_register(life_bit_reg) == 1:
+                # Diagnostic only: the wallbox should have cleared our last write.
+                _LOGGER.debug("Life bit still set from the previous write")
+        except WebastoModbusDeviceError:
+            pass
+
+        await self.async_write_register(life_bit_reg, 1)
+        return interval
+
+    async def _async_wait_reachable(self, delay: float) -> None:
+        """Sleep up to ``delay`` seconds, waking early on notify_reachable()."""
+
+        self._reachable.clear()
+        try:
+            async with asyncio.timeout(delay):
+                await self._reachable.wait()
+        except TimeoutError:
+            pass
+
+    # ------------------------------------------------------------------ #
+    # pymodbus call helpers
+    # ------------------------------------------------------------------ #
 
     async def _invoke_with_unit(
         self,
@@ -357,37 +430,44 @@ class ModbusBridge:
         message = str(err)
         return "positional argument" in message and "given" in message
 
+    # ------------------------------------------------------------------ #
+    # Connection handling
+    # ------------------------------------------------------------------ #
+
     async def async_connect(self) -> None:
-        """Initialise the Modbus client connection."""
+        """Open the Modbus connection (no-op if it is already open)."""
 
-        # Check if already connected
-        if self._client is not None and getattr(self._client, "connected", False):
-            return
+        async with self._lock:
+            await self._async_ensure_connected()
 
-        # Close any existing client before creating a new one
-        # This prevents orphaned connections from blocking the port
-        if self._client is not None:
+    async def _async_ensure_connected(self) -> Any:
+        """Return a connected client, (re)connecting if needed. Caller holds the lock."""
+
+        client = self._client
+        if client is not None and getattr(client, "connected", False):
+            return client
+
+        if client is not None:
+            # A client that lost its connection still owns a socket (and, on
+            # older setups, a reconnect task): close it before replacing it,
+            # the wallbox only accepts a single Modbus TCP connection.
             _LOGGER.debug("Closing stale client before reconnect to %s", self._host)
-            try:
-                old_client = self._client
-                self._client = None
-                close_result = old_client.close()
-                if inspect.isawaitable(close_result):
-                    await asyncio.wait_for(close_result, timeout=2.0)
-            except Exception as err:
-                _LOGGER.debug("Error closing stale client: %s", err)
+            self._client = None
+            await _async_close_client(client)
 
-        # Create new client - try with reconnect parameters first, fall back if not supported
         try:
+            # The bridge does its own reconnecting and retrying: disable the
+            # pymodbus equivalents, which would otherwise keep orphaned
+            # reconnect tasks alive and multiply every timeout.
             client = self._client_cls(
                 self._host,
                 port=self._port,
                 timeout=self._timeout,
-                reconnect_delay=1.0,
-                reconnect_delay_max=30.0,
+                reconnect_delay=0,
+                retries=0,
             )
         except TypeError:
-            # Fallback for older pymodbus versions or mock clients
+            # Fallback for clients without those keywords (test doubles).
             client = self._client_cls(
                 self._host,
                 port=self._port,
@@ -396,57 +476,64 @@ class ModbusBridge:
         try:
             await asyncio.wait_for(client.connect(), timeout=self._timeout)
         except TimeoutError as err:
-            # Ensure client is closed on timeout
-            try:
-                client.close()
-            except Exception:
-                pass
+            await _async_close_client(client)
             raise WebastoModbusError(f"Connection to {self._host}:{self._port} timed out") from err
         except (OSError, self._modbus_exception) as err:
-            # Ensure client is closed on error
-            try:
-                client.close()
-            except Exception:
-                pass
+            await _async_close_client(client)
             raise WebastoModbusError(
                 f"Failed to connect to {self._host}:{self._port}: {err}"
             ) from err
 
         if not client.connected:
-            try:
-                client.close()
-            except Exception:
-                pass
+            await _async_close_client(client)
             raise WebastoModbusError(
                 f"Unable to connect to {self._host}:{self._port} (device_id {self._unit_id})"
             )
         self._client = client
         _LOGGER.debug("Modbus connection established to %s:%s", self._host, self._port)
+        return client
+
+    async def _async_execute(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Run one Modbus request on a connected client. Caller holds the lock.
+
+        On a transport error the client is closed right away (not just
+        dropped), so its socket is released before the next attempt connects.
+        """
+
+        client = await self._async_ensure_connected()
+        try:
+            return await self._invoke_with_unit(getattr(client, method_name), *args, **kwargs)
+        except (self._modbus_exception, OSError, ConnectionError) as err:
+            if self._client is client:
+                self._client = None
+            await _async_close_client(client)
+            _raise_if_cancelled(err)
+            raise WebastoModbusError(str(err)) from err
 
     async def async_close(self) -> None:
-        """Close the Modbus connection."""
+        """Close the Modbus connection.
+
+        Waits briefly for a running request to finish. If the lock can't be
+        taken (a request is stuck), the client is closed anyway: requests work
+        on their own reference to the client, so the holder just sees a
+        connection error instead of crashing.
+        """
         _LOGGER.debug("Closing Modbus connection to %s...", self._host)
-        # Use a short timeout for acquiring the lock to avoid blocking shutdown
         try:
-            async with asyncio.timeout(2.0):
+            async with asyncio.timeout(CLOSE_LOCK_TIMEOUT):
                 async with self._lock:
-                    client = self._client
-                    self._client = None
+                    client, self._client = self._client, None
         except TimeoutError:
             _LOGGER.warning("Could not acquire lock for close, forcing close for %s", self._host)
-            client = self._client
-            self._client = None
+            client, self._client = self._client, None
 
         if client is not None:
-            try:
-                close_result = client.close()
-                if inspect.isawaitable(close_result):
-                    await asyncio.wait_for(close_result, timeout=3.0)
-            except TimeoutError:
-                _LOGGER.warning("Modbus close timed out for %s", self._host)
-            except Exception as err:
-                _LOGGER.warning("Error closing Modbus connection: %s", err)
+            await _async_close_client(client)
             _LOGGER.debug("Modbus connection to %s closed", self._host)
+
+    # ------------------------------------------------------------------ #
+    # Public operations
+    # ------------------------------------------------------------------ #
 
     async def async_test_connection(self) -> None:
         """Perform a lightweight read to validate the connection."""
@@ -461,12 +548,13 @@ class ModbusBridge:
         return await self._call_with_retry(
             lambda: self._async_read_register_once(register),
             f"read register {register.key}",
+            READ_ATTEMPTS,
         )
 
     async def async_read_data(self) -> dict[str, float | int | str | None]:
         """Read all relevant registers and return a dictionary."""
 
-        return await self._call_with_retry(self._async_read_data_once, "bulk read")
+        return await self._call_with_retry(self._async_read_data_once, "bulk read", READ_ATTEMPTS)
 
     async def async_write_register(self, register: RegisterDefinition, value: int) -> None:
         """Write a single holding register."""
@@ -477,6 +565,7 @@ class ModbusBridge:
         await self._call_with_retry(
             lambda: self._async_write_register_once(register, value),
             f"write register {register.key}",
+            WRITE_ATTEMPTS,
         )
 
     async def async_send_session_command(self, value: int) -> None:
@@ -496,34 +585,33 @@ class ModbusBridge:
         self,
         func: Callable[[], Awaitable[T]],
         description: str,
+        attempts: int,
     ) -> T:
+        """Run ``func`` with a bounded number of attempts and a total time budget."""
+
         last_err: WebastoModbusError | None = None
-        for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
-            try:
-                return await func()
-            except asyncio.CancelledError:
-                # Re-raise cancellation immediately to allow clean shutdown
-                raise
-            except WebastoModbusDeviceError:
-                # The wallbox answered and rejected the request. Reconnecting
-                # and retrying won't change the answer, and tearing the socket
-                # down here causes pymodbus transaction-id desyncs.
-                raise
-            except WebastoModbusError as err:
-                last_err = err
-                # Per-attempt detail at DEBUG only: the caller (coordinator /
-                # life-bit loop) logs the aggregate failure once.
-                _LOGGER.debug(
-                    "Attempt %s/%s to %s failed: %s",
-                    attempt,
-                    MAX_RETRY_ATTEMPTS,
-                    description,
-                    err,
-                )
-                await self.async_close()
-                if attempt == MAX_RETRY_ATTEMPTS:
-                    break
-                await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+        try:
+            async with asyncio.timeout(OPERATION_TIMEOUT):
+                for attempt in range(1, attempts + 1):
+                    try:
+                        return await func()
+                    except WebastoModbusDeviceError:
+                        # The wallbox answered and rejected the request.
+                        # Retrying won't change the answer.
+                        raise
+                    except WebastoModbusError as err:
+                        last_err = err
+                        # Per-attempt detail at DEBUG only: the caller
+                        # (coordinator / life-bit loop) logs the failure once.
+                        _LOGGER.debug(
+                            "Attempt %s/%s to %s failed: %s", attempt, attempts, description, err
+                        )
+                        if attempt < attempts:
+                            await asyncio.sleep(RETRY_BACKOFF * attempt)
+        except TimeoutError as err:
+            raise WebastoModbusError(
+                f"{description} timed out after {OPERATION_TIMEOUT:.0f} s"
+            ) from err
         assert last_err is not None
         raise last_err
 
@@ -531,28 +619,13 @@ class ModbusBridge:
         self,
         register: RegisterDefinition,
     ) -> int | float | str | None:
-        modbus_exception = self._modbus_exception
+        method = (
+            "read_input_registers"
+            if register.register_type == "input"
+            else ("read_holding_registers")
+        )
         async with self._lock:
-            await self.async_connect()
-            assert self._client is not None  # For type checkers
-
-            try:
-                if register.register_type == "input":
-                    response = await self._invoke_with_unit(
-                        self._client.read_input_registers,
-                        register.address,
-                        count=register.count,
-                    )
-                else:
-                    response = await self._invoke_with_unit(
-                        self._client.read_holding_registers,
-                        register.address,
-                        count=register.count,
-                    )
-            except (modbus_exception, OSError, ConnectionError) as err:
-                # Mark client as disconnected to force reconnect on next attempt
-                self._client = None
-                raise WebastoModbusError(str(err)) from err
+            response = await self._async_execute(method, register.address, count=register.count)
 
         if not hasattr(response, "isError") or response.isError():
             raise WebastoModbusDeviceError(
@@ -564,31 +637,18 @@ class ModbusBridge:
 
     async def _async_read_data_once(self) -> dict[str, float | int | str | None]:
         data: dict[str, float | int | str | None] = {}
-        modbus_exception = self._modbus_exception
 
         async with self._lock:
-            await self.async_connect()
-            assert self._client is not None
-
             read_any = False
             for request in self._read_plan:
-                try:
-                    if request.register_type == "input":
-                        response = await self._invoke_with_unit(
-                            self._client.read_input_registers,
-                            request.start_address,
-                            count=request.count,
-                        )
-                    else:
-                        response = await self._invoke_with_unit(
-                            self._client.read_holding_registers,
-                            request.start_address,
-                            count=request.count,
-                        )
-                except (modbus_exception, OSError, ConnectionError) as err:
-                    # Mark client as disconnected to force reconnect on next attempt
-                    self._client = None
-                    raise WebastoModbusError(str(err)) from err
+                method = (
+                    "read_input_registers"
+                    if request.register_type == "input"
+                    else "read_holding_registers"
+                )
+                response = await self._async_execute(
+                    method, request.start_address, count=request.count
+                )
 
                 if response.isError():
                     detail = _describe_modbus_response(response)
@@ -602,9 +662,9 @@ class ModbusBridge:
                             f"wallbox not responding (read @{request.start_address} "
                             f"returned {detail})"
                         )
-                    # A later block failed while others worked -> likely a
-                    # register this firmware doesn't implement.
-                    if optional_block:
+                    code = getattr(response, "exception_code", None)
+                    if optional_block and code in _UNSUPPORTED_REGISTER_CODES:
+                        # This firmware doesn't implement the register.
                         _LOGGER.info(
                             "Removing optional register block @%s from read plan "
                             "(not supported by this wallbox: %s)",
@@ -612,6 +672,12 @@ class ModbusBridge:
                             detail,
                         )
                         self._read_plan = tuple(r for r in self._read_plan if r is not request)
+                    elif optional_block:
+                        _LOGGER.debug(
+                            "Optional register block @%s temporarily failed: %s",
+                            request.start_address,
+                            detail,
+                        )
                     else:
                         _LOGGER.warning(
                             "Modbus error reading block @%s (%s): %s",
@@ -643,21 +709,8 @@ class ModbusBridge:
         return data
 
     async def _async_write_register_once(self, register: RegisterDefinition, value: int) -> None:
-        modbus_exception = self._modbus_exception
         async with self._lock:
-            await self.async_connect()
-            assert self._client is not None
-
-            try:
-                response = await self._invoke_with_unit(
-                    self._client.write_register,
-                    register.address,
-                    value,
-                )
-            except (modbus_exception, OSError, ConnectionError) as err:
-                # Mark client as disconnected to force reconnect on next attempt
-                self._client = None
-                raise WebastoModbusError(str(err)) from err
+            response = await self._async_execute("write_register", register.address, value)
 
         if response.isError():
             raise WebastoModbusDeviceError(

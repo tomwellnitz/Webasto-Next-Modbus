@@ -193,6 +193,7 @@ class WebastoDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.last_success = datetime.now(UTC)
             self.last_error = None
             self._delete_connection_issue()
+            self._bridge.notify_reachable()
             if restored:
                 self._connection_online = True
                 async_fire_device_trigger(

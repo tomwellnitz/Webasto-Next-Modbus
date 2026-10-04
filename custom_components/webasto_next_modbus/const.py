@@ -11,8 +11,6 @@ DEFAULT_UNIT_ID: Final = 255
 DEFAULT_SCAN_INTERVAL: Final = 10  # seconds
 MIN_SCAN_INTERVAL: Final = 2
 MAX_SCAN_INTERVAL: Final = 60
-MAX_RETRY_ATTEMPTS: Final = 5
-RETRY_BACKOFF_SECONDS: Final = 2.0
 # Raise a repair issue after this many consecutive failed polls.
 FAILURE_ISSUE_THRESHOLD: Final = 3
 

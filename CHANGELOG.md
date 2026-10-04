@@ -12,6 +12,12 @@
 
 ### Fixed
 
+- **No more leaked Modbus connections after a network hiccup.** A client that failed mid-request was dropped without being closed, and pymodbus kept reconnecting it in the background, so one Wi-Fi drop could leave several sockets open and lock Home Assistant (or evcc) out of the wallbox's single Modbus TCP slot. Failed clients are now closed right away and pymodbus' auto-reconnect is disabled.
+- **Service calls and number changes no longer hang for up to ~2 minutes** when the wallbox stops answering: pymodbus' hidden per-request retries are off, writes are attempted twice and reads three times, and every operation is bounded to 30 s.
+- **Unload and timeouts are no longer swallowed** while a Modbus request is in flight (pymodbus turns the cancellation into an I/O error, which the bridge used to retry).
+- **The keep-alive follows the Modbus specification** ("writes 1 every 1/2 of comTimeout"). It used to wait for the wallbox to clear the bit before writing again, which could exceed short fail-safe timeouts, and after a long outage it could stay silent for up to 5 minutes while polling already worked again.
+- An optional register is only dropped from polling when the wallbox reports it as unsupported (exception codes 1/2), not on a transient *busy*.
+- Closing the connection while a request was running could crash that request with an `AttributeError`.
 - **Device triggers now pass their data to automations.** The trigger variables were handed over in the wrong shape, so `trigger.id`, `trigger.fault_code`, `trigger.charging_state` etc. were empty. This also broke the bundled *event notifications* blueprint, which filters on `trigger.id`.
 - **Unite firmwares without register 405 are polled again.** The optional phase-mode register was read first, and an unsupported first register made every poll report the wallbox as offline. Optional registers are now read after the core telemetry.
 - **Repeated start/stop commands take effect.** Register 5006 only reacts to a change, so a second *Start charging* after an earlier one was ignored. The command is now preceded by `0`, as the Modbus specification requires.
