@@ -62,27 +62,28 @@ jobs:
               errors.append(f"pyproject.toml version {project_version} != tag {tag}")
 
           section = version if version == base_version else "Unreleased"
-          heading = re.search(
-              rf"^## \[{re.escape(section)}\]"
-              r"(?: - \d{4}-\d{2}-\d{2})?(?: - (?P<title>.+?))?[ \t]*$",
-              changelog,
-              re.MULTILINE,
+          # A release heading needs a date, the Unreleased heading has none.
+          date = "" if section == "Unreleased" else r" - \d{4}-\d{2}-\d{2}"
+          expected = (
+              "## [Unreleased] - Short title"
+              if section == "Unreleased"
+              else f"## [{section}] - YYYY-MM-DD - Short title"
           )
-          if heading is None:
+          line = re.search(
+              rf"^## \[{re.escape(section)}\](?P<rest>.*)$", changelog, re.MULTILINE
+          )
+          heading = line and re.fullmatch(rf"{date} - (?P<title>.*)", line["rest"])
+          title = heading["title"].strip() if heading else ""
+          if line is None:
               errors.append(f"CHANGELOG.md has no '## [{section}]' section")
-          elif not heading["title"]:
-              expected = (
-                  "## [Unreleased] - Short title"
-                  if section == "Unreleased"
-                  else f"## [{section}] - YYYY-MM-DD - Short title"
-              )
+          elif not title:
               errors.append(
-                  f"The CHANGELOG.md heading for [{section}] has no title; "
-                  f"expected '{expected}' (it becomes the release name)"
+                  f"The CHANGELOG.md heading '{line[0].strip()}' must look like "
+                  f"'{expected}' (the title becomes the release name)"
               )
           else:
               with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-                  output.write(f"title={heading['title'].strip()}\n")
+                  output.write(f"title={title}\n")
 
           for error in errors:
               print(f"::error::{error}")
