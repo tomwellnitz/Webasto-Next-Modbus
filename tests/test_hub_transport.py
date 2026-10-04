@@ -177,11 +177,15 @@ async def test_operation_has_a_total_time_budget(monkeypatch: pytest.MonkeyPatch
         await asyncio.sleep(3600)
         return None
 
-    bridge = _bridge(ScriptedUnit(_hang))
+    unit = ScriptedUnit(_hang)
+    bridge = _bridge(unit)
 
     async with asyncio.timeout(5):
         with pytest.raises(WebastoModbusError, match="timed out"):
             await bridge.async_read_register(CORE)
+    # The request that was still waiting when the budget ran out never saw
+    # its own timeout, so the budget drops the link itself.
+    assert unit.disconnects == 1
 
 
 async def test_cancellation_is_not_swallowed() -> None:

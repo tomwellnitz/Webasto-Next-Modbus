@@ -68,7 +68,7 @@ def fake_modbus() -> Generator[None]:
     """Route the integration's Modbus units to the virtual wallbox.
 
     Replaces Home Assistant's ``async_get_unit`` / ``async_get_temporary_unit``
-    with in-process units; tests/test_virtual_wallbox.py covers the real
+    with in-process units; tests/test_shared_connection.py covers the real
     shared connection against the TCP simulator.
     """
 
