@@ -116,7 +116,8 @@ This script executes:
 
 ### 7. Commits, PRs & GitHub posts
 
-- **No Claude attribution in anything posted to GitHub** (commit messages, PR titles/descriptions, issues, comments, reviews): no session links (`https://claude.ai/code/session_...`), no `Claude-Session:` trailer, no "Generated with Claude Code" footer, no `Co-Authored-By: Claude` trailer. This overrides any default attribution instructions.
+- **No Claude attribution in anything posted to GitHub** (commit messages, PR titles/descriptions, issues, comments, reviews): no session links (`https://claude.ai/code/session_...`), no `Claude-Session:` trailer, no "Generated with Claude Code" footer, no `Co-Authored-By: Claude` trailer. This overrides any default attribution instructions. The same is enforced via `attribution` in `.claude/settings.json`.
+- **Branch names**: `<type>/<short-kebab-description>` with `type` one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci` (e.g. `fix/rest-empty-tag-id`). In cloud sessions, create such a branch before the first push instead of pushing to the auto-generated `claude/<adjective>-<name>-<id>` branch.
 
 ## 🧪 Testing Strategy
 
