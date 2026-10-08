@@ -356,11 +356,15 @@ async def silent_server() -> AsyncGenerator[tuple[int, list[asyncio.StreamWriter
 async def test_real_connection_recovers_from_a_silent_peer(
     socket_enabled: None,
     silent_server: tuple[int, list[asyncio.StreamWriter]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Timed-out requests drop their link, so no half-dead socket is kept open."""
 
     from modbus_connection.tmodbus import ModbusConnection
 
+    # From modbus-connection 4.11 on the bridge's own request timeout applies
+    # (the link takes the largest one asked for); keep it short here.
+    monkeypatch.setattr(hub_module, "REQUEST_TIMEOUT", 0.2)
     port, connections = silent_server
     connection = ModbusConnection(ModbusTcpParams(host="127.0.0.1", port=port), timeout=0.2)
     bridge = ModbusBridge(
