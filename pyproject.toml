@@ -80,10 +80,26 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-# voluptuous ships no type information; treat it as untyped rather than
-# erroring on the missing stubs.
+# Treat voluptuous as untyped. From Home Assistant 2026.9 on, `import
+# voluptuous` is aliased to probatio at runtime and HA's APIs are annotated
+# with probatio types, so voluptuous' own annotations don't describe what
+# actually runs (and on older HA versions, where it is voluptuous, the schemas
+# are the same API).
 module = ["voluptuous", "voluptuous.*"]
 ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# Home Assistant 2026.10 moved these device-class enums into the platforms'
+# const modules and imports them back without an explicit re-export. Importing
+# them from the platform package works on every supported HA version, while
+# the const modules didn't have them before 2026.10.
+module = [
+    "homeassistant.components.binary_sensor",
+    "homeassistant.components.button",
+    "homeassistant.components.switch",
+]
+implicit_reexport = true
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -111,7 +127,7 @@ dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.1.0",
-    "pytest-homeassistant-custom-component==0.13.367",
+    "pytest-homeassistant-custom-component==0.13.371",
     "ruff>=0.5",
     "voluptuous>=0.15.2",
     "vulture>=2.14",
