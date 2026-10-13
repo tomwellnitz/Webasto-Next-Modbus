@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import Any
-
 import pytest
+from modbus_connection import IllegalDataAddressError, ModbusExceptionError
+from modbus_connection.mock import MockModbusConnection, MockModbusUnit
 
 from custom_components.webasto_next_modbus.const import (
     MODEL_UNITE,
@@ -19,7 +18,7 @@ from custom_components.webasto_next_modbus.hub import (
     WebastoModbusDeviceError,
     WebastoModbusError,
     _build_read_plan,
-    _describe_modbus_response,
+    _describe_modbus_exception,
 )
 
 
@@ -29,21 +28,24 @@ def test_device_error_is_subclass_of_modbus_error() -> None:
     assert issubclass(WebastoModbusDeviceError, WebastoModbusError)
 
 
-def test_describe_modbus_response_with_known_code() -> None:
-    text = _describe_modbus_response(SimpleNamespace(exception_code=2))
+def test_describe_modbus_exception_with_known_code() -> None:
+    text = _describe_modbus_exception(IllegalDataAddressError(2))
     assert "exception code 2" in text
     assert "Illegal Data Address" in text
 
 
-def test_describe_modbus_response_with_unknown_code() -> None:
-    text = _describe_modbus_response(SimpleNamespace(exception_code=99))
+def test_describe_modbus_exception_with_unknown_code() -> None:
+    text = _describe_modbus_exception(ModbusExceptionError(99))
     assert "exception code 99" in text
     assert "unknown" in text
 
 
-def test_describe_modbus_response_falls_back_to_str() -> None:
-    # No exception_code attribute -> uses str() of the response.
-    assert "boom" in _describe_modbus_response(SimpleNamespace(detail="boom"))
+def test_describe_modbus_exception_without_code() -> None:
+    assert "boom" in _describe_modbus_exception(ModbusExceptionError(None, "boom"))
+
+
+def _mock_unit() -> MockModbusUnit:
+    return MockModbusConnection().for_unit(255)
 
 
 def test_read_plan_puts_optional_blocks_last() -> None:
@@ -58,53 +60,12 @@ def test_read_plan_puts_optional_blocks_last() -> None:
     assert all(optional_flags[first_optional:])
 
 
-class _ErrorResult:
-    exception_code = 2
-
-    def isError(self) -> bool:
-        return True
-
-
-class _OkResult:
-    def __init__(self, count: int) -> None:
-        self.registers = [7] * count
-
-    def isError(self) -> bool:
-        return False
-
-
-class _ClientWithoutRegister405:
-    """Fake pymodbus client for a firmware that lacks holding register 405."""
-
-    def __init__(self, host: str, **_kwargs: Any) -> None:
-        self.connected = False
-
-    async def connect(self) -> bool:
-        self.connected = True
-        return True
-
-    def close(self) -> None:
-        self.connected = False
-
-    async def read_holding_registers(self, address: int, count: int, **_kwargs: Any) -> Any:
-        if address == 405:
-            return _ErrorResult()
-        return _OkResult(count)
-
-    async def read_input_registers(self, address: int, count: int, **_kwargs: Any) -> Any:
-        return _OkResult(count)
-
-
-async def test_unsupported_optional_register_does_not_block_polling(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_unsupported_optional_register_does_not_block_polling() -> None:
     """An optional block read first must not make the wallbox look offline."""
 
-    from custom_components.webasto_next_modbus import hub as hub_module
-
-    monkeypatch.setattr(
-        hub_module, "_ensure_pymodbus", lambda: (_ClientWithoutRegister405, Exception)
-    )
+    unit = _mock_unit()
+    unit.input[1000] = 7
+    unit.fail_read(405, IllegalDataAddressError(2))
     optional = RegisterDefinition(
         key="number_of_phases",
         name="Number of phases",
@@ -124,7 +85,7 @@ async def test_unsupported_optional_register_does_not_block_polling(
         data_type="uint16",
         entity="sensor",
     )
-    bridge = ModbusBridge("wallbox", 502, 255, registers=(optional, core))
+    bridge = ModbusBridge(unit, host="wallbox", port=502, unit_id=255, registers=(optional, core))
 
     data = await bridge.async_read_data()
 
@@ -140,16 +101,13 @@ async def test_session_command_resets_register_first(monkeypatch: pytest.MonkeyP
 
     from custom_components.webasto_next_modbus import hub as hub_module
 
-    monkeypatch.setattr(
-        hub_module, "_ensure_pymodbus", lambda: (_ClientWithoutRegister405, Exception)
-    )
     sleeps: list[float] = []
 
     async def _fake_sleep(delay: float) -> None:
         sleeps.append(delay)
 
     monkeypatch.setattr(hub_module.asyncio, "sleep", _fake_sleep)
-    bridge = ModbusBridge("wallbox", 502, 255)
+    bridge = ModbusBridge(_mock_unit(), host="wallbox", port=502, unit_id=255)
     written: list[tuple[str, int]] = []
 
     async def _record(register: RegisterDefinition, value: int) -> None:

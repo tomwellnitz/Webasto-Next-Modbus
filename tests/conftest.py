@@ -10,9 +10,8 @@ from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotEx
 from syrupy.assertion import SnapshotAssertion
 
 from virtual_wallbox.simulator import (
-    FakeAsyncModbusTcpClient,
-    FakeModbusException,
     VirtualWallboxState,
+    VirtualWallboxUnit,
     build_default_scenario,
     register_virtual_wallbox,
 )
@@ -56,7 +55,7 @@ def default_virtual_wallbox() -> Generator[VirtualWallboxState]:
 # --------------------------------------------------------------------------- #
 # Fixtures for tests that run the integration inside a real Home Assistant.
 # Modules opt in with
-#   pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")
+#   pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus")
 # --------------------------------------------------------------------------- #
 
 HA_HOST = "192.0.2.10"
@@ -65,17 +64,33 @@ HA_UNIT_ID = 255
 
 
 @pytest.fixture
-def fake_pymodbus() -> Generator[None]:
-    """Route the bridge's Modbus client to the virtual wallbox."""
+def fake_modbus() -> Generator[None]:
+    """Route the integration's Modbus units to the virtual wallbox.
 
+    Replaces Home Assistant's ``async_get_unit`` / ``async_get_temporary_unit``
+    with in-process units; tests/test_shared_connection.py covers the real
+    shared connection against the TCP simulator.
+    """
+
+    from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
     from unittest.mock import patch
 
-    from custom_components.webasto_next_modbus import hub as hub_module
+    import custom_components.webasto_next_modbus as integration
+    from custom_components.webasto_next_modbus import config_flow
 
-    with patch.object(
-        hub_module,
-        "_ensure_pymodbus",
-        return_value=(FakeAsyncModbusTcpClient, FakeModbusException),
+    def _get_unit(_hass: Any, _entry: Any, params: Any, unit_id: int) -> VirtualWallboxUnit:
+        return VirtualWallboxUnit(params.host, params.port, unit_id)
+
+    @asynccontextmanager
+    async def _get_temporary_unit(
+        _hass: Any, params: Any, unit_id: int
+    ) -> AsyncIterator[VirtualWallboxUnit]:
+        yield VirtualWallboxUnit(params.host, params.port, unit_id)
+
+    with (
+        patch.object(integration, "async_get_unit", _get_unit),
+        patch.object(config_flow, "async_get_temporary_unit", _get_temporary_unit),
     ):
         yield
 
