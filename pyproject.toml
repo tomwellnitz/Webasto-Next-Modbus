@@ -112,11 +112,11 @@ dev = [
     "homeassistant>=2026.9.0",
     "mdformat>=0.7.19",
     # Pinned to what Home Assistant's `modbus` integration requires in the HA
-    # version pytest-homeassistant-custom-component pins (HA 2026.10.0), so
+    # version pytest-homeassistant-custom-component pins (HA 2026.10.4), so
     # the tests run the same connection code as production. Bump together
     # with phcc. pytest-homeassistant-custom-component does not install
     # integration requirements, hence the explicit entries.
-    "modbus-connection[tmodbus]==4.12.3",
+    "modbus-connection[tmodbus]==4.12.4",
     "mypy>=1.8",
     "pycares<6.0.0",
     # Only for the virtual_wallbox TCP simulator (virtual_wallbox/server.py),

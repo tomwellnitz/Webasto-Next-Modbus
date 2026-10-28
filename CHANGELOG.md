@@ -6,6 +6,7 @@
 
 - **Requires Home Assistant 2026.9 or newer.** HACS offers 2.0.0 only from that version on; older installations stay on 1.4.0.
 - No reconfiguration is needed: config entries, devices, entity IDs, history and automations stay as they are.
+- **Ampure Unite: the *Charge point state* `unavailable` is now `out_of_service`** (shown as *Out of service* / *Außer Betrieb*). Automations, templates or dashboards that check this sensor for `unavailable` on a Unite must use `out_of_service` instead. The Next is not affected.
 
 ### Changed
 
@@ -16,19 +17,15 @@
 - `integration_type` is now `device` (one config entry per wallbox).
 - **Enable debug logging** on the integration's page now also logs the Modbus connection (`modbus_connection`, `tmodbus`); `docs/support.md` lists the loggers for `configuration.yaml`.
 
+### Fixed
+
+- **A Unite that reports the OCPP state "Unavailable" no longer looks offline.** The state was stored as `unavailable`, which is Home Assistant's own "entity unavailable": the sensor looked disconnected, history showed a gap, and automations could not tell this state from a lost connection.
+
 ### Development
 
 - Tests run Home Assistant's real shared connection against the virtual wallbox TCP simulator (`tests/test_shared_connection.py`); transport tests use `modbus_connection.mock.MockModbusConnection` or a scripted unit.
 - The dev group pins `modbus-connection[tmodbus]` / `tmodbus` to what Home Assistant's `modbus` integration requires in the HA version the tests run against. pymodbus is only left in the dev group for the simulator.
 - The weekly upstream check installs the requirements of Home Assistant's `modbus` integration and checks that `async_get_unit`, `async_get_temporary_unit` and the `ModbusUnit` methods the bridge uses still exist.
-
-### Upgrade notes
-
-- **Ampure Unite: the *Charge point state* `unavailable` is now `out_of_service`** (shown as *Out of service* / *Außer Betrieb*). Automations, templates or dashboards that check this sensor for `unavailable` on a Unite must use `out_of_service` instead. The Next is not affected.
-
-### Fixed
-
-- **A Unite that reports the OCPP state "Unavailable" no longer looks offline.** The state was stored as `unavailable`, which is Home Assistant's own "entity unavailable": the sensor looked disconnected, history showed a gap, and automations could not tell this state from a lost connection.
 
 ## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST
 
