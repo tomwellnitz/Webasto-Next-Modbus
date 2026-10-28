@@ -30,10 +30,11 @@ from custom_components.webasto_next_modbus.const import (
     DOMAIN,
     FAILURE_ISSUE_THRESHOLD,
     MODEL_NEXT,
+    MODEL_UNITE,
     SESSION_COMMAND_START_VALUE,
     VARIANT_22_KW,
 )
-from tests.conftest import HA_HOST, HA_PORT, HA_UNIT_ID
+from tests.conftest import HA_HOST, HA_PORT, HA_UNIT_ID, make_config_entry
 from virtual_wallbox.simulator import VirtualWallboxState
 
 HOST = HA_HOST
@@ -69,6 +70,26 @@ async def test_setup_and_unload(hass: HomeAssistant, loaded_entry: MockConfigEnt
     assert await hass.config_entries.async_unload(loaded_entry.entry_id)
     await hass.async_block_till_done()
     assert loaded_entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_unite_out_of_service_is_not_home_assistant_unavailable(
+    hass: HomeAssistant, wallbox: VirtualWallboxState
+) -> None:
+    """OCPP "Unavailable" (7) must not read as the entity being unavailable."""
+
+    wallbox.apply_values({"charge_point_state": 7})
+    entry = make_config_entry(model=MODEL_UNITE)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.wallbox_charge_point_state")
+    assert state is not None
+    assert state.state == "out_of_service"
+    assert "unavailable" not in state.attributes["options"]
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
 
 
 async def test_setup_retries_when_wallbox_unreachable(
