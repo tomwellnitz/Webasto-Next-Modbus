@@ -113,7 +113,7 @@ This script executes:
 
 ### 6. Dependabot & auto-merge
 
-- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, grouped per ecosystem, monthly, a 7-day `cooldown`, and `pymodbus` major/minor bumps ignored. `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against.
+- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, weekly, a 7-day `cooldown` (2 days for patch releases), and `pymodbus` major/minor bumps ignored. `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against. It has a group of its own (`home-assistant-test-env`), so each HA release arrives within days. That matters for security: HA pins most transitive packages exactly (e.g. Pillow, cryptography, PyJWT, uv), so a Dependabot alert on one of them is only cleared by the HA release that bumps it, never by `uv lock --upgrade-package`.
 - `.github/workflows/dependabot-auto-merge.yml` enables GitHub auto-merge for **patch + minor** Dependabot PRs; **major** bumps are left for manual review. For grouped PRs the highest semver bump in the group decides.
 - **Two repository settings are required for auto-merge to be safe**, otherwise GitHub would merge without waiting for CI:
   1. Settings → General → **Allow auto-merge** (enabled).
