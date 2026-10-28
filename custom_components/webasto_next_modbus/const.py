@@ -160,7 +160,9 @@ CHARGE_POINT_STATE_MAP: Final = {
 }
 
 # The Webasto / Ampure Unite reports a different (and wider) charge-point-state
-# enum than the Next at register 1000.
+# enum than the Next at register 1000. OCPP calls 7 "Unavailable"; it is
+# "out_of_service" here because a sensor state of "unavailable" is Home
+# Assistant's own "entity unavailable" and could not be told apart from it.
 UNITE_CHARGE_POINT_STATE_MAP: Final = {
     0: "available",
     1: "preparing",
@@ -169,7 +171,7 @@ UNITE_CHARGE_POINT_STATE_MAP: Final = {
     4: "suspended_ev",
     5: "finishing",
     6: "reserved",
-    7: "unavailable",
+    7: "out_of_service",
     8: "faulted",
 }
 

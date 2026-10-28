@@ -96,7 +96,7 @@
           "finishing": "Finishing",
           "error": "Error",
           "reserved": "Reserved",
-          "unavailable": "Unavailable",
+          "out_of_service": "Out of service",
           "faulted": "Faulted"
         }
       },

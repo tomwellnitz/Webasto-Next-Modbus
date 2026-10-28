@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Ampure Unite: the *Charge point state* `unavailable` is now `out_of_service`** (shown as *Out of service* / *Außer Betrieb*). Automations, templates or dashboards that check this sensor for `unavailable` on a Unite must use `out_of_service` instead. The Next is not affected.
+
+### Fixed
+
+- **A Unite that reports the OCPP state "Unavailable" no longer looks offline.** The state was stored as `unavailable`, which is Home Assistant's own "entity unavailable": the sensor looked disconnected, history showed a gap, and automations could not tell this state from a lost connection.
+
 ## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST
 
 ### Upgrade notes

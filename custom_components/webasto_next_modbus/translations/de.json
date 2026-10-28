@@ -68,7 +68,7 @@
           "finishing": "Wird beendet",
           "error": "Fehler",
           "reserved": "Reserviert",
-          "unavailable": "Nicht verfügbar",
+          "out_of_service": "Außer Betrieb",
           "faulted": "Störung"
         }
       },
