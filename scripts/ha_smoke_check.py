@@ -45,14 +45,20 @@ def _problems_in_log(log: str) -> list[str]:
 
 
 def _entity_states(database: Path) -> dict[str, str]:
+    if not database.exists():
+        return {}
     with sqlite3.connect(database) as connection:
-        rows = connection.execute(
-            """
-            SELECT meta.entity_id, states.state
-            FROM states JOIN states_meta AS meta ON states.metadata_id = meta.metadata_id
-            WHERE states.state_id IN (SELECT MAX(state_id) FROM states GROUP BY metadata_id)
-            """
-        ).fetchall()
+        try:
+            rows = connection.execute(
+                """
+                SELECT meta.entity_id, states.state
+                FROM states JOIN states_meta AS meta ON states.metadata_id = meta.metadata_id
+                WHERE states.state_id IN (SELECT MAX(state_id) FROM states GROUP BY metadata_id)
+                """
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # The recorder had not created its tables yet.
+            return {}
     return {entity_id: state for entity_id, state in rows if ".wallbox_" in entity_id}
 
 
