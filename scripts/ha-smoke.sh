@@ -22,6 +22,7 @@ MODEL=next
 POLLS=3
 PORT=15020
 TIMEOUT=600
+INSTALL_TIMEOUT=900
 KEEP=0
 
 usage() {
@@ -50,11 +51,32 @@ LOG=$WORK/home-assistant.log
 SIM_PID=""
 HA_PID=""
 
-cleanup() {
-  if [[ -n "$HA_PID" ]]; then
-    kill -INT "$HA_PID" 2>/dev/null || true
-    wait "$HA_PID" 2>/dev/null || true
+# Ask Home Assistant to stop, and kill it if it hasn't after a minute. SIGTERM,
+# not SIGINT: a Home Assistant that is still starting up ignores SIGINT.
+stop_ha() {
+  [[ -n "$HA_PID" ]] || return 0
+  kill -TERM "$HA_PID" 2>/dev/null || true
+  for _ in $(seq 60); do
+    kill -0 "$HA_PID" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$HA_PID" 2>/dev/null; then
+    echo "⚠️  Home Assistant did not stop within 60 s, killing it" >&2
+    kill -KILL "$HA_PID" 2>/dev/null || true
   fi
+  wait "$HA_PID" 2>/dev/null || true
+  HA_PID=""
+}
+
+show_logs() {
+  echo "----- last 80 lines of the Home Assistant log -----" >&2
+  tail -80 "$LOG" >&2 || true
+  echo "----- virtual wallbox log -----" >&2
+  tail -20 "$WORK/virtual-wallbox.log" >&2 || true
+}
+
+cleanup() {
+  stop_ha
   if [[ -n "$SIM_PID" ]]; then
     kill "$SIM_PID" 2>/dev/null || true
     wait "$SIM_PID" 2>/dev/null || true
@@ -67,13 +89,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ "$HA_VERSION" == beta ]]; then
+  # Pin the newest Home Assistant version, pre-releases included, instead of
+  # `--prerelease allow`: that would let every dependency resolve to an alpha
+  # or beta too, which is not what a Home Assistant beta ships with.
+  HA_VERSION=$(python3 - <<'PY'
+import json
+import urllib.request
+
+with urllib.request.urlopen("https://pypi.org/pypi/homeassistant/json", timeout=30) as response:
+    data = json.load(response)
+uploads = [(files[0]["upload_time"], version) for version, files in data["releases"].items() if files]
+print(max(uploads)[1])
+PY
+)
+fi
+
 echo "🏠 Installing Home Assistant ($HA_VERSION) into $VENV"
 uv venv --quiet --python 3.14 "$VENV"
-case "$HA_VERSION" in
-  latest) uv pip install --quiet --python "$VENV/bin/python" homeassistant ;;
-  beta) uv pip install --quiet --python "$VENV/bin/python" --prerelease allow homeassistant ;;
-  *) uv pip install --quiet --python "$VENV/bin/python" "homeassistant==$HA_VERSION" ;;
-esac
+if [[ "$HA_VERSION" == latest ]]; then
+  timeout "$INSTALL_TIMEOUT" uv pip install --quiet --python "$VENV/bin/python" homeassistant
+else
+  timeout "$INSTALL_TIMEOUT" uv pip install --quiet --python "$VENV/bin/python" "homeassistant==$HA_VERSION"
+fi
 "$VENV/bin/python" -c "from homeassistant.const import __version__; print('   Home Assistant', __version__)"
 
 echo "⚙️  Writing the configuration ($MODEL on 127.0.0.1:$PORT)"
@@ -111,19 +149,27 @@ echo "🚀 Starting Home Assistant (waiting for $POLLS successful polls, at most
 "$VENV/bin/python" -m homeassistant --config "$CFG" > "$LOG" 2>&1 &
 HA_PID=$!
 deadline=$((SECONDS + TIMEOUT))
+polls=0
 while (( SECONDS < deadline )); do
   if ! kill -0 "$HA_PID" 2>/dev/null; then
-    echo "❌ Home Assistant exited early; last log lines:" >&2
-    tail -30 "$LOG" >&2
+    echo "❌ Home Assistant exited early" >&2
+    show_logs
     exit 1
   fi
   polls=$(grep -c "Finished fetching Webasto Next.*success: True" "$LOG" || true)
   (( polls >= POLLS )) && break
   sleep 5
 done
-kill -INT "$HA_PID" 2>/dev/null || true
-wait "$HA_PID" 2>/dev/null || true
-HA_PID=""
+TIMED_OUT=0
+if (( polls < POLLS )); then
+  TIMED_OUT=1
+  echo "⏱️  Timed out after ${TIMEOUT}s with $polls successful poll(s)" >&2
+fi
+stop_ha
 
 echo "🔎 Checking the result"
-"$VENV/bin/python" "$REPO/scripts/ha_smoke_check.py" --config "$CFG" --log "$LOG" --polls "$POLLS"
+if ! "$VENV/bin/python" "$REPO/scripts/ha_smoke_check.py" --config "$CFG" --log "$LOG" --polls "$POLLS" \
+  || (( TIMED_OUT )); then
+  show_logs
+  exit 1
+fi
