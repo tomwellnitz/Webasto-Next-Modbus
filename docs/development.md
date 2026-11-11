@@ -89,7 +89,7 @@ uv run pytest tests/test_snapshots.py --snapshot-update
 
 It installs that Home Assistant into a throwaway venv, starts the virtual wallbox and a config entry for it, and waits for a few polls. It fails unless the polls succeed, the entities have values and the integration logs no errors or warnings. `--keep` leaves the configuration and the log behind for a look. The first run takes a few minutes because Home Assistant installs the requirements of its own core integrations.
 
-Unlike the pytest suite it needs no `pytest-homeassistant-custom-component` for the target version, so it works on a Home Assistant beta the day it is published. The weekly *Upstream compatibility* workflow runs it against the latest release and the newest beta. HA betas appear about a week before each release, so a red beta run is the earliest warning.
+Unlike the pytest suite it needs no `pytest-homeassistant` release for the target version, so it works on a Home Assistant beta the day it is published. The weekly *Upstream compatibility* workflow runs it against the latest release and the newest beta. HA betas appear about a week before each release, so a red beta run is the earliest warning.
 
 ## 📦 Release Playbook (Maintainers)
 

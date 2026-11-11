@@ -5,8 +5,8 @@
 #   ./scripts/ha-smoke.sh --ha beta       # newest beta (or release, if newer)
 #   ./scripts/ha-smoke.sh --ha 2026.11.0b3 --model unite
 #
-# Unlike the pytest suite this needs no pytest-homeassistant-custom-component
-# for the target version, so it also works against a Home Assistant beta the
+# Unlike the pytest suite this needs no pytest-homeassistant release for the
+# target version, so it also works against a Home Assistant beta the
 # day it is published. It installs Home Assistant into a throwaway venv,
 # starts the virtual wallbox (from the project's own environment), loads a
 # config entry for it and lets Home Assistant poll. It fails unless the entry

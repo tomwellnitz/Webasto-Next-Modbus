@@ -15,8 +15,8 @@ from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
+from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
@@ -44,7 +44,7 @@ from custom_components.webasto_next_modbus.rest_client import (
 from tests.conftest import HA_HOST, make_config_entry
 from virtual_wallbox.simulator import VirtualWallboxState
 
-pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")
+pytestmark = pytest.mark.usefixtures("fake_pymodbus")
 
 BASE = f"https://{HA_HOST}/api"
 JSON = {"Content-Type": "application/json"}

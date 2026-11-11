@@ -10,6 +10,10 @@
 
 - **A Unite that reports the OCPP state "Unavailable" no longer looks offline.** The state was stored as `unavailable`, which is Home Assistant's own "entity unavailable": the sensor looked disconnected, history showed a gap, and automations could not tell this state from a lost connection.
 
+### Development
+
+- **Tests run against Home Assistant 2026.11 with Home Assistant's own test package.** From 2026.11 on, Home Assistant publishes `pytest-homeassistant` with every release. It replaces `pytest-homeassistant-custom-component`, which gets no 2026.11 release. The test environment now pulls in Home Assistant's own pins, among them Pillow 13.0.0.
+
 ## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST
 
 ### Upgrade notes
