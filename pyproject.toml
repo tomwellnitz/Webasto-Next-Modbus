@@ -19,7 +19,9 @@ virtual-wallbox = "virtual_wallbox.cli:main"
 webasto-smoke = "virtual_wallbox.smoke:main"
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+# Let Home Assistant install its httpx alias before respx is imported
+# (pytest-homeassistant README).
+addopts = "-ra -p no:respx"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -112,11 +114,11 @@ dev = [
     "homeassistant>=2026.9.0",
     "mdformat>=0.7.19",
     # Pinned to what Home Assistant's `modbus` integration requires in the HA
-    # version pytest-homeassistant-custom-component pins (HA 2026.10.4), so
-    # the tests run the same connection code as production. Bump together
-    # with phcc. pytest-homeassistant-custom-component does not install
-    # integration requirements, hence the explicit entries.
-    "modbus-connection[tmodbus]==4.12.4",
+    # version pytest-homeassistant pins (HA 2026.11.1), so the tests run the
+    # same connection code as production. Bump together with
+    # pytest-homeassistant, which does not install integration requirements,
+    # hence the explicit entries.
+    "modbus-connection[tmodbus]==4.12.7",
     "mypy>=1.8",
     "pycares<6.0.0",
     # Only for the virtual_wallbox TCP simulator (virtual_wallbox/server.py),
@@ -126,9 +128,9 @@ dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.1.0",
-    "pytest-homeassistant-custom-component==0.13.375",
+    "pytest-homeassistant==2026.11.1",
     "ruff>=0.5",
-    "tmodbus==0.6.2",  # see modbus-connection above
+    "tmodbus==1.1.0",  # see modbus-connection above
     "voluptuous>=0.15.2",
     "vulture>=2.14",
     "yamllint>=1.37.1",

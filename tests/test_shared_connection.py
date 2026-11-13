@@ -20,7 +20,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from modbus_connection import ModbusTcpParams
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.webasto_next_modbus import CONFIG_ENTRY_MINOR_VERSION
 from custom_components.webasto_next_modbus.const import (
@@ -35,7 +35,7 @@ from custom_components.webasto_next_modbus.const import (
 from virtual_wallbox import serve_tcp
 from virtual_wallbox.simulator import VirtualWallboxState, build_default_scenario
 
-pytestmark = [pytest.mark.usefixtures("enable_custom_integrations"), pytest.mark.enable_socket]
+pytestmark = pytest.mark.enable_socket
 
 HOST = "127.0.0.1"
 UNIT_ID = 255

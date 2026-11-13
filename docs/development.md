@@ -77,6 +77,20 @@ The same tools are available as optional [pre-commit](https://pre-commit.com) ho
 uv run pytest tests/test_snapshots.py --snapshot-update
 ```
 
+### Real Home Assistant smoke test
+
+`scripts/ha-smoke.sh` runs the integration in a real Home Assistant against the virtual wallbox and checks that it works:
+
+```bash
+./scripts/ha-smoke.sh                       # latest Home Assistant release
+./scripts/ha-smoke.sh --ha beta             # newest beta (or release, if newer)
+./scripts/ha-smoke.sh --ha 2026.11.0b3 --model unite --keep
+```
+
+It installs that Home Assistant into a throwaway venv, starts the virtual wallbox and a config entry for it, and waits for a few polls. It fails unless the polls succeed, the entities have values and the integration logs no errors or warnings. `--keep` leaves the configuration and the log behind for a look. The first run takes a few minutes because Home Assistant installs the requirements of its own core integrations.
+
+Unlike the pytest suite it needs no `pytest-homeassistant` release for the target version, so it works on a Home Assistant beta the day it is published. The weekly *Upstream compatibility* workflow runs it against the latest release and the newest beta. HA betas appear about a week before each release, so a red beta run is the earliest warning.
+
 ## 📦 Release Playbook (Maintainers)
 
 1. **Update Version**:

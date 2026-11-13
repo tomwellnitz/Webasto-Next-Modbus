@@ -25,6 +25,7 @@
 
 - Tests run Home Assistant's real shared connection against the virtual wallbox TCP simulator (`tests/test_shared_connection.py`); transport tests use `modbus_connection.mock.MockModbusConnection` or a scripted unit.
 - The dev group pins `modbus-connection[tmodbus]` / `tmodbus` to what Home Assistant's `modbus` integration requires in the HA version the tests run against. pymodbus is only left in the dev group for the simulator.
+- **Tests run against Home Assistant 2026.11 with Home Assistant's own test package.** From 2026.11 on, Home Assistant publishes `pytest-homeassistant` with every release. It replaces `pytest-homeassistant-custom-component`, which gets no 2026.11 release. The test environment now pulls in Home Assistant's own pins, among them Pillow 13.0.0.
 - The weekly upstream check installs the requirements of Home Assistant's `modbus` integration and checks that `async_get_unit`, `async_get_temporary_unit` and the `ModbusUnit` methods the bridge uses still exist.
 
 ## [1.4.0] - 2026-10-04 - Unite REST API, stable device IDs, hardened Modbus and REST

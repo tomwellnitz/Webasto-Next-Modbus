@@ -11,6 +11,11 @@ name: Upstream compatibility
 #   * hassfest: static schema validation against HA-Core main — catches
 #     integration-manifest / schema drift.
 #
+#   * ha-smoke: runs the integration in a real Home Assistant (latest
+#     release and newest beta) against the virtual wallbox, via
+#     scripts/ha-smoke.sh. Betas are published about a week before each
+#     release, so a red beta run is the earliest warning we get.
+#
 # A failure in either job means an upcoming HA release will break the
 # integration for end users — same failure mode as #88, but caught
 # ~1-2 weeks early so we can hot-fix or widen constraints before HACS
@@ -33,7 +38,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         # Deliberately no cache-dependency-glob: this job must not restore
         # the project's uv.lock but resolve the actual latest upstream
         # versions in a fresh environment.
@@ -156,3 +161,24 @@ jobs:
         # freeze it to a specific HA-Core snapshot and defeat the design.
         # ci.yaml uses @master here for the same reason.
         uses: home-assistant/actions/hassfest@master
+
+  ha-smoke:
+    name: Real Home Assistant (${{ matrix.ha }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ha: [latest, beta]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install the project (for the virtual wallbox)
+        run: uv sync --locked
+
+      - name: Run the integration in Home Assistant ${{ matrix.ha }}
+        run: ./scripts/ha-smoke.sh --ha "${{ matrix.ha }}"

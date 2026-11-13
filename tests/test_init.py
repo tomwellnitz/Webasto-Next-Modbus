@@ -13,11 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.components.diagnostics import (
+from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.components.diagnostics import (
     get_diagnostics_for_config_entry,
 )
-from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
+from pytest_homeassistant.typing import ClientSessionGenerator
 
 from custom_components.webasto_next_modbus import CONFIG_ENTRY_MINOR_VERSION
 from custom_components.webasto_next_modbus import hub as hub_module
@@ -41,7 +41,7 @@ HOST = HA_HOST
 PORT = HA_PORT
 UNIT_ID = HA_UNIT_ID
 
-pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus")
+pytestmark = pytest.mark.usefixtures("fake_modbus")
 
 
 @pytest.fixture

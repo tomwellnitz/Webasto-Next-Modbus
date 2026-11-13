@@ -17,12 +17,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.components.diagnostics import (
+from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.components.diagnostics import (
     get_diagnostics_for_config_entry,
 )
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
-from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
+from pytest_homeassistant.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant.typing import ClientSessionGenerator
 from syrupy.assertion import SnapshotAssertion
 
 from custom_components.webasto_next_modbus.const import (
@@ -38,7 +38,7 @@ from custom_components.webasto_next_modbus.const import (
 )
 from tests.conftest import HA_HOST, make_config_entry
 
-pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_modbus", "wallbox")
+pytestmark = pytest.mark.usefixtures("fake_modbus", "wallbox")
 
 ENTRY_ID = "01JWEBASTOSNAPSHOTENTRY000"
 BASE = f"https://{HA_HOST}/api"
