@@ -4,8 +4,8 @@ updates:
   # `uv sync --locked` keeps passing on Dependabot PRs.
   - package-ecosystem: uv
     directory: "/"
-    # Weekly, so a Home Assistant patch release (a patch bump of
-    # pytest-homeassistant-custom-component, see below) reaches the test
+    # Weekly, so a Home Assistant patch release (a bump of
+    # pytest-homeassistant, see below) reaches the test
     # environment within days: HA pins most transitive packages exactly, so
     # its releases are the only way their security fixes get into uv.lock.
     schedule:
@@ -22,12 +22,11 @@ updates:
     # in uv.lock would just be noise.
     allow:
       - dependency-type: "direct"
-    # pytest-homeassistant-custom-component is deliberately NOT ignored:
-    # it pins the Home Assistant version the tests run against, and every
-    # HA release (including 2026.10.0 itself) is only a *patch* bump of it
-    # (0.13.367 = HA 2026.9.4, 0.13.368 = HA 2026.10.0b0). Ignoring patch
-    # bumps meant the test environment never followed HA. It gets a group of
-    # its own, so an HA release is never held back by another dependency.
+    # pytest-homeassistant (Home Assistant's own test package, versioned
+    # like Home Assistant itself, e.g. 2026.11.1) pins the Home Assistant
+    # version the tests run against, so it must never be ignored. It gets a
+    # group of its own, so an HA release is never held back by another
+    # dependency.
     ignore:
       # pymodbus bumps are driven by Home Assistant core's `modbus`
       # integration, not by us (HA 2026.5/6: 3.11.x, HA 2026.7: 3.13.1).
@@ -40,12 +39,12 @@ updates:
     groups:
       home-assistant-test-env:
         patterns:
-          - "pytest-homeassistant-custom-component"
+          - "pytest-homeassistant"
       python-dependencies:
         patterns:
           - "*"
         exclude-patterns:
-          - "pytest-homeassistant-custom-component"
+          - "pytest-homeassistant"
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: "/"

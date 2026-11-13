@@ -23,7 +23,9 @@ virtual-wallbox = "virtual_wallbox.cli:main"
 webasto-smoke = "virtual_wallbox.smoke:main"
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+# Let Home Assistant install its httpx alias before respx is imported
+# (pytest-homeassistant README).
+addopts = "-ra -p no:respx"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -127,7 +129,7 @@ dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.1.0",
-    "pytest-homeassistant-custom-component==0.13.375",
+    "pytest-homeassistant==2026.11.1",
     "ruff>=0.5",
     "voluptuous>=0.15.2",
     "vulture>=2.14",

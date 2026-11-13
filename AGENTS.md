@@ -20,7 +20,7 @@ This document provides context and guidelines for AI agents working on this code
 - **Dependency Management**: `uv` (replaces pip/poetry)
 - **Linting & Formatting**: `ruff`
 - **Type Checking**: `mypy` (Strict mode)
-- **Testing**: `pytest` with `pytest-homeassistant-custom-component`
+- **Testing**: `pytest` with `pytest-homeassistant` (Home Assistant's official test package, released with every HA version since 2026.11; it replaces `pytest-homeassistant-custom-component`, which gets no more releases — never install both)
 - **Security**: `bandit`
 - **Dead Code**: `vulture`
 - **Spelling**: `codespell`
@@ -113,7 +113,7 @@ This script executes:
 
 ### 6. Dependabot & auto-merge
 
-- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, weekly, a 7-day `cooldown` (2 days for patch releases), and `pymodbus` major/minor bumps ignored. `pytest-homeassistant-custom-component` patch bumps are **not** ignored: every HA release is a patch bump of it, and it pins the HA version the tests run against. It has a group of its own (`home-assistant-test-env`), so each HA release arrives within days. That matters for security: HA pins most transitive packages exactly (e.g. Pillow, cryptography, PyJWT, uv), so a Dependabot alert on one of them is only cleared by the HA release that bumps it, never by `uv lock --upgrade-package`.
+- `dependabot.yml` keeps PRs low-noise: the `uv` ecosystem (updates `pyproject.toml` and `uv.lock` together), direct deps only, weekly, a 7-day `cooldown` (2 days for patch releases), and `pymodbus` major/minor bumps ignored. `pytest-homeassistant` bumps are **never** ignored: the package is versioned like Home Assistant (`2026.11.1`) and pins the HA version the tests run against. Being calendar-versioned, a monthly HA release is a *minor* bump (7-day cooldown, auto-merged), a patch release a *patch* bump (2 days), and the January release a *major* bump (left for manual review). It has a group of its own (`home-assistant-test-env`), so each HA release arrives within days. That matters for security: HA pins most transitive packages exactly (e.g. Pillow, cryptography, PyJWT, uv), so a Dependabot alert on one of them is only cleared by the HA release that bumps it, never by `uv lock --upgrade-package`.
 - `.github/workflows/dependabot-auto-merge.yml` enables GitHub auto-merge for **patch + minor** Dependabot PRs; **major** bumps are left for manual review. For grouped PRs the highest semver bump in the group decides.
 - **Two repository settings are required for auto-merge to be safe**, otherwise GitHub would merge without waiting for CI:
   1. Settings → General → **Allow auto-merge** (enabled).
@@ -127,11 +127,11 @@ This script executes:
 ## 🧪 Testing Strategy
 
 - **Unit Tests**: Cover all config flows, sensor parsing, and coordinator logic.
-- **Integration tests in a real Home Assistant** (`tests/test_init.py`, `tests/test_rest.py`, `tests/test_snapshots.py`): opt in with `pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")`, use the `wallbox` / `config_entry` fixtures from `tests/conftest.py`, and mock REST with `aioclient_mock`.
+- **Integration tests in a real Home Assistant** (`tests/test_init.py`, `tests/test_rest.py`, `tests/test_snapshots.py`): opt in with `pytestmark = pytest.mark.usefixtures("fake_pymodbus")` (the `hass` fixture loads custom integrations itself; `tests/conftest.py` gives each test a temporary config directory), use the `wallbox` / `config_entry` fixtures from `tests/conftest.py`, and mock REST with `aioclient_mock`.
 - **Snapshots**: `tests/test_snapshots.py` records every entity, the device and the diagnostics in `tests/snapshots/`. Regenerate with `--snapshot-update` after intended changes and review the diff.
 - **Mocking**: Use `unittest.mock` to mock the `ModbusBridge`; patch `hub._ensure_pymodbus` (the `fake_pymodbus` fixture) to route the client to the virtual wallbox. There are no global module stubs: tests import the real `pymodbus` and `voluptuous`.
 - **Virtual Wallbox**: The `virtual_wallbox` module provides a fake Modbus server for end-to-end testing or local development without hardware.
-- **Real Home Assistant smoke test**: `./scripts/ha-smoke.sh [--ha latest|beta|VERSION] [--model next|unite]` installs that Home Assistant into a throwaway venv, starts the virtual wallbox and a config entry for it, and fails unless polls succeed, the entities have values and the integration logs no errors or warnings. It needs no pytest-homeassistant-custom-component for the target version, so use it to check a new HA beta (or any version a user reports) before the test environment catches up.
+- **Real Home Assistant smoke test**: `./scripts/ha-smoke.sh [--ha latest|beta|VERSION] [--model next|unite]` installs that Home Assistant into a throwaway venv, starts the virtual wallbox and a config entry for it, and fails unless polls succeed, the entities have values and the integration logs no errors or warnings. It needs no `pytest-homeassistant` release for the target version, so use it to check a new HA beta (or any version a user reports) before the test environment catches up.
 
 ## 🔑 Key Files to Know
 

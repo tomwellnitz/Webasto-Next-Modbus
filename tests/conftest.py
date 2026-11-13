@@ -6,8 +6,6 @@ from collections.abc import Generator
 from typing import Any
 
 import pytest
-from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
-from syrupy.assertion import SnapshotAssertion
 
 from virtual_wallbox.simulator import (
     FakeAsyncModbusTcpClient,
@@ -22,14 +20,15 @@ from virtual_wallbox.simulator import (
 
 
 @pytest.fixture
-def snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
-    """Serialise Home Assistant objects (states, registry entries) stably.
+def hass_config_dir(hass_tmp_config_dir: str) -> str:
+    """Give every Home Assistant test its own temporary config directory.
 
-    Two pytest plugins define ``snapshot``; pin the Home Assistant extension so
-    timestamps, IDs and contexts never end up in the snapshots.
+    The default is the shared ``tests/testing_config``; Home Assistant writes
+    into it (e.g. the integration's bundled blueprint), which would leave
+    untracked files in the repository.
     """
 
-    return snapshot.use_extension(HomeAssistantSnapshotExtension)
+    return hass_tmp_config_dir
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +55,7 @@ def default_virtual_wallbox() -> Generator[VirtualWallboxState]:
 # --------------------------------------------------------------------------- #
 # Fixtures for tests that run the integration inside a real Home Assistant.
 # Modules opt in with
-#   pytestmark = pytest.mark.usefixtures("enable_custom_integrations", "fake_pymodbus")
+#   pytestmark = pytest.mark.usefixtures("fake_pymodbus")
 # --------------------------------------------------------------------------- #
 
 HA_HOST = "192.0.2.10"
@@ -99,7 +98,7 @@ def make_config_entry(
     """Return a MockConfigEntry for the virtual wallbox."""
 
     from homeassistant.const import CONF_HOST, CONF_PORT
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.webasto_next_modbus import CONFIG_ENTRY_MINOR_VERSION
     from custom_components.webasto_next_modbus.const import (

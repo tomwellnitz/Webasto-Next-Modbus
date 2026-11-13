@@ -21,7 +21,7 @@ This document captures architectural goals, the communication protocols (Modbus 
 - **Diagnostics** – Downloadable config-entry diagnostics with REST credentials redacted.
 - **Quality scale** – Platinum: strict typing (`mypy --strict` + `py.typed`), `inject-websession` (HA shared aiohttp session), async-dependency, icon translations (`icons.json`), exception translations, action-setup, `PARALLEL_UPDATES` declared on every platform.
 - **Extensibility** – Centralised register descriptions drive entity creation so new datapoints require minimal boilerplate.
-- **Testing** – Pytest suite with virtual-wallbox fixtures covering the config flow (incl. reconfigure and reauth), coordinator, entities, services, and device triggers; `pytest-homeassistant-custom-component` provides a realistic Home Assistant core.
+- **Testing** – Pytest suite with virtual-wallbox fixtures covering the config flow (incl. reconfigure and reauth), coordinator, entities, services, and device triggers; Home Assistant's own `pytest-homeassistant` package provides a realistic Home Assistant core.
 - **Documentation** – User-facing README and support/troubleshooting page, plus architecture and development guides for maintainers.
 
 ## Domain model
@@ -135,7 +135,7 @@ Picking the **Unite** model in the config flow switches to a corrected register 
 - Coordinator tests that validate decoding, delta handling, and retry behaviour under simulated Modbus failures.
 - Entity snapshot tests to guard the number of exposed entities and their metadata.
 - Service tests asserting register writes, clamping, and refresh behaviour using the virtual wallbox simulator.
-- `pytest-homeassistant-custom-component` fixtures provide a realistic Home Assistant core for integration-level tests.
+- `pytest-homeassistant` fixtures (Home Assistant's official test package) provide a realistic Home Assistant core for integration-level tests.
 
 ## Assumptions and open items
 
