@@ -31,7 +31,7 @@ The wallbox must be reachable over Modbus TCP (default port `502`). The REST API
 
 ## Requirements
 
-- **Home Assistant** 2026.5.1 or newer (requires Python 3.14.2). On older Home Assistant, stay on release `1.1.5`.
+- **Home Assistant** 2026.9.0 or newer (requires Python 3.14.2). On Home Assistant 2026.5–2026.8 stay on release `1.4.x`, on older versions on `1.1.5`.
 - A supported wallbox (see [Supported hardware](#supported-hardware)) reachable over Modbus TCP.
 
 ## Installation
@@ -184,7 +184,7 @@ automation:
 
 ## Known limitations
 
-- **One Modbus client at a time** — the Webasto Next / Unite accepts only one Modbus TCP connection. If another client (EVCC, a manual `modbus:` block, another HA add-on) is holding the slot, this integration cannot connect.
+- **One Modbus client at a time** — the Webasto Next / Unite accepts only one Modbus TCP connection. Inside Home Assistant the connection is shared: integrations that use Home Assistant's Modbus connection for the same wallbox (host and port) share one socket. A client outside Home Assistant (EVCC, another add-on) holding the slot still keeps this integration from connecting.
 - **Modbus is off by default on the wallbox** — it must be enabled once in the wallbox web interface (expert / installer view) before setup will succeed ([#36](https://github.com/tomwellnitz/Webasto-Next-Modbus/issues/36)).
 - **No auto-discovery** — the wallboxes do not advertise themselves over mDNS / zeroconf, so they are added manually by IP address or hostname.
 - **Use a static address** — configure a DHCP reservation or use a hostname so the wallbox stays reachable; if the address changes, run the integration's *Reconfigure* flow.
@@ -196,7 +196,7 @@ automation:
 
 ## Troubleshooting
 
-- **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. Make sure **Modbus TCP is enabled on the wallbox** (expert view) — it is off by default. These wallboxes also accept only one Modbus TCP connection at a time, so make sure no other client (e.g. EVCC) holds it.
+- **Cannot connect** — verify host, port (`502`) and unit ID (`255`), and that the wallbox is reachable. Make sure **Modbus TCP is enabled on the wallbox** (expert view) — it is off by default. These wallboxes also accept only one Modbus TCP connection at a time, so make sure no client outside Home Assistant (e.g. EVCC) holds it.
 - **Values stuck or stale** — check the logs; transient errors are retried automatically, and a booting wallbox recovers on its own within a few minutes. If polling keeps failing, a **repair issue** appears under *Settings → System → Repairs*; it disappears by itself once the wallbox answers again.
 - **Diagnostics** — integration entry → three-dot menu → **Download diagnostics** (secrets are redacted).
 

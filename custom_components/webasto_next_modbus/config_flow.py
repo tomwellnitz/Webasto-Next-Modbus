@@ -8,11 +8,13 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.modbus import async_get_temporary_unit
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from modbus_connection import ModbusTcpParams
 
 from .const import (
     CONF_MODEL,
@@ -161,16 +163,13 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Let the user change the connection settings of an existing entry.
 
-        The new settings are validated by the reload that follows: Home
-        Assistant unloads the entry first (which closes the existing Modbus
-        connection via ``async_unload_entry``), then sets it up again against
-        the new host/port/unit and validates on the first refresh. We do not
-        open a second connection to test here on purpose -- the wallbox accepts
-        only one Modbus TCP connection at a time and the old one is still held
-        by the running entry, so a probe would be refused or test stale data.
+        The new settings are tested before they are saved. Probing the same
+        wallbox the entry already talks to shares the entry's connection, so
+        the single Modbus TCP slot is not an obstacle.
         """
 
         entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
 
         if user_input is not None:
             host = str(user_input[CONF_HOST]).strip()
@@ -183,28 +182,45 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if other.entry_id != entry.entry_id and other.unique_id == new_unique_id:
                     return self.async_abort(reason="already_configured")
 
-            new_data = dict(entry.data)
-            new_data[CONF_HOST] = host
-            new_data[CONF_PORT] = port
-            new_data[CONF_UNIT_ID] = unit_id
-            if name:
-                new_data[CONF_NAME] = name
-                title = name
+            try:
+                await self._async_validate_and_connect(
+                    {
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_UNIT_ID: unit_id,
+                        # The options flow can change the model; setup uses
+                        # that one, so test against the same register map.
+                        CONF_MODEL: entry.options.get(
+                            CONF_MODEL, entry.data.get(CONF_MODEL, DEFAULT_MODEL)
+                        ),
+                    }
+                )
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
             else:
-                new_data.pop(CONF_NAME, None)
-                title = f"{host} (unit {unit_id})"
+                new_data = dict(entry.data)
+                new_data[CONF_HOST] = host
+                new_data[CONF_PORT] = port
+                new_data[CONF_UNIT_ID] = unit_id
+                if name:
+                    new_data[CONF_NAME] = name
+                    title = name
+                else:
+                    new_data.pop(CONF_NAME, None)
+                    title = f"{host} (unit {unit_id})"
 
-            # Update the entry and let the existing update listener perform the
-            # single reload. We deliberately do not use a reloading config-flow
-            # helper here: combining it with the update listener is deprecated
-            # (HA 2026.6, error from 2026.12) because it reloads twice.
-            self.hass.config_entries.async_update_entry(
-                entry,
-                data=new_data,
-                title=title,
-                unique_id=new_unique_id,
-            )
-            return self.async_abort(reason="reconfigure_successful")
+                # Update the entry and let the existing update listener perform
+                # the single reload. We deliberately do not use a reloading
+                # config-flow helper here: combining it with the update listener
+                # is deprecated (HA 2026.6, error from 2026.12) because it
+                # reloads twice.
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data=new_data,
+                    title=title,
+                    unique_id=new_unique_id,
+                )
+                return self.async_abort(reason="reconfigure_successful")
 
         current = entry.data
         data_schema = vol.Schema(
@@ -238,7 +254,10 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-        return self.async_show_form(step_id="reconfigure", data_schema=data_schema)
+        if user_input is not None:
+            # Keep what the user typed when the test failed.
+            data_schema = self.add_suggested_values_to_schema(data_schema, user_input)
+        return self.async_show_form(step_id="reconfigure", data_schema=data_schema, errors=errors)
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
@@ -303,49 +322,29 @@ class WebastoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_validate_and_connect(self, data: Mapping[str, Any]) -> None:
-        """Validate user input by performing a Modbus test read."""
+        """Validate user input with a single Modbus test read.
+
+        The temporary unit shares the connection of an entry that already
+        talks to this wallbox (its only Modbus TCP slot), and opens and closes
+        its own one otherwise.
+        """
         host = data[CONF_HOST]
         port = int(data[CONF_PORT])
         unit_id = int(data[CONF_UNIT_ID])
-
-        # Check if there's already a running entry for this host - reuse its bridge
-        existing_bridge = self._get_existing_bridge(host, unit_id)
-        if existing_bridge is not None:
-            try:
-                await existing_bridge.async_test_connection()
-                return
-            except WebastoModbusError as err:
-                raise CannotConnect from err
-
-        # No existing bridge, create a temporary one for validation
-        bridge = ModbusBridge(
-            host=host,
-            port=port,
-            unit_id=unit_id,
-            registers=get_readable_registers(data.get(CONF_MODEL, DEFAULT_MODEL)),
-        )
+        params = ModbusTcpParams(host=host, port=port)
 
         try:
-            await bridge.async_connect()
-            await bridge.async_test_connection()
-        except WebastoModbusError as err:
+            async with async_get_temporary_unit(self.hass, params, unit_id) as unit:
+                bridge = ModbusBridge(
+                    unit,
+                    host=host,
+                    port=port,
+                    unit_id=unit_id,
+                    registers=get_readable_registers(data.get(CONF_MODEL, DEFAULT_MODEL)),
+                )
+                await bridge.async_test_connection()
+        except (WebastoModbusError, HomeAssistantError) as err:
             raise CannotConnect from err
-        finally:
-            await bridge.async_close()
-
-    def _get_existing_bridge(self, host: str, unit_id: int) -> ModbusBridge | None:
-        """Return the bridge for an existing entry if available."""
-        from . import RuntimeData
-
-        for entry in self.hass.config_entries.async_loaded_entries(DOMAIN):
-            runtime = getattr(entry, "runtime_data", None)
-            if not isinstance(runtime, RuntimeData):
-                continue
-            bridge = runtime.bridge
-            # Check if this bridge matches the host/unit_id we're testing
-            if bridge.host == host and bridge.unit_id == unit_id:
-                return bridge
-        return None
 
     @staticmethod
     @callback

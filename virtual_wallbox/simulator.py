@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
+from modbus_connection import ModbusConnectionError
+
 from custom_components.webasto_next_modbus.const import (
     MODEL_NEXT,
     SESSION_COMMAND_START_VALUE,
@@ -21,25 +23,12 @@ from custom_components.webasto_next_modbus.const import (
 )
 
 
-class FakeModbusException(Exception):
-    """Raised when simulator usage is incorrect."""
+class FakeModbusException(ModbusConnectionError):
+    """Raised when no virtual wallbox answers at the addressed endpoint/unit.
 
-
-class _FakeReadResult:
-    """Simplified Modbus read response."""
-
-    def __init__(self, registers: list[int]):
-        self.registers = registers
-
-    def isError(self) -> bool:  # pragma: no cover - kept for interface parity
-        return False
-
-
-class _FakeWriteResult:
-    """Simplified Modbus write response."""
-
-    def isError(self) -> bool:  # pragma: no cover - kept for interface parity
-        return False
+    A ``ModbusConnectionError``, so the bridge treats it like a real wallbox
+    that is unreachable.
+    """
 
 
 @dataclass(slots=True)
@@ -253,45 +242,43 @@ def register_virtual_wallbox(
         registry.unregister(host, port, unit_id)
 
 
-class FakeAsyncModbusTcpClient:
-    """Drop-in replacement for :class:`pymodbus.AsyncModbusTcpClient`."""
+class VirtualWallboxUnit:
+    """In-process ``modbus_connection.ModbusUnit`` backed by the registry.
 
-    def __init__(self, host: str, *, port: int, timeout: float | None = None) -> None:
+    Implements the part of the ``ModbusUnit`` protocol the integration uses,
+    so the bridge can be exercised against a simulated wallbox without a TCP
+    socket. For a real end-to-end run use :func:`virtual_wallbox.serve_tcp`
+    and a ``modbus_connection`` TCP connection instead.
+    """
+
+    def __init__(self, host: str, port: int, unit_id: int) -> None:
         self._host = host
         self._port = port
-        self._timeout = timeout
-        self._connected = False
-
-    async def connect(self) -> None:
-        if not registry.has_endpoint(self._host, self._port):
-            raise FakeModbusException(f"No virtual wallbox available at {self._host}:{self._port}")
-        self._connected = True
-
-    async def close(self) -> None:
+        self._unit_id = unit_id
         self._connected = False
 
     @property
     def connected(self) -> bool:
         return self._connected
 
-    async def read_input_registers(self, address: int, count: int, *, unit: int) -> _FakeReadResult:
-        state = registry.require(self._host, self._port, unit)
-        return _FakeReadResult(state.read_block("input", address, count))
+    def _state(self) -> VirtualWallboxState:
+        if not registry.has_endpoint(self._host, self._port):
+            self._connected = False
+            raise FakeModbusException(f"No virtual wallbox available at {self._host}:{self._port}")
+        self._connected = True
+        return registry.require(self._host, self._port, self._unit_id)
 
-    async def read_holding_registers(
-        self,
-        address: int,
-        count: int,
-        *,
-        unit: int,
-    ) -> _FakeReadResult:
-        state = registry.require(self._host, self._port, unit)
-        return _FakeReadResult(state.read_block("holding", address, count))
+    async def read_input_registers(self, address: int, count: int) -> list[int]:
+        return self._state().read_block("input", address, count)
 
-    async def write_register(self, address: int, value: int, *, unit: int) -> _FakeWriteResult:
-        state = registry.require(self._host, self._port, unit)
-        state.write_register(address, value)
-        return _FakeWriteResult()
+    async def read_holding_registers(self, address: int, count: int) -> list[int]:
+        return self._state().read_block("holding", address, count)
+
+    async def write_register(self, address: int, value: int) -> None:
+        self._state().write_register(address, value)
+
+    async def disconnect(self) -> None:
+        self._connected = False
 
 
 def build_default_scenario(*, unit_id: int = 255) -> Scenario:

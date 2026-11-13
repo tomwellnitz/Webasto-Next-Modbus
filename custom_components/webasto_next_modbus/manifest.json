@@ -5,18 +5,19 @@
     "@tomwellnitz"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "modbus"
+  ],
   "documentation": "https://github.com/tomwellnitz/Webasto-Next-Modbus",
-  "integration_type": "hub",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/tomwellnitz/Webasto-Next-Modbus/issues",
   "loggers": [
-    "pymodbus",
-    "custom_components.webasto_next_modbus"
+    "custom_components.webasto_next_modbus",
+    "modbus_connection",
+    "tmodbus"
   ],
   "quality_scale": "platinum",
-  "requirements": [
-    "pymodbus>=3.11.2"
-  ],
-  "version": "1.4.0"
+  "requirements": [],
+  "version": "2.0.0"
 }
