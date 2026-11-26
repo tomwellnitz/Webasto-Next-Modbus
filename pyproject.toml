@@ -128,7 +128,7 @@ dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=0.24,<2",
     "pytest-cov==7.1.0",
-    "pytest-homeassistant==2026.11.2",
+    "pytest-homeassistant==2026.11.3",
     "ruff>=0.5",
     "tmodbus==1.1.0",  # see modbus-connection above
     "voluptuous>=0.15.2",
