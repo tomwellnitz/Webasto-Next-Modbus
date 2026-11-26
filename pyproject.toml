@@ -118,7 +118,7 @@ dev = [
     # same connection code as production. Bump together with
     # pytest-homeassistant, which does not install integration requirements,
     # hence the explicit entries.
-    "modbus-connection[tmodbus]==4.12.7",
+    "modbus-connection[tmodbus]==4.12.8",
     "mypy>=1.8",
     "pycares<6.0.0",
     # Only for the virtual_wallbox TCP simulator (virtual_wallbox/server.py),
